@@ -1318,6 +1318,7 @@ void CrossPointWebServer::handleGetOpdsServers() const {
     doc["name"] = servers[i].name;
     doc["url"] = servers[i].url;
     doc["username"] = servers[i].username;
+    doc["downloadFolder"] = normalizeOpdsDownloadFolder(servers[i].downloadFolder);
     doc["filenameFormat"] = opdsFilenameFormatToJson(servers[i].filenameFormat);
     // Never expose passwords over the API — only indicate whether one is set
     doc["hasPassword"] = !servers[i].password.empty();
@@ -1352,6 +1353,7 @@ void CrossPointWebServer::handlePostOpdsServer() {
   opdsServer.name = doc["name"] | std::string("");
   opdsServer.url = doc["url"] | std::string("");
   opdsServer.username = doc["username"] | std::string("");
+  opdsServer.downloadFolder = normalizeOpdsDownloadFolder(doc["downloadFolder"] | std::string("/"));
   opdsServer.filenameFormat = opdsFilenameFormatFromJson(doc["filenameFormat"] | "");
 
   // The password field is optional in the JSON payload. When absent (vs. present but empty),
@@ -1360,6 +1362,8 @@ void CrossPointWebServer::handlePostOpdsServer() {
   std::string password = doc["password"] | std::string("");
   const bool hasFilenameFormatField =
       doc["filenameFormat"].is<const char*>() || doc["filenameFormat"].is<std::string>();
+  const bool hasDownloadFolderField =
+      doc["downloadFolder"].is<const char*>() || doc["downloadFolder"].is<std::string>();
 
   if (doc["index"].is<int>()) {
     int idx = doc["index"].as<int>();
@@ -1374,6 +1378,9 @@ void CrossPointWebServer::handlePostOpdsServer() {
     }
     if (existing && !hasFilenameFormatField) {
       opdsServer.filenameFormat = existing->filenameFormat;
+    }
+    if (existing && !hasDownloadFolderField) {
+      opdsServer.downloadFolder = existing->downloadFolder;
     }
     opdsServer.password = password;
     OPDS_STORE.updateServer(static_cast<size_t>(idx), opdsServer);

@@ -10,12 +10,14 @@ enum class OpdsFilenameFormat : uint8_t {
 
 const char* opdsFilenameFormatToJson(OpdsFilenameFormat format);
 OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value);
+std::string normalizeOpdsDownloadFolder(std::string folder);
 
 struct OpdsServer {
   std::string name;
   std::string url;
   std::string username;
   std::string password;  // Plaintext in memory; obfuscated with hardware key on disk
+  std::string downloadFolder = "/";
   OpdsFilenameFormat filenameFormat = OpdsFilenameFormat::AUTHOR_TITLE;
 };
 

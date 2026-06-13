@@ -1,6 +1,7 @@
 #include "OpdsBookBrowserActivity.h"
 
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <Memory.h>
@@ -29,6 +30,12 @@ std::string buildBookFilenameBase(const OpdsEntry& book, const OpdsFilenameForma
   if (book.title.empty()) return book.author;
   if (format == OpdsFilenameFormat::TITLE_AUTHOR) return book.title + " - " + book.author;
   return book.author + " - " + book.title;
+}
+
+std::string buildDownloadPath(const std::string& folder, const OpdsServer& server, const OpdsEntry& book) {
+  const std::string filename =
+      StringUtils::sanitizeFilename(buildBookFilenameBase(book, server.filenameFormat)) + ".epub";
+  return folder == "/" ? "/" + filename : folder + "/" + filename;
 }
 }  // namespace
 
@@ -343,9 +350,17 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   // Build full download URL relative to the current feed, not the root server URL
   const std::string feedUrl = UrlUtils::buildUrl(server.url, currentPath);
   std::string downloadUrl = UrlUtils::buildUrl(feedUrl, book.href);
-  std::string filename =
-      "/" + StringUtils::sanitizeFilename(buildBookFilenameBase(book, server.filenameFormat)) + ".epub";
+  const std::string folder = normalizeOpdsDownloadFolder(server.downloadFolder);
+  std::string filename = buildDownloadPath(folder, server, book);
   LOG_DBG("OPDS", "Downloading: %s -> %s", downloadUrl.c_str(), filename.c_str());
+
+  if (folder != "/" && !Storage.exists(folder.c_str()) && !Storage.mkdir(folder.c_str())) {
+    LOG_ERR("OPDS", "Failed to create download folder: %s", folder.c_str());
+    state = BrowserState::ERROR;
+    errorMessage = tr(STR_DOWNLOAD_FAILED);
+    requestUpdate();
+    return;
+  }
 
   bool cancelRequested = false;
   auto pollCancel = [this, &cancelRequested] {

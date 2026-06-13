@@ -332,6 +332,8 @@ Response:
     "name": "My Catalog",
     "url": "http://calibre.local:8080/opds",
     "username": "reader",
+    "downloadFolder": "/Books",
+    "filenameFormat": "author_title",
     "hasPassword": true
   }
 ]
@@ -341,11 +343,13 @@ Response:
 
 Adds or updates an OPDS server. Include `index` to update an existing entry.
 If `password` is omitted during an update, the existing password is preserved.
+If `downloadFolder` is omitted during an update, the existing download folder is
+preserved. Empty or missing download folders default to `/`.
 
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d '{"name":"My Catalog","url":"http://calibre.local:8080/opds","username":"reader","password":"secret"}' \
+  -d '{"name":"My Catalog","url":"http://calibre.local:8080/opds","username":"reader","password":"secret","downloadFolder":"/Books","filenameFormat":"author_title"}' \
   http://crosspoint.local/api/opds
 ```
 

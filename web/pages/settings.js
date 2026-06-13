@@ -438,6 +438,11 @@ let allSettings = [];
           '<option value="title_author"' + (srv.filenameFormat === 'title_author' ? ' selected' : '') + '>Title - Author</option>' +
         '</select></span>' +
       '</div>' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">Download Folder</span>' +
+        '<span class="setting-control"><input type="text" id="opds-folder-' + id + '" value="' +
+          escapeHtml(srv.downloadFolder || '/') + '"></span>' +
+      '</div>' +
       '<div class="opds-actions">' +
         '<button class="btn-small btn-save-server" onclick="saveOpdsServer(' + idx + ')">Save</button>' +
         (isNew ? '' : '<button class="btn-small btn-delete" onclick="deleteOpdsServer(' + idx + ')">Delete</button>') +
@@ -480,7 +485,17 @@ let allSettings = [];
     const addBtn = card.querySelector('.btn-add').parentElement;
     // Prevent multiple unsaved new-server forms at once (idx -1 → id "new")
     if (document.getElementById('opds-new')) return;
-    addBtn.insertAdjacentHTML('beforebegin', renderOpdsServer({name:'',url:'',username:'',hasPassword:false,filenameFormat:'author_title'}, -1));
+    addBtn.insertAdjacentHTML(
+      'beforebegin',
+      renderOpdsServer({
+        name: '',
+        url: '',
+        username: '',
+        hasPassword: false,
+        downloadFolder: '/',
+        filenameFormat: 'author_title'
+      }, -1)
+    );
   }
 
   async function saveOpdsServer(idx) {
@@ -489,6 +504,7 @@ let allSettings = [];
       name: document.getElementById('opds-name-' + id).value,
       url: document.getElementById('opds-url-' + id).value,
       username: document.getElementById('opds-user-' + id).value,
+      downloadFolder: document.getElementById('opds-folder-' + id).value,
       filenameFormat: document.getElementById('opds-filename-' + id).value,
     };
     // Only include password in payload when the user actually typed something;
