@@ -206,6 +206,18 @@ OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
     return HTTP_ERROR;
   }
 
+  const int statusCode = esp_http_client_get_status_code(client_handle);
+  if (statusCode == 404) {
+    LOG_INF("OTA", "No GitHub release found at update URL");
+    esp_http_client_cleanup(client_handle);
+    return NO_UPDATE;
+  }
+  if (statusCode < 200 || statusCode >= 300) {
+    LOG_ERR("OTA", "Update metadata HTTP status: %d", statusCode);
+    esp_http_client_cleanup(client_handle);
+    return HTTP_ERROR;
+  }
+
   esp_err = esp_http_client_cleanup(client_handle);
   if (esp_err != ESP_OK) {
     LOG_ERR("OTA", "esp_http_client_cleanup Failed : %s", esp_err_to_name(esp_err));
