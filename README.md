@@ -6,4 +6,4 @@
 
 ## What's different in this fork
 
-- OPDS download organization with per-server download folders, optional author subfolders, and configurable filename order.
+- OPDS download organization with per-server download folders, optional author subfolders, configurable filename order, and matching author-folder moves when finished books are sent to the Read folder.
