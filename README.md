@@ -1,3 +1,7 @@
+> **This is a personal fork of [CrossInk](https://github.com/uxjulia/CrossInk), which is itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader).**
+>
+> This fork aims to keep CrossInk intact while adding practical workflow improvements. It includes Docker-based firmware builds for hosts that should not run a full local PlatformIO setup; see [Docker Build](./docs/contributing/docker-build.md). It also adds OPDS download organization with per-server download folders, optional author subfolders, and configurable filename order.
+
 > **This is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** with a focus on improved fonts and minimal reading stats.
 
 ## What's different in this fork
