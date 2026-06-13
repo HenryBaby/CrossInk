@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v1.3.6] - 2026-06-13
+
 ### Added
 - OPDS downloads can use title-only filenames.
 
