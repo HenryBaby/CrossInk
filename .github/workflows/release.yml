@@ -80,7 +80,7 @@ jobs:
         run: |
           python3 scripts/generate_release_notes.py \
             --version "${{ env.RELEASE_VERSION }}" \
-            --output ".pio/build/release-notes.md"
+            --output "release-notes.md"
 
       - name: Build CrossInk
         env:
@@ -93,7 +93,7 @@ jobs:
           token: ${{ github.token }}
           tag_name: v${{ env.RELEASE_VERSION }}
           target_commitish: ${{ github.sha }}
-          body_path: .pio/build/release-notes.md
+          body_path: release-notes.md
           draft: false
           prerelease: false
           make_latest: true
