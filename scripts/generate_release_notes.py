@@ -8,6 +8,7 @@ share one source of truth.
 
 import argparse
 import re
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -64,11 +65,34 @@ def normalize_section_titles(section):
     return '\n'.join(lines).strip()
 
 
+def last_sunday(year, month):
+    day = datetime(year, month + 1, 1, tzinfo=timezone.utc) - timedelta(days=1)
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+
+def crossink_local_time():
+    now_utc = datetime.now(timezone.utc)
+    year = now_utc.year
+    cest_start = last_sunday(year, 3).replace(hour=1, minute=0, second=0, microsecond=0)
+    cest_end = last_sunday(year, 10).replace(hour=1, minute=0, second=0, microsecond=0)
+    if cest_start <= now_utc < cest_end:
+        return now_utc + timedelta(hours=2), 'CEST'
+    return now_utc + timedelta(hours=1), 'CET'
+
+
+def default_intro():
+    now, timezone_name = crossink_local_time()
+    time_text = now.strftime('%I:%M%p').lower()
+    date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
+    return f'This release is up to date with the master branch of CrossInk as of {time_text} {timezone_name} {date_text}'
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Generate release notes from CHANGELOG.md.')
     parser.add_argument('--version', required=True, help='Release version, with or without leading v.')
     parser.add_argument('--changelog', default='CHANGELOG.md', type=Path, help='Path to CHANGELOG.md.')
     parser.add_argument('--output', required=True, type=Path, help='Output markdown file.')
+    parser.add_argument('--intro', default=None, help='Optional release intro line without the leading blockquote marker.')
     return parser.parse_args()
 
 
@@ -77,8 +101,9 @@ def main():
     version = normalize_version(args.version)
     changelog = args.changelog.read_text(encoding='utf-8')
     section = normalize_section_titles(extract_version_section(changelog, version))
+    intro = args.intro.strip() if args.intro else default_intro()
 
-    body = f"""> HenryBaby/CrossInk fork release.
+    body = f"""> {intro}
 
 {section}
 
