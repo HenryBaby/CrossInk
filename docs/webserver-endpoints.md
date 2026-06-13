@@ -348,6 +348,8 @@ If `downloadFolder` is omitted during an update, the existing download folder is
 preserved. Empty or missing download folders default to `/`.
 If `folderOrganization` is omitted during an update, the existing folder
 organization is preserved. Supported values are `flat` and `author`.
+If `filenameFormat` is omitted during an update, the existing filename format is
+preserved. Supported values are `author_title`, `title_author`, and `title`.
 
 ```bash
 curl -X POST \

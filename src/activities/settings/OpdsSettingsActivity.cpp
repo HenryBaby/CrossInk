@@ -16,6 +16,30 @@ namespace {
 // Editable fields: Name, URL, Username, Password, Folder, Folder layout, Filename.
 // Existing servers also show a Delete option (BASE_ITEMS + 1).
 constexpr int BASE_ITEMS = 7;
+
+OpdsFilenameFormat nextFilenameFormat(const OpdsFilenameFormat format) {
+  switch (format) {
+    case OpdsFilenameFormat::AUTHOR_TITLE:
+      return OpdsFilenameFormat::TITLE_AUTHOR;
+    case OpdsFilenameFormat::TITLE_AUTHOR:
+      return OpdsFilenameFormat::TITLE;
+    case OpdsFilenameFormat::TITLE:
+    default:
+      return OpdsFilenameFormat::AUTHOR_TITLE;
+  }
+}
+
+const char* filenameFormatLabel(const OpdsFilenameFormat format) {
+  switch (format) {
+    case OpdsFilenameFormat::TITLE_AUTHOR:
+      return tr(STR_TITLE_AUTHOR);
+    case OpdsFilenameFormat::TITLE:
+      return tr(STR_TITLE);
+    case OpdsFilenameFormat::AUTHOR_TITLE:
+    default:
+      return tr(STR_AUTHOR_TITLE);
+  }
+}
 }  // namespace
 
 int OpdsSettingsActivity::getMenuItemCount() const {
@@ -175,9 +199,7 @@ void OpdsSettingsActivity::handleSelection() {
     saveServer();
     requestUpdate();
   } else if (selectedIndex == 6) {
-    editServer.filenameFormat = editServer.filenameFormat == OpdsFilenameFormat::AUTHOR_TITLE
-                                    ? OpdsFilenameFormat::TITLE_AUTHOR
-                                    : OpdsFilenameFormat::AUTHOR_TITLE;
+    editServer.filenameFormat = nextFilenameFormat(editServer.filenameFormat);
     saveServer();
     requestUpdate();
   } else if (selectedIndex == 7 && !isNewServer) {
@@ -239,8 +261,7 @@ void OpdsSettingsActivity::render(RenderLock&&) {
                      ? std::string(tr(STR_AUTHOR_FOLDERS))
                      : std::string(tr(STR_SINGLE_FOLDER));
         } else if (index == 6) {
-          return editServer.filenameFormat == OpdsFilenameFormat::TITLE_AUTHOR ? std::string(tr(STR_TITLE_AUTHOR))
-                                                                               : std::string(tr(STR_AUTHOR_TITLE));
+          return std::string(filenameFormatLabel(editServer.filenameFormat));
         }
         return std::string("");
       },

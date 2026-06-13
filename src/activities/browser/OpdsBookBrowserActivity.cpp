@@ -29,6 +29,7 @@ constexpr size_t OPDS_DOWNLOAD_FOLDER_MAX_BYTES = 127;
 std::string buildBookFilenameBase(const OpdsEntry& book, const OpdsFilenameFormat format) {
   if (book.author.empty()) return book.title;
   if (book.title.empty()) return book.author;
+  if (format == OpdsFilenameFormat::TITLE) return book.title;
   if (format == OpdsFilenameFormat::TITLE_AUTHOR) return book.title + " - " + book.author;
   return book.author + " - " + book.title;
 }
