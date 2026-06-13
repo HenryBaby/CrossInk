@@ -1,6 +1,6 @@
 # SD Card Fonts
 
-CrossInk supports loading additional fonts from the SD card, including fonts
+CrossPoint supports loading additional fonts from the SD card, including fonts
 with extended Unicode coverage (CJK, Cyrillic, Greek, etc.).
 
 ## Installing Fonts
@@ -24,7 +24,7 @@ There are three ways to install fonts:
 ### Option 3: Manual SD card copy
 
 1. Download font files from the
-   [crossink-fonts repository](https://github.com/uxjulia/crossink-fonts)
+   [crosspoint-fonts repository](https://github.com/crosspoint-reader/crosspoint-fonts)
 2. Copy font family folders to one of two locations on your SD card:
 
    - `/.fonts/` — hidden directory (preferred; keeps the SD root tidy

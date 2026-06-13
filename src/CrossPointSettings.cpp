@@ -1,5 +1,6 @@
 #include "CrossPointSettings.h"
 
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <JsonSettingsIO.h>
 #include <Logging.h>
@@ -27,7 +28,8 @@ void readAndValidate(FsFile& file, uint8_t& member, const uint8_t maxValue) {
 namespace {
 constexpr uint8_t SETTINGS_FILE_VERSION = 1;
 constexpr char SETTINGS_FILE_BIN[] = "/.crosspoint/settings.bin";
-constexpr char SETTINGS_FILE_JSON[] = "/.crosspoint/settings.json";
+constexpr char SETTINGS_FILE_JSON[] = "/.crosspoint/crossink-settings.json";
+constexpr char LEGACY_SETTINGS_FILE_JSON[] = "/.crosspoint/settings.json";
 constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 constexpr char LANG_FILE_BIN[] = "/.crosspoint/language.bin";
 constexpr char LANG_FILE_BAK[] = "/.crosspoint/language.bin.bak";
@@ -66,6 +68,12 @@ constexpr uint8_t SD_FONT_RANGE_POINT_SIZES[CrossPointSettings::SD_FONT_SIZE_RAN
                                                {8, 9, 10, 12, 14, 16, 18, 20},
 };
 constexpr uint8_t SD_FONT_RANGE_STEP_COUNTS[CrossPointSettings::SD_FONT_SIZE_RANGE_COUNT] = {4, 4, 3, 5, 8};
+
+bool isValidDeviceName(const char* name) {
+  if (!name) return false;
+  const size_t len = std::strlen(name);
+  return len >= CrossPointSettings::MIN_DEVICE_NAME_LENGTH && len <= CrossPointSettings::MAX_DEVICE_NAME_LENGTH;
+}
 
 uint8_t normalizedSdFontRange(uint8_t range) {
   return range < CrossPointSettings::SD_FONT_SIZE_RANGE_COUNT ? range : CrossPointSettings::SD_FONT_RANGE_TINY;
@@ -232,6 +240,16 @@ void applyLegacyFrontButtonLayout(CrossPointSettings& settings) {
 
 }  // namespace
 
+const char* CrossPointSettings::getDefaultDeviceName() {
+  if (gpio.deviceIsX3()) return "CrossInk X3";
+  if (gpio.deviceIsX4()) return "CrossInk X4";
+  return "CrossInk";
+}
+
+const char* CrossPointSettings::getEffectiveDeviceName() const {
+  return isValidDeviceName(deviceName) ? deviceName : getDefaultDeviceName();
+}
+
 void CrossPointSettings::validateFrontButtonMapping(CrossPointSettings& settings) {
   const uint8_t mapping[] = {settings.frontButtonBack, settings.frontButtonConfirm, settings.frontButtonLeft,
                              settings.frontButtonRight};
@@ -365,23 +383,37 @@ bool CrossPointSettings::saveToFile() const {
 }
 
 bool CrossPointSettings::loadFromFile() {
-  // Try JSON first
-  if (Storage.exists(SETTINGS_FILE_JSON)) {
-    String json = Storage.readFile(SETTINGS_FILE_JSON);
+  enum class JsonLoadStatus : uint8_t { MissingOrEmpty, Loaded, Failed };
+
+  auto loadJsonSettings = [this](const char* path, bool migrateToCurrentPath) -> JsonLoadStatus {
+    if (!Storage.exists(path)) return JsonLoadStatus::MissingOrEmpty;
+
+    String json = Storage.readFile(path);
     if (!json.isEmpty()) {
       bool resave = false;
       bool result = JsonSettingsIO::loadSettings(*this, json.c_str(), &resave);
-      if (result && resave) {
+      if (result && (resave || migrateToCurrentPath)) {
         if (saveToFile()) {
-          LOG_DBG("CPS", "Resaved settings to update format");
+          LOG_DBG("CPS", migrateToCurrentPath ? "Migrated legacy settings.json to crossink-settings.json"
+                                              : "Resaved settings to update format");
         } else {
-          LOG_ERR("CPS", "Failed to resave settings after format update");
+          LOG_ERR("CPS", migrateToCurrentPath ? "Failed to save migrated settings to crossink-settings.json"
+                                              : "Failed to resave settings after format update");
         }
       }
       migrateLanguageBinaryFile();
-      return result;
+      return result ? JsonLoadStatus::Loaded : JsonLoadStatus::Failed;
     }
-  }
+    return JsonLoadStatus::MissingOrEmpty;
+  };
+
+  // Prefer CrossInk's namespaced settings file. Use the old generic file only
+  // as a migration fallback so other firmware can keep its own settings.json.
+  JsonLoadStatus jsonStatus = loadJsonSettings(SETTINGS_FILE_JSON, false);
+  if (jsonStatus != JsonLoadStatus::MissingOrEmpty) return jsonStatus == JsonLoadStatus::Loaded;
+
+  jsonStatus = loadJsonSettings(LEGACY_SETTINGS_FILE_JSON, true);
+  if (jsonStatus != JsonLoadStatus::MissingOrEmpty) return jsonStatus == JsonLoadStatus::Loaded;
 
   // Fall back to binary migration
   if (Storage.exists(SETTINGS_FILE_BIN)) {
@@ -389,7 +421,7 @@ bool CrossPointSettings::loadFromFile() {
       migrateLanguageBinaryFile();
       if (saveToFile()) {
         Storage.rename(SETTINGS_FILE_BIN, SETTINGS_FILE_BAK);
-        LOG_DBG("CPS", "Migrated settings.bin to settings.json");
+        LOG_DBG("CPS", "Migrated settings.bin to crossink-settings.json");
         return true;
       } else {
         LOG_ERR("CPS", "Failed to save migrated settings to JSON");
@@ -421,7 +453,7 @@ bool CrossPointSettings::migrateLanguageBinaryFile() {
   }
   Storage.rename(LANG_FILE_BIN, LANG_FILE_BAK);
   saveToFile();
-  LOG_DBG("CPS", "Migrated language.bin into settings.json");
+  LOG_DBG("CPS", "Migrated language.bin into crossink-settings.json");
   return true;
 }
 

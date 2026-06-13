@@ -11,6 +11,7 @@ namespace SleepCoverAssets {
 bool prepareEpub(const Epub& epub);
 bool prepareXtc(const Xtc& xtc);
 bool prepareTxt(const Txt& txt);
+bool prepareFullCoverForPath(const std::string& bookPath, bool cropped);
 
 std::string reusableCoverPathFor(const std::string& bookPath);
 std::string cachedCoverPathFor(const std::string& bookPath, bool cropped);

@@ -41,6 +41,8 @@ constexpr char CAROUSEL_CACHE_PATH[] = "/.crosspoint/home_carousel_cache.bin";
 constexpr char CAROUSEL_CACHE_TMP_PATH[] = "/.crosspoint/home_carousel_cache.tmp";
 constexpr uint32_t CAROUSEL_FRAME_MIN_FREE_AFTER_ALLOC = 64U * 1024U;
 constexpr uint32_t CAROUSEL_FRAME_MIN_MAX_ALLOC_AFTER_ALLOC = 24U * 1024U;
+constexpr unsigned long HOME_BOOK_SWAP_LONG_PRESS_MS = 1000;
+constexpr int HOME_BOOK_SWAP_RECENT_COUNT = 2;
 
 enum class HomeMenuAction {
   BrowseFiles,
@@ -374,9 +376,23 @@ void appendSyncedStatsStateToKey(std::string& key) {
   dir.close();
 }
 
-void buildCarouselCacheKey(const std::vector<RecentBook>& recentBooks, std::string& key, uint64_t& keyHash) {
+void appendCarouselMenuStateToKey(std::string& key, const bool hasOpdsServers, const bool hasReadingStats,
+                                  const bool hasBookmarks) {
+  key += hasOpdsServers ? "opds:1" : "opds:0";
+  key += '\0';
+  key += hasReadingStats ? "stats:1" : "stats:0";
+  key += '\0';
+  key += hasBookmarks ? "bookmarks:1" : "bookmarks:0";
+  key += '\0';
+}
+
+void buildCarouselCacheKey(const std::vector<RecentBook>& recentBooks, const bool hasOpdsServers,
+                           const bool hasReadingStats, const bool hasBookmarks, std::string& key, uint64_t& keyHash) {
   key.clear();
   key.reserve(512);
+  // The carousel cache stores the bottom icon row too, so menu visibility must
+  // be part of the key alongside book covers/progress.
+  appendCarouselMenuStateToKey(key, hasOpdsServers, hasReadingStats, hasBookmarks);
   for (const auto& book : recentBooks) {
     appendCarouselCoverStateToKey(key, book);
   }
@@ -404,13 +420,14 @@ bool readCarouselCacheHeader(FsFile& file, CarouselCacheHeader& header) {
   return true;
 }
 
-bool hasValidCarouselDiskCache(const std::vector<RecentBook>& recentBooks, const GfxRenderer& renderer) {
+bool hasValidCarouselDiskCache(const std::vector<RecentBook>& recentBooks, const GfxRenderer& renderer,
+                               const bool hasOpdsServers, const bool hasReadingStats, const bool hasBookmarks) {
   const int bookCount = static_cast<int>(recentBooks.size());
   if (bookCount <= 0) return false;
 
   std::string cacheKey;
   uint64_t cacheKeyHash = 0;
-  buildCarouselCacheKey(recentBooks, cacheKey, cacheKeyHash);
+  buildCarouselCacheKey(recentBooks, hasOpdsServers, hasReadingStats, hasBookmarks, cacheKey, cacheKeyHash);
 
   FsFile cacheFile;
   if (!Storage.openFileForRead("HOME", CAROUSEL_CACHE_PATH, cacheFile)) {
@@ -423,9 +440,14 @@ bool hasValidCarouselDiskCache(const std::vector<RecentBook>& recentBooks, const
   return readOk && isCarouselCacheHeaderValid(header, cacheKeyHash, bookCount, renderer);
 }
 
+int getVisibleRecentBookCount(const std::vector<RecentBook>& recentBooks) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  return std::min(static_cast<int>(recentBooks.size()), metrics.homeRecentBooksCount);
+}
+
 int getHomeMenuSelectionOffset(const std::vector<RecentBook>& recentBooks) {
   const auto& metrics = UITheme::getInstance().getMetrics();
-  return metrics.homeContinueReadingInMenu ? 0 : static_cast<int>(recentBooks.size());
+  return metrics.homeContinueReadingInMenu ? 0 : getVisibleRecentBookCount(recentBooks);
 }
 }  // namespace
 
@@ -476,7 +498,7 @@ int HomeActivity::getMenuItemCount() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   int count = 4;  // File Browser, Recents, File transfer, Settings
   if (!metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
-    count += recentBooks.size();
+    count += getVisibleRecentBookCount();
   } else if (metrics.homeContinueReadingInMenu && !recentBooks.empty()) {
     count++;  // Continue Reading menu item
   }
@@ -740,13 +762,21 @@ void HomeActivity::onEnter() {
   carouselWarmupPending = isCarouselTheme;
 
   const auto& metrics = UITheme::getInstance().getMetrics();
-  loadRecentBooks(metrics.homeRecentBooksCount);
+  const int recentBooksToLoad =
+      std::min(kMaxCachedBooks, std::max(metrics.homeRecentBooksCount, HOME_BOOK_SWAP_RECENT_COUNT));
+  loadRecentBooks(recentBooksToLoad);
 
   if (!APP_STATE.openEpubPath.empty()) {
     for (int i = 0; i < static_cast<int>(recentBooks.size()); ++i) {
       if (recentBooks[i].path == APP_STATE.openEpubPath) {
-        selectorIndex = i;
-        lastCarouselBookIndex = i;
+        if (metrics.homeRecentBooksCount == 1 && i > 0) {
+          std::rotate(recentBooks.begin(), recentBooks.begin() + i, recentBooks.end());
+          selectorIndex = 0;
+          lastCarouselBookIndex = 0;
+        } else {
+          selectorIndex = i;
+          lastCarouselBookIndex = i;
+        }
         break;
       }
     }
@@ -771,7 +801,8 @@ void HomeActivity::onEnter() {
     }
   }
 
-  if (isCarouselTheme && hasValidCarouselDiskCache(recentBooks, renderer)) {
+  if (isCarouselTheme &&
+      hasValidCarouselDiskCache(recentBooks, renderer, hasOpdsServers, hasReadingStats, hasBookmarks)) {
     preRenderCarouselFrames(false);
   }
 
@@ -783,9 +814,30 @@ int HomeActivity::getHighlightedBookIndex() const {
     return -1;
   }
 
-  const int bookCount = static_cast<int>(recentBooks.size());
-  const int highlightedBookIdx = (selectorIndex < bookCount) ? selectorIndex : lastCarouselBookIndex;
-  return std::clamp(highlightedBookIdx, 0, bookCount - 1);
+  const int visibleBookCount = getVisibleRecentBookCount();
+  const int highlightedBookIdx = (selectorIndex < visibleBookCount) ? selectorIndex : lastCarouselBookIndex;
+  return std::clamp(highlightedBookIdx, 0, visibleBookCount - 1);
+}
+
+int HomeActivity::getVisibleRecentBookCount() const { return ::getVisibleRecentBookCount(recentBooks); }
+
+bool HomeActivity::canSwapHomeBook() const {
+  return UITheme::getInstance().getMetrics().homeRecentBooksCount == 1 && recentBooks.size() > 1;
+}
+
+void HomeActivity::showNextRecentBookOnHome() {
+  if (!canSwapHomeBook()) {
+    return;
+  }
+
+  std::rotate(recentBooks.begin(), recentBooks.begin() + 1, recentBooks.end());
+  selectorIndex = 0;
+  lastCarouselBookIndex = 0;
+  bookStatsCached = false;
+  updateHighlightedBookContext();
+  coverRendered = false;
+  freeCoverBuffer();
+  requestUpdate();
 }
 
 std::string HomeActivity::getCurrentBookPath() const {
@@ -1134,7 +1186,7 @@ bool HomeActivity::preRenderCarouselFrames(bool showProgressPopup) {
   // reuse a stale snapshot built before carousel-sized thumbs existed.
   std::string newKey;
   uint64_t newKeyHash = 0;
-  buildCarouselCacheKey(recentBooks, newKey, newKeyHash);
+  buildCarouselCacheKey(recentBooks, hasOpdsServers, hasReadingStats, hasBookmarks, newKey, newKeyHash);
 
   // Cache hit: same books in same order — reuse without any SD reads
   if (newKey == gCarouselCache.key && gCarouselCache.frameCount > 0) {
@@ -1225,6 +1277,13 @@ void HomeActivity::loop() {
       }
     }
 
+    if (homeBookSwapLongPressHandled) {
+      if (releasedFrontButton == HalGPIO::BTN_BACK || !mappedInput.isFrontButtonPressed(HalGPIO::BTN_BACK)) {
+        homeBookSwapLongPressHandled = false;
+      }
+      return;
+    }
+
     if (minimalMenuOpen) {
       const auto menuItems = buildMinimalMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks);
       const int menuCount = static_cast<int>(menuItems.size());
@@ -1278,6 +1337,13 @@ void HomeActivity::loop() {
             break;
         }
       }
+      return;
+    }
+
+    if (canSwapHomeBook() && mappedInput.isFrontButtonPressed(HalGPIO::BTN_BACK) &&
+        mappedInput.getHeldTime() >= HOME_BOOK_SWAP_LONG_PRESS_MS) {
+      homeBookSwapLongPressHandled = true;
+      showNextRecentBookOnHome();
       return;
     }
 
@@ -1351,9 +1417,24 @@ void HomeActivity::loop() {
   const bool isCarousel =
       static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
   const int previousHighlightedBookIdx = getHighlightedBookIndex();
+  const int visibleBookCount = getVisibleRecentBookCount();
+
+  if (homeBookSwapLongPressHandled) {
+    if (!mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
+      homeBookSwapLongPressHandled = false;
+    }
+    return;
+  }
+
+  if (!isCarousel && canSwapHomeBook() && mappedInput.isPressed(MappedInputManager::Button::Confirm) &&
+      mappedInput.getHeldTime() >= HOME_BOOK_SWAP_LONG_PRESS_MS) {
+    homeBookSwapLongPressHandled = true;
+    showNextRecentBookOnHome();
+    return;
+  }
 
   if (isCarousel) {
-    const int bookCount = static_cast<int>(recentBooks.size());
+    const int bookCount = visibleBookCount;
     const int menuItemCount =
         static_cast<int>(buildHomeMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks).size());
     const bool inCarouselRow = (selectorIndex < bookCount);
@@ -1409,7 +1490,7 @@ void HomeActivity::loop() {
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     const auto& metrics = UITheme::getInstance().getMetrics();
-    if (!metrics.homeContinueReadingInMenu && selectorIndex < recentBooks.size()) {
+    if (!metrics.homeContinueReadingInMenu && selectorIndex < visibleBookCount) {
       onSelectBook(recentBooks[selectorIndex].path);
       return;
     }

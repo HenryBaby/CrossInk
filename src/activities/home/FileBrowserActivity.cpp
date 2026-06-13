@@ -7,6 +7,7 @@
 #include <I18n.h>
 
 #include <algorithm>
+#include <cstring>
 
 #include "BookActions.h"
 #include "CrossPointSettings.h"
@@ -15,17 +16,62 @@
 #include "MappedInputManager.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "components/UITheme.h"
+#include "components/themes/minimal/MinimalTheme.h"
 #include "fontIds.h"
 
 namespace {
 constexpr unsigned long GO_HOME_MS = 1000;
 constexpr unsigned long COMPLETED_FEEDBACK_MS = 1000;
 constexpr int ROOT_HINT_GAP = 20;
+constexpr uint32_t FILE_BROWSER_APPEND_MIN_FREE_AFTER_ALLOC = 48U * 1024U;
+constexpr uint32_t FILE_BROWSER_APPEND_MIN_MAX_ALLOC_AFTER_ALLOC = 16U * 1024U;
 
 bool isDefaultSleepFolderPath(const std::string& path) { return path == "/sleep" || path == "/.sleep"; }
 
 bool isSleepImageFile(const std::string& path) {
   return FsHelpers::hasBmpExtension(path) || FsHelpers::hasPngExtension(path);
+}
+
+bool isMacOSMetadataEntry(std::string_view filename) {
+  return filename.rfind("._", 0) == 0 || filename == ".DS_Store" || filename == ".Spotlight-V100" ||
+         filename == ".Trashes" || filename == ".fseventsd";
+}
+
+bool equalsIgnoreCase(std::string_view a, std::string_view b) {
+  if (a.length() != b.length()) return false;
+  for (size_t i = 0; i < a.length(); ++i) {
+    if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool isWindowsMetadataEntry(std::string_view filename) {
+  return equalsIgnoreCase(filename, "System Volume Information") || equalsIgnoreCase(filename, "$RECYCLE.BIN") ||
+         equalsIgnoreCase(filename, "desktop.ini") || equalsIgnoreCase(filename, "Thumbs.db") ||
+         equalsIgnoreCase(filename, "IndexerVolumeGuid") || equalsIgnoreCase(filename, "WPSettings.dat");
+}
+
+size_t estimateNextVectorCapacity(size_t size, size_t capacity) {
+  if (size < capacity) {
+    return capacity;
+  }
+  if (capacity == 0) {
+    return 1;
+  }
+  return capacity * 2;
+}
+
+bool hasHeapForFileEntryAppend(const std::vector<std::string>& files, size_t entryLen) {
+  const size_t nextCapacity = estimateNextVectorCapacity(files.size(), files.capacity());
+  const uint32_t vectorGrowthBytes =
+      (nextCapacity == files.capacity()) ? 0U : static_cast<uint32_t>(nextCapacity * sizeof(std::string));
+  const uint32_t stringBytes = static_cast<uint32_t>(entryLen + 1);
+  const uint32_t largestNeeded = std::max(vectorGrowthBytes, stringBytes);
+
+  return ESP.getFreeHeap() >= vectorGrowthBytes + stringBytes + FILE_BROWSER_APPEND_MIN_FREE_AFTER_ALLOC &&
+         ESP.getMaxAllocHeap() >= largestNeeded + FILE_BROWSER_APPEND_MIN_MAX_ALLOC_AFTER_ALLOC;
 }
 
 bool hasFileMetadata(const std::string& path) {
@@ -89,9 +135,13 @@ std::string getFileName(std::string filename);
 
 void FileBrowserActivity::loadFiles() {
   files.clear();
+  fileListMemoryLimited = false;
 
   auto root = Storage.open(basepath.c_str());
   if (!root || !root.isDirectory()) {
+    if (root) {
+      root.close();
+    }
     return;
   }
 
@@ -100,25 +150,51 @@ void FileBrowserActivity::loadFiles() {
   char name[500];
   for (auto file = root.openNextFile(); file; file = root.openNextFile()) {
     file.getName(name, sizeof(name));
-    if ((!SETTINGS.showHiddenFiles && name[0] == '.') || strcmp(name, "System Volume Information") == 0) {
+    if (isMacOSMetadataEntry(name) || isWindowsMetadataEntry(name) || (!SETTINGS.showHiddenFiles && name[0] == '.')) {
+      file.close();
       continue;
     }
 
+    bool shouldAdd = false;
+    size_t entryLen = std::strlen(name);
     if (file.isDirectory()) {
-      files.emplace_back(std::string(name) + "/");
+      if (entryLen + 1 >= sizeof(name)) {
+        LOG_ERR("FileBrowser", "Skipping oversized directory entry: %s", name);
+        file.close();
+        continue;
+      }
+      name[entryLen++] = '/';
+      name[entryLen] = '\0';
+      shouldAdd = true;
     } else {
       std::string_view filename{name};
       if (mode == Mode::PickFirmware) {
         // Firmware picker: only show .bin files.
-        if (FsHelpers::checkFileExtension(filename, ".bin")) {
-          files.emplace_back(filename);
-        }
+        shouldAdd = FsHelpers::checkFileExtension(filename, ".bin");
       } else if (FsHelpers::hasEpubExtension(filename) || FsHelpers::hasXtcExtension(filename) ||
                  FsHelpers::hasTxtExtension(filename) || FsHelpers::hasMarkdownExtension(filename) ||
                  FsHelpers::hasBmpExtension(filename) || FsHelpers::hasPngExtension(filename)) {
-        files.emplace_back(filename);
+        shouldAdd = true;
       }
     }
+
+    if (!shouldAdd) {
+      file.close();
+      continue;
+    }
+
+    if (!hasHeapForFileEntryAppend(files, entryLen)) {
+      fileListMemoryLimited = true;
+      LOG_ERR("FileBrowser", "Low heap while loading %s (entries=%u free=%u maxAlloc=%u)", basepath.c_str(),
+              static_cast<unsigned>(files.size()), ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+      file.close();
+      root.close();
+      files.clear();
+      return;
+    }
+
+    files.emplace_back(name);
+    file.close();
   }
   root.close();
   FsHelpers::sortFileList(files);
@@ -137,7 +213,14 @@ void FileBrowserActivity::onEnter() {
   if (!root) {
     basepath = "/";
     loadFiles();
-  } else if (!root.isDirectory()) {
+    requestUpdate();
+    return;
+  }
+
+  const bool rootIsDirectory = root.isDirectory();
+  root.close();
+
+  if (!rootIsDirectory) {
     lockLongPressBack = mappedInput.isPressed(MappedInputManager::Button::Back);
 
     const std::string oldPath = basepath;
@@ -267,6 +350,7 @@ void FileBrowserActivity::showDirectoryActionMenu(const std::string& entry, bool
                                clearPreferredSleepFolder();
                                return;
                              case FileBrowserAction::DeleteCache:
+                             case FileBrowserAction::DeleteStats:
                              case FileBrowserAction::ToggleCompleted:
                              case FileBrowserAction::RemoveFromRecents:
                              case FileBrowserAction::PinFavorite:
@@ -373,13 +457,37 @@ void FileBrowserActivity::showFileActionMenu(const std::string& entry, bool igno
             promptDeleteFile(fullPath, entry);
             return;
           case FileBrowserAction::DeleteCache:
-            if (!BookActions::clearBookCache(fullPath)) {
-              LOG_ERR("FileBrowser", "Failed to clear book cache for: %s", fullPath.c_str());
-            } else {
-              BookActions::drawToast(renderer, tr(STR_BOOK_CACHE_DELETED));
-              delay(1000);
-            }
-            requestUpdate();
+            startActivityForResult(std::make_unique<ConfirmationActivity>(
+                                       renderer, mappedInput, BookActions::confirmationHeading(StrId::STR_DELETE_CACHE),
+                                       getFileName(entry)),
+                                   [this, fullPath](const ActivityResult& confirmation) {
+                                     if (!confirmation.isCancelled) {
+                                       if (!BookActions::clearBookCache(fullPath)) {
+                                         LOG_ERR("FileBrowser", "Failed to clear book cache for: %s", fullPath.c_str());
+                                       } else {
+                                         BookActions::drawToast(renderer, tr(STR_BOOK_CACHE_DELETED));
+                                         delay(1000);
+                                       }
+                                     }
+                                     requestUpdate();
+                                   });
+            return;
+          case FileBrowserAction::DeleteStats:
+            startActivityForResult(
+                std::make_unique<ConfirmationActivity>(renderer, mappedInput,
+                                                       BookActions::confirmationHeading(StrId::STR_DELETE_BOOK_STATS),
+                                                       getFileName(entry)),
+                [this, fullPath](const ActivityResult& confirmation) {
+                  if (!confirmation.isCancelled) {
+                    if (!BookActions::deleteBookStats(fullPath)) {
+                      LOG_ERR("FileBrowser", "Failed to delete book stats for: %s", fullPath.c_str());
+                    } else {
+                      BookActions::drawToast(renderer, tr(STR_BOOK_STATS_DELETED));
+                      delay(1000);
+                    }
+                  }
+                  requestUpdate();
+                });
             return;
           case FileBrowserAction::ToggleCompleted:
             if (BookActions::toggleEpubCompleted(fullPath, getFileName(entry), completedFeedbackIsFinished)) {
@@ -464,12 +572,13 @@ void FileBrowserActivity::loop() {
 
   const int pathReserved = renderer.getLineHeight(SMALL_FONT_ID) + UITheme::getInstance().getMetrics().verticalSpacing;
   int pageItems = UITheme::getNumberOfItemsPerPage(renderer, true, false, true, false, pathReserved);
-  if (GUI.usesCompactFileBrowserRows()) {
+  const bool compactFileRows = SETTINGS.fileBrowserDisplay == CrossPointSettings::FILE_BROWSER_DISPLAY_2_LINES;
+  if (compactFileRows) {
     const auto& metrics = UITheme::getInstance().getMetrics();
     const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
     const int contentHeight =
         renderer.getScreenHeight() - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
-    pageItems = std::max(1, contentHeight / GUI.compactFileBrowserRowHeight(renderer));
+    pageItems = std::max(1, contentHeight / MinimalTheme::compactFileBrowserRowHeightFor(renderer));
   }
 
   if (!files.empty()) {
@@ -633,29 +742,36 @@ void FileBrowserActivity::render(RenderLock&&) {
   const int contentHeight =
       pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing - pathReserved;
   if (files.empty()) {
-    const char* emptyMsg = (mode == Mode::PickFirmware) ? tr(STR_NO_BIN_FILES) : tr(STR_NO_FILES_FOUND);
+    const char* emptyMsg = fileListMemoryLimited
+                               ? tr(STR_MEMORY_ERROR)
+                               : ((mode == Mode::PickFirmware) ? tr(STR_NO_BIN_FILES) : tr(STR_NO_FILES_FOUND));
     renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, contentTop + 20, emptyMsg);
   } else {
-    const bool compactFileRows = GUI.usesCompactFileBrowserRows();
+    const bool compactFileRows = SETTINGS.fileBrowserDisplay == CrossPointSettings::FILE_BROWSER_DISPLAY_2_LINES;
     const std::function<std::string(int)> compactRowMarker =
         compactFileRows ? [this](int index) { return files[index].back() == '/' ? "folder" : ""; }
                         : std::function<std::string(int)>{};
-    GUI.drawList(
-        renderer, Rect{0, contentTop, pageWidth, contentHeight}, files.size(), selectorIndex,
-        [this](int index) { return getFileName(files[index]); }, compactRowMarker,
-        [this](int index) { return UITheme::getFileIcon(files[index]); },
-        [this](int index) {
-          const std::string extension = getFileExtension(files[index]);
-          const std::string fullPath = buildFullPath(basepath, files[index]);
-          if (files[index].back() == '/' && isPreferredSleepFolder(fullPath)) {
-            return std::string("*");
-          }
-          if (isPinnedSleepFavorite(fullPath)) {
-            return extension.empty() ? std::string("*") : "* " + extension;
-          }
-          return extension;
-        },
-        false);
+    const auto rowTitle = [this](int index) { return getFileName(files[index]); };
+    const auto rowIcon = [this](int index) { return UITheme::getFileIcon(files[index]); };
+    const auto rowValue = [this](int index) {
+      const std::string extension = SETTINGS.hideFileExtension != 0 ? std::string() : getFileExtension(files[index]);
+      const std::string fullPath = buildFullPath(basepath, files[index]);
+      if (files[index].back() == '/' && isPreferredSleepFolder(fullPath)) {
+        return std::string("*");
+      }
+      if (isPinnedSleepFavorite(fullPath)) {
+        return extension.empty() ? std::string("*") : "* " + extension;
+      }
+      return extension;
+    };
+    const Rect listRect{0, contentTop, pageWidth, contentHeight};
+    if (compactFileRows) {
+      MinimalTheme::drawCompactFileBrowserList(renderer, listRect, files.size(), selectorIndex, rowTitle,
+                                               compactRowMarker, rowIcon, rowValue);
+    } else {
+      GUI.drawList(renderer, listRect, files.size(), selectorIndex, rowTitle, compactRowMarker, rowIcon, rowValue,
+                   false);
+    }
   }
 
   // Full path display

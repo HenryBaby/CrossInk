@@ -4,6 +4,7 @@
 #include <Logging.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <iterator>
@@ -30,6 +31,7 @@
 #include "activities/reader/GlobalReadingStats.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "activities/util/OptionSelectionActivity.h"
 #include "components/HeaderDate.h"
 #include "components/UITheme.h"
@@ -41,6 +43,7 @@ const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DIS
 namespace {
 constexpr int systemVersionFooterSideMargin = 20;
 constexpr int systemVersionFooterBottomInset = 15;
+constexpr int roundedRaffHeaderDateYOffset = 13;
 
 uint8_t enumDisplayIndexForRawValue(const SettingInfo& setting, uint8_t rawValue) {
   if (setting.enumRawValues.empty()) {
@@ -174,6 +177,18 @@ uint8_t rawValueForValueDisplayIndex(const SettingInfo& setting, const uint8_t d
 uint8_t valueOptionCount(const SettingInfo& setting) {
   const uint8_t step = setting.valueRange.step == 0 ? 1 : setting.valueRange.step;
   return static_cast<uint8_t>(((setting.valueRange.max - setting.valueRange.min) / step) + 1);
+}
+
+std::string trimAsciiSpaces(const std::string& value) {
+  size_t start = 0;
+  while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
+    start++;
+  }
+  size_t end = value.size();
+  while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+    end--;
+  }
+  return value.substr(start, end - start);
 }
 }  // namespace
 
@@ -421,6 +436,54 @@ void SettingsActivity::openScreenMarginPicker(const SettingInfo& setting) {
       });
 }
 
+void SettingsActivity::openStringEditor(const SettingInfo& setting) {
+  std::string initialText;
+  if (setting.stringGetter) {
+    initialText = setting.stringGetter();
+  } else if (setting.stringMaxLen > 0) {
+    initialText = reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
+  }
+  if (setting.nameId == StrId::STR_DEVICE_NAME && initialText.empty()) {
+    initialText = SETTINGS.getEffectiveDeviceName();
+  }
+
+  const size_t maxLength = setting.stringMaxLen > 0 ? setting.stringMaxLen - 1 : 0;
+  const size_t minLength = setting.nameId == StrId::STR_DEVICE_NAME ? CrossPointSettings::MIN_DEVICE_NAME_LENGTH : 0;
+  const SettingInfo selectedSetting = setting;
+  startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId),
+                                                                 initialText, maxLength, InputType::Text, minLength),
+                         [this, selectedSetting](const ActivityResult& result) {
+                           if (result.isCancelled) {
+                             requestUpdate();
+                             return;
+                           }
+
+                           const auto* kb = std::get_if<KeyboardResult>(&result.data);
+                           if (kb == nullptr) {
+                             requestUpdate();
+                             return;
+                           }
+
+                           const std::string value = trimAsciiSpaces(kb->text);
+                           if (selectedSetting.nameId == StrId::STR_DEVICE_NAME &&
+                               (value.length() < CrossPointSettings::MIN_DEVICE_NAME_LENGTH ||
+                                value.length() > CrossPointSettings::MAX_DEVICE_NAME_LENGTH)) {
+                             requestUpdate();
+                             return;
+                           }
+
+                           if (selectedSetting.stringSetter) {
+                             selectedSetting.stringSetter(value);
+                           } else if (selectedSetting.stringMaxLen > 0) {
+                             char* ptr = reinterpret_cast<char*>(&SETTINGS) + selectedSetting.stringOffset;
+                             strncpy(ptr, value.c_str(), selectedSetting.stringMaxLen - 1);
+                             ptr[selectedSetting.stringMaxLen - 1] = '\0';
+                           }
+                           SETTINGS.saveToFile();
+                           requestUpdate();
+                         });
+}
+
 void SettingsActivity::onEnter() {
   Activity::onEnter();
 
@@ -556,6 +619,10 @@ void SettingsActivity::toggleCurrentSetting() {
       SETTINGS.saveToFile();
       requestUpdate();
     });
+    return;
+  }
+  if (setting.type == SettingType::STRING) {
+    openStringEditor(setting);
     return;
   }
   if (setting.nameId == StrId::STR_FONT_FAMILY && setting.type == SettingType::ENUM) {
@@ -775,7 +842,11 @@ void SettingsActivity::render(RenderLock&&) {
   const auto& metrics = UITheme::getInstance().getMetrics();
 
   GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_SETTINGS_TITLE));
-  drawHeaderDate(renderer, pageWidth, metrics);
+  int headerDateLineBottom = headerDateLineBottomY(renderer, metrics);
+  if (SETTINGS.uiTheme == CrossPointSettings::ROUNDEDRAFF) {
+    headerDateLineBottom += roundedRaffHeaderDateYOffset;
+  }
+  drawHeaderDateAtLineBottom(renderer, pageWidth, headerDateLineBottom);
 
   std::vector<TabInfo> tabs;
   tabs.reserve(categoryCount);
@@ -825,6 +896,14 @@ void SettingsActivity::render(RenderLock&&) {
           valueText = settingEnumOptionLabel(setting, value);
         } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
           valueText = formatSettingValue(setting);
+        } else if (setting.type == SettingType::STRING) {
+          if (setting.nameId == StrId::STR_DEVICE_NAME) {
+            valueText = SETTINGS.getEffectiveDeviceName();
+          } else if (setting.stringGetter) {
+            valueText = setting.stringGetter();
+          } else if (setting.stringMaxLen > 0) {
+            valueText = reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
+          }
         }
         return valueText;
       },
@@ -845,6 +924,7 @@ void SettingsActivity::render(RenderLock&&) {
                       (*currentSettings)[selectedSettingIndex - 1].type == SettingType::ACTION ||
                       (*currentSettings)[selectedSettingIndex - 1].nameId == StrId::STR_FONT_FAMILY ||
                       (*currentSettings)[selectedSettingIndex - 1].nameId == StrId::STR_TIME_TO_SLEEP ||
+                      (*currentSettings)[selectedSettingIndex - 1].type == SettingType::STRING ||
                       (*currentSettings)[selectedSettingIndex - 1].valuePtr == &CrossPointSettings::lineHeightPercent ||
                       (*currentSettings)[selectedSettingIndex - 1].valuePtr ==
                           &CrossPointSettings::readingIdleTimeThresholdUnits ||

@@ -440,9 +440,13 @@ void MinimalTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std:
   }
 }
 
-int MinimalTheme::compactFileBrowserRowHeight(const GfxRenderer& renderer) const {
+int MinimalTheme::compactFileBrowserRowHeightFor(const GfxRenderer& renderer) {
   const int textHeight = renderer.getLineHeight(UI_10_FONT_ID) * 2 + kFileBrowserRowVerticalPadding;
   return std::max(kFileBrowserIconSize + kFileBrowserRowVerticalPadding, textHeight);
+}
+
+int MinimalTheme::compactFileBrowserRowHeight(const GfxRenderer& renderer) const {
+  return compactFileBrowserRowHeightFor(renderer);
 }
 
 void MinimalTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, int selectedIndex,
@@ -459,9 +463,19 @@ void MinimalTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCoun
     return;
   }
 
+  drawCompactFileBrowserList(renderer, rect, itemCount, selectedIndex, rowTitle, rowSubtitle, rowIcon, rowValue,
+                             rowDimmed);
+}
+
+void MinimalTheme::drawCompactFileBrowserList(const GfxRenderer& renderer, Rect rect, int itemCount, int selectedIndex,
+                                              const std::function<std::string(int index)>& rowTitle,
+                                              const std::function<std::string(int index)>& rowSubtitle,
+                                              const std::function<UIIcon(int index)>& rowIcon,
+                                              const std::function<std::string(int index)>& rowValue,
+                                              const std::function<bool(int index)>& rowDimmed) {
   if (itemCount <= 0) return;
 
-  const int fileRowHeight = compactFileBrowserRowHeight(renderer);
+  const int fileRowHeight = compactFileBrowserRowHeightFor(renderer);
   const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   const int folderRowHeight = MinimalMetrics::values.listRowHeight;
   const auto isFolderRow = [&](int index) { return rowSubtitle(index) == "folder"; };

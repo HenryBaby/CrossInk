@@ -65,6 +65,32 @@ bool prepareTxt(const Txt& txt) {
   return txt.generateCoverBmp();
 }
 
+bool prepareFullCoverForPath(const std::string& bookPath, const bool cropped) {
+  if (bookPath.empty()) {
+    return false;
+  }
+
+  if (FsHelpers::hasEpubExtension(bookPath)) {
+    Epub epub(bookPath, "/.crosspoint");
+    if (!epub.load(/*buildIfMissing=*/false, /*skipLoadingCss=*/true)) {
+      return false;
+    }
+    return epub.generateCoverBmp(cropped);
+  }
+  if (FsHelpers::hasXtcExtension(bookPath)) {
+    Xtc xtc(bookPath, "/.crosspoint");
+    if (!xtc.load()) {
+      return false;
+    }
+    return xtc.generateCoverBmp();
+  }
+  if (FsHelpers::hasTxtExtension(bookPath) || FsHelpers::hasMarkdownExtension(bookPath)) {
+    Txt txt(bookPath, "/.crosspoint");
+    return txt.generateCoverBmp();
+  }
+  return false;
+}
+
 std::string reusableCoverPathFor(const std::string& bookPath) {
   if (FsHelpers::hasEpubExtension(bookPath)) {
     return Epub(bookPath, "/.crosspoint").getThumbBmpPath();

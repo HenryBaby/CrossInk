@@ -1,6 +1,7 @@
 #pragma once
 #include <HalStorage.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <iosfwd>
 
@@ -74,13 +75,7 @@ class CrossPointSettings {
     XTC_STATUS_BAR_TOP = 2,
     XTC_STATUS_BAR_MODE_COUNT
   };
-  enum STATUS_BAR_CLOCK_MODE {
-    CLOCK_NEVER = 0,
-    // Value 1 intentionally matches the legacy Show Clock toggle's "on" value.
-    CLOCK_IN_READER = 1,
-    CLOCK_ALWAYS = 2,
-    STATUS_BAR_CLOCK_MODE_COUNT
-  };
+  enum HIDE_CLOCK_MODE { HIDE_CLOCK_NEVER = 0, HIDE_CLOCK_IN_READER = 1, HIDE_CLOCK_ALWAYS = 2, HIDE_CLOCK_MODE_COUNT };
 
   enum ORIENTATION {
     PORTRAIT = 0,       // 480x800 logical coordinates (current default)
@@ -190,6 +185,12 @@ class CrossPointSettings {
     REFRESH_FREQUENCY_COUNT
   };
 
+  enum FILE_BROWSER_DISPLAY {
+    FILE_BROWSER_DISPLAY_1_LINE = 0,
+    FILE_BROWSER_DISPLAY_2_LINES = 1,
+    FILE_BROWSER_DISPLAY_COUNT
+  };
+
   // Short power button press actions
   enum SHORT_PWRBTN {
     IGNORE = 0,
@@ -209,6 +210,10 @@ class CrossPointSettings {
     TOGGLE_TILT_PAGE_TURN = 14,
     TOGGLE_DARK_MODE = 15,
     FOOTNOTES = 16,
+    FILE_BROWSER = 17,
+    CALIBRE_WIRELESS = 18,
+    JOIN_NETWORK = 19,
+    CREATE_HOTSPOT = 20,
     SHORT_PWRBTN_COUNT
   };
 
@@ -220,6 +225,7 @@ class CrossPointSettings {
     OFF = 0,
     CHAPTER_SKIP = 1,
     ORIENTATION_CHANGE = 2,
+    FONT_SIZE_CHANGE = 3,
     LONG_PRESS_BUTTON_BEHAVIOR_COUNT
   };
 
@@ -265,6 +271,10 @@ class CrossPointSettings {
     LONG_MENU_TOGGLE_TILT_PAGE_TURN = 13,
     LONG_MENU_TOGGLE_DARK_MODE = 14,
     LONG_MENU_FOOTNOTES = 15,
+    LONG_MENU_FILE_BROWSER = 16,
+    LONG_MENU_CALIBRE_WIRELESS = 17,
+    LONG_MENU_JOIN_NETWORK = 18,
+    LONG_MENU_CREATE_HOTSPOT = 19,
     LONG_PRESS_MENU_ACTION_COUNT
   };
 
@@ -297,8 +307,8 @@ class CrossPointSettings {
   uint8_t statusBarTimeLeft = TIME_LEFT_HIDE;
   uint8_t statusBarBattery = 1;
   uint8_t xtcStatusBarMode = XTC_STATUS_BAR_HIDE;
-  // Clock display mode (X3 only, requires DS3231 RTC)
-  uint8_t statusBarClock = 0;
+  // Clock visibility mode (X3 only, requires DS3231 RTC)
+  uint8_t hideClock = HIDE_CLOCK_ALWAYS;
   // Clock UTC offset in quarter-hour steps, biased by 48 so it fits in uint8_t.
   // Value 48 = UTC+0, 0 = UTC-12:00, 104 = UTC+14:00.
   // Quarter-hour granularity supports oddball zones like Nepal (+5:45) and Chatham (+12:45).
@@ -394,6 +404,10 @@ class CrossPointSettings {
   char sdFontFamilyName[64] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)
   uint8_t showHiddenFiles = 0;
+  // Hide file extensions in the file browser right-side value column (0 = show, 1 = hide)
+  uint8_t hideFileExtension = 0;
+  // File browser display row style (0 = one-line theme list, 1 = two-line compact display)
+  uint8_t fileBrowserDisplay = FILE_BROWSER_DISPLAY_1_LINE;
   // Remove a book from the Recent Books list when its End-of-Book screen is reached (0 = off, 1 = on)
   uint8_t removeReadBooksFromRecents = 0;
   // Move epub to /Read/ folder on SD card when marked as finished (0 = disabled, 1 = enabled)
@@ -406,11 +420,15 @@ class CrossPointSettings {
   uint8_t imageRendering = IMAGES_DISPLAY;
   // Long-press Confirm (menu button) quick action in reader (0 = off)
   uint8_t longPressMenuAction = LONG_MENU_OFF;
+  // Long-press Back quick action in reader (defaults to the historical file browser shortcut)
+  uint8_t longPressBackAction = LONG_MENU_FILE_BROWSER;
   // Tilt-based page turning (X3 only — requires QMI8658 IMU)
   uint8_t tiltPageTurn = TILT_OFF;
   uint8_t tiltPageTurnDirection = TILT_LEFT_RIGHT;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
+  // Custom KOReader sync device display name. Empty means use the hardware default.
+  char deviceName[21] = "";
   // Quick Resume: keep current content visible with moon icon instead of showing a static sleep screen.
   uint8_t quickResumeSleepScreen = QUICK_RESUME_NEVER;
 #ifdef CROSSINK_ENABLE_READING_STATS_TOGGLE
@@ -424,6 +442,7 @@ class CrossPointSettings {
   static CrossPointSettings& getInstance() { return instance; }
 
   static constexpr uint16_t POWER_BUTTON_WAKE_SHORT_MS = 10;
+  static constexpr uint16_t POWER_BUTTON_WAKE_LONG_MS = 200;
   static constexpr uint16_t POWER_BUTTON_LONG_PRESS_MS = 400;
   static constexpr uint8_t MIN_SLEEP_TIMEOUT_MINUTES = 1;
   static constexpr uint8_t SLEEP_TIMEOUT_NEVER_MINUTES = 31;
@@ -440,14 +459,18 @@ class CrossPointSettings {
       MIN_READING_IDLE_TIME_THRESHOLD_SECONDS / READING_IDLE_TIME_THRESHOLD_UNIT_SECONDS;
   static constexpr uint8_t MAX_READING_IDLE_TIME_THRESHOLD_UNITS =
       MAX_READING_IDLE_TIME_THRESHOLD_SECONDS / READING_IDLE_TIME_THRESHOLD_UNIT_SECONDS;
+  static constexpr size_t MIN_DEVICE_NAME_LENGTH = 2;
+  static constexpr size_t MAX_DEVICE_NAME_LENGTH = sizeof(deviceName) - 1;
 
   uint16_t getPowerButtonWakeDuration() const {
     return (shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) ? POWER_BUTTON_WAKE_SHORT_MS
-                                                                    : POWER_BUTTON_LONG_PRESS_MS;
+                                                                    : POWER_BUTTON_WAKE_LONG_MS;
   }
 
-  bool shouldShowClockInReader() const { return statusBarClock == CLOCK_IN_READER || statusBarClock == CLOCK_ALWAYS; }
-  bool shouldShowClockOutsideReader() const { return statusBarClock == CLOCK_ALWAYS; }
+  bool shouldShowClockInReader() const { return hideClock == HIDE_CLOCK_NEVER; }
+  bool shouldShowClockOutsideReader() const {
+    return hideClock == HIDE_CLOCK_NEVER || hideClock == HIDE_CLOCK_IN_READER;
+  }
   bool shouldTrackReadingStats() const {
 #ifdef CROSSINK_ENABLE_READING_STATS_TOGGLE
     return trackReadingStats != 0;
@@ -455,6 +478,8 @@ class CrossPointSettings {
     return true;
 #endif
   }
+  static const char* getDefaultDeviceName();
+  const char* getEffectiveDeviceName() const;
   uint16_t getReadingIdleTimeThresholdSeconds() const;
 
   // Callback to resolve SD card font IDs. Set by SdCardFontSystem::begin().

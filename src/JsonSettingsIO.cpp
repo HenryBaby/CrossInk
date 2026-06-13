@@ -253,6 +253,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
       }
       strncpy(destPtr, val.c_str(), info.stringMaxLen - 1);
       destPtr[info.stringMaxLen - 1] = '\0';
+      if (std::strcmp(info.key, "deviceName") == 0 &&
+          std::strlen(destPtr) < CrossPointSettings::MIN_DEVICE_NAME_LENGTH) {
+        destPtr[0] = '\0';
+        if (needsResave) *needsResave = true;
+      }
     } else {
       const uint8_t fieldDefault = s.*(info.valuePtr);  // struct-initializer default, read before we overwrite it
       uint8_t v = doc[info.key] | fieldDefault;
@@ -288,6 +293,21 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     }
   }
 
+  // Migration: preserve Minimal users' old two-line file browser default when the new
+  // fileBrowserDisplay setting is not present yet.
+  if (doc["fileBrowserDisplay"].isNull()) {
+    if (!doc["fileBrowserPreview"].isNull()) {
+      s.fileBrowserDisplay =
+          clamp(doc["fileBrowserPreview"] | static_cast<uint8_t>(CrossPointSettings::FILE_BROWSER_DISPLAY_1_LINE),
+                static_cast<uint8_t>(CrossPointSettings::FILE_BROWSER_DISPLAY_COUNT),
+                static_cast<uint8_t>(CrossPointSettings::FILE_BROWSER_DISPLAY_1_LINE));
+      if (needsResave) *needsResave = true;
+    } else if (s.uiTheme == CrossPointSettings::MINIMAL) {
+      s.fileBrowserDisplay = CrossPointSettings::FILE_BROWSER_DISPLAY_2_LINES;
+      if (needsResave) *needsResave = true;
+    }
+  }
+
   if (migrateLegacyTiltMode) {
     if (legacyTiltMode == 1 || legacyTiltMode == 2) {
       s.tiltPageTurn = CrossPointSettings::TILT_ON;
@@ -297,6 +317,16 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     } else {
       s.tiltPageTurn = CrossPointSettings::TILT_OFF;
     }
+  }
+
+  if (doc["hideClock"].isNull() && !doc["statusBarClock"].isNull()) {
+    constexpr uint8_t LEGACY_SHOW_CLOCK_NEVER = 0;
+    const uint8_t legacyShowClock =
+        clamp(doc["statusBarClock"] | LEGACY_SHOW_CLOCK_NEVER,
+              static_cast<uint8_t>(CrossPointSettings::HIDE_CLOCK_MODE_COUNT), LEGACY_SHOW_CLOCK_NEVER);
+    s.hideClock = legacyShowClock == LEGACY_SHOW_CLOCK_NEVER ? CrossPointSettings::HIDE_CLOCK_ALWAYS
+                                                             : CrossPointSettings::HIDE_CLOCK_NEVER;
+    if (needsResave) *needsResave = true;
   }
 
   if (doc["sleepTimeoutMinutes"].isNull() && !doc["sleepTimeout"].isNull()) {

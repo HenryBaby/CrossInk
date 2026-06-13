@@ -33,6 +33,7 @@ class HomeActivity final : public Activity {
   bool hasOpdsServers = false;
   bool minimalMenuOpen = false;
   bool minimalSuppressInitialFrontRelease = false;
+  bool homeBookSwapLongPressHandled = false;
   int minimalMenuIndex = 0;
   int minimalHomeNavIndex = -1;
   bool coverRendered = false;      // Track if cover has been rendered once
@@ -91,6 +92,9 @@ class HomeActivity final : public Activity {
   void renderCarouselFrame(int bookIdx, int slotIdx);
   void updateSlidingWindowCache(int centerIdx, int bookCount);
   int getHighlightedBookIndex() const;
+  int getVisibleRecentBookCount() const;
+  bool canSwapHomeBook() const;
+  void showNextRecentBookOnHome();
   void updateHighlightedBookContext();
   void loadRecentBooks(int maxBooks);
   void loadAllBookStats();

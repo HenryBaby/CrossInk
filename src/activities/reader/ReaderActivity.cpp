@@ -23,7 +23,9 @@ bool ReaderActivity::isTxtFile(const std::string& path) {
          FsHelpers::hasMarkdownExtension(path);  // Treat .md as txt files (until we have a markdown reader)
 }
 
-bool ReaderActivity::isBmpFile(const std::string& path) { return FsHelpers::hasBmpExtension(path); }
+static bool isImagePreviewFile(const std::string& path) {
+  return FsHelpers::hasBmpExtension(path) || FsHelpers::hasPngExtension(path);
+}
 
 bool ReaderActivity::shouldShowLoadingPopup(const std::string& path) {
   // Only first-open EPUBs are slow enough to need the popup (they build the
@@ -31,7 +33,7 @@ bool ReaderActivity::shouldShowLoadingPopup(const std::string& path) {
   // just add an extra full e-ink refresh (~3s on X3) before the reader paints
   // its first page; that page's own refresh is the visible "working" feedback.
   // Other formats, and EPUBs without a metadata cache yet, keep the popup.
-  if (isXtcFile(path) || isTxtFile(path) || isBmpFile(path)) {
+  if (isXtcFile(path) || isTxtFile(path) || isImagePreviewFile(path)) {
     return true;
   }
   return !Epub::hasCache(path, "/.crosspoint");
@@ -126,12 +128,15 @@ void ReaderActivity::onEnter() {
     GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
   }
 
+  if (isImagePreviewFile(initialBookPath)) {
+    onGoToBmpViewer(initialBookPath);
+    return;
+  }
+
   sdFontSystem.ensureLoaded(renderer);
 
   currentBookPath = initialBookPath;
-  if (isBmpFile(initialBookPath)) {
-    onGoToBmpViewer(initialBookPath);
-  } else if (isXtcFile(initialBookPath)) {
+  if (isXtcFile(initialBookPath)) {
     auto xtc = loadXtc(initialBookPath);
     if (!xtc) {
       onGoBack();

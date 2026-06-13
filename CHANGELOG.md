@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [v1.3.7] - 2026-06-13
+
+### Changed
+- Synced this fork with upstream CrossInk v1.3.3.
+- Upstream settings now save to `/.crosspoint/crossink-settings.json`, with a one-time fallback migration from `/.crosspoint/settings.json`.
+- The X3 clock visibility setting is now phrased as `Hide Clock`, with existing `Show Clock` preferences migrated to the matching hide behavior.
+
+### Added
+- Upstream file browser display options for one-line or two-line rows, hiding file extensions, and deleting one book's reading stats.
+- Upstream device-name setting for KOReader Sync and Nearby Stats Sync.
+- Upstream shortcut options and custom shortcuts for Long-press Back Action.
+
+### Fixed
+- Upstream fixes for finished-book moves preserving reading progress, per-book stats, bookmarks, and resume state.
+- Upstream fixes for file browser refresh, oversized folders, PNG previews, and hidden macOS/Windows metadata files.
+- Upstream reader, sleep-screen, KOReader Sync, SD-card font, cache, bookmark, and theme fixes from CrossInk v1.3.3.
+
 ## [v1.3.6] - 2026-06-13
 
 ### Added

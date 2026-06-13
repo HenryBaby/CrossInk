@@ -155,6 +155,17 @@ families:
       italic:     {url: "https://mirrors.ctan.org/fonts/domitian/opentype/Domitian-Italic.otf"}
       bolditalic: {url: "https://mirrors.ctan.org/fonts/domitian/opentype/Domitian-BoldItalic.otf"}
 
+  - name: LibreBaskerville
+    description: "A serif reimplementing the classic Baskerville (Latin)"
+    languages: "Latin"
+    intervals: latin-ext
+    sizes: [8, 9, 10, 12, 14, 16, 18, 20]
+    styles:
+      regular:    {url: "https://raw.githubusercontent.com/impallari/Libre-Baskerville/master/fonts/ttf/LibreBaskerville-Regular.ttf"}
+      bold:       {url: "https://raw.githubusercontent.com/impallari/Libre-Baskerville/master/fonts/ttf/LibreBaskerville-Bold.ttf"}
+      italic:     {url: "https://raw.githubusercontent.com/impallari/Libre-Baskerville/master/fonts/ttf/LibreBaskerville-Italic.ttf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/impallari/Libre-Baskerville/master/fonts/ttf/LibreBaskerville-BoldItalic.ttf"}
+
 
   # ── Sans-serif ─────────────────────────────────────────────────────────
 
@@ -208,10 +219,10 @@ families:
     intervals: latin-ext,greek,cyrillic,georgian,armenian,ethiopic
     sizes: [8, 9, 10, 12, 14, 16, 18, 20]
     styles:
-      regular:    {path: "builtinFonts/source/NotoSans/NotoSans-Regular.ttf"}
-      bold:       {path: "builtinFonts/source/NotoSans/NotoSans-Bold.ttf"}
-      italic:     {path: "builtinFonts/source/NotoSans/NotoSans-Italic.ttf"}
-      bolditalic: {path: "builtinFonts/source/NotoSans/NotoSans-BoldItalic.ttf"}
+      regular:    {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/NotoSans/NotoSans-Regular.ttf"}
+      bold:       {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/NotoSans/NotoSans-Bold.ttf"}
+      italic:     {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/NotoSans/NotoSans-Italic.ttf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/NotoSans/NotoSans-BoldItalic.ttf"}
 
   - name: SourceSans3
     description: "Adobe humanist sans-serif"
@@ -253,12 +264,12 @@ families:
   - name: OpenDyslexic
     description: "Dyslexia-friendly font (Latin)"
     intervals: latin-ext
-    sizes: [8, 10, 12, 14]
+    sizes: [8, 9, 10, 12, 14, 16, 18, 20]
     styles:
-      regular:    {path: "builtinFonts/source/OpenDyslexic/OpenDyslexic-Regular.otf"}
-      bold:       {path: "builtinFonts/source/OpenDyslexic/OpenDyslexic-Bold.otf"}
-      italic:     {path: "builtinFonts/source/OpenDyslexic/OpenDyslexic-Italic.otf"}
-      bolditalic: {path: "builtinFonts/source/OpenDyslexic/OpenDyslexic-BoldItalic.otf"}
+      regular:    {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/OpenDyslexic/OpenDyslexic-Regular.otf"}
+      bold:       {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/OpenDyslexic/OpenDyslexic-Bold.otf"}
+      italic:     {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/OpenDyslexic/OpenDyslexic-Italic.otf"}
+      bolditalic: {url: "https://raw.githubusercontent.com/uxjulia/crossink-fonts/main/fonts/OpenDyslexic/OpenDyslexic-BoldItalic.otf"}
 
   # ── Accessibility ──────────────────────────────────────────────────────
 
