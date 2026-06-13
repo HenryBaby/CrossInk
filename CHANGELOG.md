@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- OTA update checks now show "No update available" when this fork has no matching release metadata instead of showing a generic failure.
+
 ## [v1.3.3] - 2026-06-13
 
 ### Added
