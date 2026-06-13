@@ -1,5 +1,8 @@
 name: Compile Release
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -48,6 +51,7 @@ jobs:
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
       - name: Resolve release version
+        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
@@ -56,7 +60,27 @@ jobs:
           fi
           VERSION="${VERSION#v}"
           echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
-          sed -i "s/crossink_version = .*/crossink_version = $VERSION/" platformio.ini
+
+      - name: Verify PlatformIO version
+        shell: bash
+        run: |
+          CONFIG_VERSION="$(python3 - <<'PY'
+          import configparser
+          config = configparser.ConfigParser()
+          config.read('platformio.ini')
+          print(config.get('crosspoint', 'crossink_version'))
+          PY
+          )"
+          if [ "$CONFIG_VERSION" != "${RELEASE_VERSION}" ]; then
+            echo "platformio.ini crossink_version ($CONFIG_VERSION) must match release ${RELEASE_VERSION}" >&2
+            exit 1
+          fi
+
+      - name: Generate release notes
+        run: |
+          python3 scripts/generate_release_notes.py \
+            --version "${{ env.RELEASE_VERSION }}" \
+            --output ".pio/build/release-notes.md"
 
       - name: Build CrossInk
         env:
@@ -69,7 +93,10 @@ jobs:
           token: ${{ github.token }}
           tag_name: v${{ env.RELEASE_VERSION }}
           target_commitish: ${{ github.sha }}
-          draft: true
+          body_path: .pio/build/release-notes.md
+          draft: false
+          prerelease: false
+          make_latest: true
           files: |
             .pio/build/teensy/firmware-teensy-v${{ env.RELEASE_VERSION }}.bin
             .pio/build/tiny/firmware-tiny-v${{ env.RELEASE_VERSION }}.bin
