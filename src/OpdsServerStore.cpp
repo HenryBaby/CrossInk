@@ -15,6 +15,8 @@ namespace {
 constexpr char OPDS_FILE_JSON[] = "/.crosspoint/opds.json";
 constexpr char FILENAME_FORMAT_AUTHOR_TITLE[] = "author_title";
 constexpr char FILENAME_FORMAT_TITLE_AUTHOR[] = "title_author";
+constexpr char FOLDER_ORGANIZATION_FLAT[] = "flat";
+constexpr char FOLDER_ORGANIZATION_AUTHOR[] = "author";
 constexpr size_t MAX_OPDS_DOWNLOAD_FOLDER_BYTES = 127;
 }  // namespace
 
@@ -33,6 +35,23 @@ OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value) {
     return OpdsFilenameFormat::TITLE_AUTHOR;
   }
   return OpdsFilenameFormat::AUTHOR_TITLE;
+}
+
+const char* opdsFolderOrganizationToJson(const OpdsFolderOrganization organization) {
+  switch (organization) {
+    case OpdsFolderOrganization::AUTHOR:
+      return FOLDER_ORGANIZATION_AUTHOR;
+    case OpdsFolderOrganization::FLAT:
+    default:
+      return FOLDER_ORGANIZATION_FLAT;
+  }
+}
+
+OpdsFolderOrganization opdsFolderOrganizationFromJson(const char* value) {
+  if (value && strcmp(value, FOLDER_ORGANIZATION_AUTHOR) == 0) {
+    return OpdsFolderOrganization::AUTHOR;
+  }
+  return OpdsFolderOrganization::FLAT;
 }
 
 std::string normalizeOpdsDownloadFolder(std::string folder) {

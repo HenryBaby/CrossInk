@@ -478,6 +478,7 @@ bool JsonSettingsIO::saveOpds(const OpdsServerStore& store, const char* path) {
     obj["username"] = server.username;
     obj["password_obf"] = obfuscation::obfuscateToBase64(server.password);
     obj["downloadFolder"] = normalizeOpdsDownloadFolder(server.downloadFolder);
+    obj["folderOrganization"] = opdsFolderOrganizationToJson(server.folderOrganization);
     obj["filenameFormat"] = opdsFilenameFormatToJson(server.filenameFormat);
   }
 
@@ -504,6 +505,7 @@ bool JsonSettingsIO::loadOpds(OpdsServerStore& store, const char* json, bool* ne
     server.url = obj["url"] | std::string("");
     server.username = obj["username"] | std::string("");
     server.downloadFolder = normalizeOpdsDownloadFolder(obj["downloadFolder"] | std::string("/"));
+    server.folderOrganization = opdsFolderOrganizationFromJson(obj["folderOrganization"] | "");
     server.filenameFormat = opdsFilenameFormatFromJson(obj["filenameFormat"] | "");
     // Try the obfuscated key first; fall back to plaintext "password" for
     // files written before obfuscation was added (or hand-edited JSON).
