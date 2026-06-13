@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- Finished OPDS downloads now keep author-folder organization when moved to the Read folder.
+
 ## [v1.3.4] - 2026-06-13
 
 ### Fixed

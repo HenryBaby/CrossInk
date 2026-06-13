@@ -13,21 +13,75 @@
 #include "BookmarkStore.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
 #include "activities/reader/BookReadingStats.h"
 #include "activities/reader/GlobalReadingStats.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/BookCacheUtils.h"
+#include "util/StringUtils.h"
 
 namespace {
+constexpr char READ_FOLDER[] = "/Read";
+constexpr size_t READ_FOLDER_MAX_BYTES = 127;
 
-std::string buildReadFolderDestination(const std::string& srcPath) {
-  const size_t lastSlash = srcPath.rfind('/');
-  const std::string filename = (lastSlash != std::string::npos) ? srcPath.substr(lastSlash + 1) : srcPath;
+std::string filenameFromPath(const std::string& path) {
+  const size_t lastSlash = path.rfind('/');
+  return (lastSlash != std::string::npos) ? path.substr(lastSlash + 1) : path;
+}
 
-  Storage.mkdir("/Read");
-  std::string dstPath = "/Read/" + filename;
+bool isPathUnderFolder(const std::string& path, const std::string& folder) {
+  if (folder == "/") return !path.empty() && path[0] == '/';
+  if (path.rfind(folder, 0) != 0) return false;
+  return path.size() == folder.size() || path[folder.size()] == '/';
+}
+
+std::string firstChildFolderUnder(const std::string& path, const std::string& folder) {
+  size_t childStart = folder == "/" ? 1 : folder.size() + 1;
+  if (path.size() <= childStart) return "";
+
+  const size_t childEnd = path.find('/', childStart);
+  if (childEnd == std::string::npos) return "";
+  return path.substr(childStart, childEnd - childStart);
+}
+
+std::string readFolderForBook(const std::string& srcPath, const std::string& author) {
+  std::string matchedBaseFolder;
+
+  for (const auto& server : OPDS_STORE.getServers()) {
+    if (server.folderOrganization != OpdsFolderOrganization::AUTHOR) continue;
+
+    const std::string baseFolder = normalizeOpdsDownloadFolder(server.downloadFolder);
+    if (!isPathUnderFolder(srcPath, baseFolder)) continue;
+    if (baseFolder.size() <= matchedBaseFolder.size()) continue;
+    matchedBaseFolder = baseFolder;
+  }
+
+  if (matchedBaseFolder.empty()) return READ_FOLDER;
+
+  std::string folderAuthor = author.empty() ? firstChildFolderUnder(srcPath, matchedBaseFolder) : author;
+  if (folderAuthor.empty()) return READ_FOLDER;
+
+  constexpr size_t readSeparatorBytes = 1;
+  if (sizeof(READ_FOLDER) - 1 + readSeparatorBytes >= READ_FOLDER_MAX_BYTES) return READ_FOLDER;
+
+  const size_t authorBudget = READ_FOLDER_MAX_BYTES - (sizeof(READ_FOLDER) - 1) - readSeparatorBytes;
+  std::string authorFolder = StringUtils::sanitizeFilename(folderAuthor, authorBudget);
+  if (authorFolder.size() > authorBudget) {
+    authorFolder.resize(authorBudget);
+  }
+  if (authorFolder.empty()) return READ_FOLDER;
+
+  return std::string(READ_FOLDER) + "/" + authorFolder;
+}
+
+std::string buildReadFolderDestination(const std::string& srcPath, const std::string& author) {
+  const std::string filename = filenameFromPath(srcPath);
+  const std::string readFolder = readFolderForBook(srcPath, author);
+
+  Storage.mkdir(readFolder.c_str());
+  std::string dstPath = readFolder + "/" + filename;
   if (!Storage.exists(dstPath.c_str())) {
     return dstPath;
   }
@@ -37,7 +91,7 @@ std::string buildReadFolderDestination(const std::string& srcPath) {
   const std::string ext = (dotPos != std::string::npos) ? filename.substr(dotPos) : "";
   int suffix = 2;
   do {
-    dstPath = "/Read/" + base + " (" + std::to_string(suffix) + ")" + ext;
+    dstPath = readFolder + "/" + base + " (" + std::to_string(suffix) + ")" + ext;
     suffix++;
   } while (Storage.exists(dstPath.c_str()) && suffix < 100);
   return dstPath;
@@ -123,9 +177,10 @@ bool toggleEpubCompleted(const std::string& fullPath, const std::string& display
 
   if (completed && SETTINGS.moveFinishedToReadFolder && fullPath.rfind("/Read/", 0) != 0) {
     const std::string oldCachePath = epub.getCachePath();
-    const std::string dstPath = buildReadFolderDestination(fullPath);
+    epub.load(false, true);
     const std::string title = epub.getTitle();
     const std::string author = epub.getAuthor();
+    const std::string dstPath = buildReadFolderDestination(fullPath, author);
     LOG_INF("BookActions", "Moving completed epub: %s -> %s", fullPath.c_str(), dstPath.c_str());
     if (!Storage.rename(fullPath.c_str(), dstPath.c_str())) {
       LOG_ERR("BookActions", "Failed to move book to 'Read' folder");
