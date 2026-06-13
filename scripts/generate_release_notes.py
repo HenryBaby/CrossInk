@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""
+Generate GitHub release notes from CHANGELOG.md.
+
+The release workflow uses this so tags, firmware binaries, and release notes
+share one source of truth.
+"""
+
+import argparse
+import re
+from pathlib import Path
+
+
+SECTION_TITLE_MAP = {
+    'Added': 'New',
+    'Changed': 'Changed',
+    'Deprecated': 'Deprecated',
+    'Removed': 'Removed',
+    'Fixed': 'Fixed',
+    'Security': 'Security',
+}
+
+TIP = """\
+---
+
+Tip
+
+If you experience any problems, please clear your caches before opening an issue. Start with the least invasive and work your way to the most invasive if problems persist after each step.
+1. Delete book cache (In-reader menu > `Delete book cache`)
+2. From your SD card: Delete the individual `.crosspoint/epub_<hash>` folder for the book giving you issues
+3. Delete all reading cache (`Settings > System > Files & Cache > Clear Reading Cache`)
+4. From your SD card: Delete ALL `.crosspoint/epub_<hash>` folders and `recent.json` and `state.json`
+5. Back up your `global_stats.bin` and then delete the entire `.crosspoint/` folder
+"""
+
+
+def normalize_version(version):
+    version = version.strip()
+    return version[1:] if version.startswith('v') else version
+
+
+def extract_version_section(changelog, version):
+    wanted = normalize_version(version)
+    heading = re.compile(r'^## \[(?:v)?([^\]]+)\](?:\s+-\s+.*)?$', re.MULTILINE)
+    matches = list(heading.finditer(changelog))
+
+    for index, match in enumerate(matches):
+        if normalize_version(match.group(1)) != wanted:
+            continue
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(changelog)
+        return changelog[start:end].strip()
+
+    raise SystemExit(f'No CHANGELOG.md section found for v{wanted}')
+
+
+def normalize_section_titles(section):
+    lines = []
+    for line in section.splitlines():
+        title = line.removeprefix('### ').strip() if line.startswith('### ') else None
+        if title:
+            line = f'## {SECTION_TITLE_MAP.get(title, title)}'
+        lines.append(line)
+    return '\n'.join(lines).strip()
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Generate release notes from CHANGELOG.md.')
+    parser.add_argument('--version', required=True, help='Release version, with or without leading v.')
+    parser.add_argument('--changelog', default='CHANGELOG.md', type=Path, help='Path to CHANGELOG.md.')
+    parser.add_argument('--output', required=True, type=Path, help='Output markdown file.')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    version = normalize_version(args.version)
+    changelog = args.changelog.read_text(encoding='utf-8')
+    section = normalize_section_titles(extract_version_section(changelog, version))
+
+    body = f"""> HenryBaby/CrossInk fork release.
+
+{section}
+
+{TIP}"""
+
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(body.strip() + '\n', encoding='utf-8')
+    print(f'Release notes written to: {args.output}')
+
+
+if __name__ == '__main__':
+    main()
