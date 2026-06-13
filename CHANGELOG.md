@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- Per-server OPDS download folders, including optional author subfolders, so books pulled from a catalog can be saved outside the SD card root.
+
 ## [v1.3.2] - 2026-06-10
 
 ### Added

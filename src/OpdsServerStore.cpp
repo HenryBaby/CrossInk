@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "CrossPointSettings.h"
+#include "util/StringUtils.h"
 
 OpdsServerStore OpdsServerStore::instance;
 
@@ -14,6 +15,9 @@ namespace {
 constexpr char OPDS_FILE_JSON[] = "/.crosspoint/opds.json";
 constexpr char FILENAME_FORMAT_AUTHOR_TITLE[] = "author_title";
 constexpr char FILENAME_FORMAT_TITLE_AUTHOR[] = "title_author";
+constexpr char FOLDER_ORGANIZATION_FLAT[] = "flat";
+constexpr char FOLDER_ORGANIZATION_AUTHOR[] = "author";
+constexpr size_t MAX_OPDS_DOWNLOAD_FOLDER_BYTES = 127;
 }  // namespace
 
 const char* opdsFilenameFormatToJson(const OpdsFilenameFormat format) {
@@ -31,6 +35,61 @@ OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value) {
     return OpdsFilenameFormat::TITLE_AUTHOR;
   }
   return OpdsFilenameFormat::AUTHOR_TITLE;
+}
+
+const char* opdsFolderOrganizationToJson(const OpdsFolderOrganization organization) {
+  switch (organization) {
+    case OpdsFolderOrganization::AUTHOR:
+      return FOLDER_ORGANIZATION_AUTHOR;
+    case OpdsFolderOrganization::FLAT:
+    default:
+      return FOLDER_ORGANIZATION_FLAT;
+  }
+}
+
+OpdsFolderOrganization opdsFolderOrganizationFromJson(const char* value) {
+  if (value && strcmp(value, FOLDER_ORGANIZATION_AUTHOR) == 0) {
+    return OpdsFolderOrganization::AUTHOR;
+  }
+  return OpdsFolderOrganization::FLAT;
+}
+
+std::string normalizeOpdsDownloadFolder(std::string folder) {
+  if (folder.empty()) return "/";
+
+  for (char& c : folder) {
+    if (c == '\\') c = '/';
+  }
+
+  std::string normalized = "/";
+  size_t pos = 0;
+  while (pos < folder.size()) {
+    while (pos < folder.size() && folder[pos] == '/') {
+      pos++;
+    }
+    const size_t start = pos;
+    while (pos < folder.size() && folder[pos] != '/') {
+      pos++;
+    }
+    if (start == pos) continue;
+
+    const std::string segment = folder.substr(start, pos - start);
+    if (segment == "." || segment == "..") continue;
+
+    const size_t separatorBytes = normalized.size() > 1 ? 1 : 0;
+    if (normalized.size() + separatorBytes >= MAX_OPDS_DOWNLOAD_FOLDER_BYTES) break;
+    const size_t segmentBudget = MAX_OPDS_DOWNLOAD_FOLDER_BYTES - normalized.size() - separatorBytes;
+    std::string cleanSegment = StringUtils::sanitizeFilename(segment, segmentBudget);
+    if (cleanSegment.size() > segmentBudget) {
+      cleanSegment.resize(segmentBudget);
+    }
+    if (cleanSegment.empty()) continue;
+
+    if (normalized.size() > 1) normalized += "/";
+    normalized += cleanSegment;
+  }
+
+  return normalized.empty() ? "/" : normalized;
 }
 
 bool OpdsServerStore::saveToFile() const {
