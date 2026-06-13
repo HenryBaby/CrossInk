@@ -3,6 +3,7 @@
 ## [v1.3.2] - 2026-06-10
 
 ### Added
+- Docker-based firmware builds that run the normal PlatformIO release build and copy generated `firmware-*.bin` artifacts into an output folder.
 - Current date in the top-right Settings header on X3 devices.
 - Dark Reader Mode for EPUB and TXT reading screens, plus shortcut actions for the power button and front-button long press.
 - File Browser long-press folder action for choosing a custom sleep-image folder instead of only `/.sleep` or `/sleep`.
