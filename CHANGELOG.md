@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v1.3.3] - 2026-06-13
+
 ### Added
 - Per-server OPDS download folders, including optional author subfolders, so books pulled from a catalog can be saved outside the SD card root.
 
