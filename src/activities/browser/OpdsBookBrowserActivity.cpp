@@ -1,5 +1,6 @@
 #include "OpdsBookBrowserActivity.h"
 
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -7,6 +8,9 @@
 #include <Memory.h>
 #include <OpdsStream.h>
 #include <WiFi.h>
+
+#include <cctype>
+#include <string_view>
 
 #include "MappedInputManager.h"
 #include "SdCardFontSystem.h"
@@ -61,6 +65,58 @@ std::string buildDownloadFolder(const OpdsServer& server, const OpdsEntry& book)
   }
 
   return baseFolder == "/" ? "/" + authorFolder : baseFolder + "/" + authorFolder;
+}
+
+bool pathsEqualIgnoreCase(const std::string_view left, const std::string_view right) {
+  if (left.size() != right.size()) return false;
+  for (size_t i = 0; i < left.size(); ++i) {
+    const auto leftByte = static_cast<unsigned char>(left[i]);
+    const auto rightByte = static_cast<unsigned char>(right[i]);
+    if (std::tolower(leftByte) != std::tolower(rightByte)) return false;
+  }
+  return true;
+}
+
+bool applyResponseFilename(const std::string& folder, const std::string& responseFilename, std::string& path) {
+  if (responseFilename.empty()) return false;
+
+  const std::string cleanFilename = StringUtils::sanitizeFilename(responseFilename);
+  if (!FsHelpers::hasEpubExtension(cleanFilename)) {
+    LOG_ERR("OPDS", "Ignoring non-EPUB response filename: %s", cleanFilename.c_str());
+    return false;
+  }
+
+  const std::string responsePath = folder == "/" ? "/" + cleanFilename : folder + "/" + cleanFilename;
+  if (responsePath == path) return true;
+  if (pathsEqualIgnoreCase(responsePath, path)) return true;
+
+  std::string backupPath;
+  const bool replacingExisting = Storage.exists(responsePath.c_str());
+  if (replacingExisting) {
+    backupPath = responsePath + ".replace";
+    if (Storage.exists(backupPath.c_str()) && !Storage.remove(backupPath.c_str())) {
+      LOG_ERR("OPDS", "Failed to clear replacement backup: %s", backupPath.c_str());
+      return false;
+    }
+    if (!Storage.rename(responsePath.c_str(), backupPath.c_str())) {
+      LOG_ERR("OPDS", "Failed to back up existing response filename: %s", responsePath.c_str());
+      return false;
+    }
+  }
+  if (!Storage.rename(path.c_str(), responsePath.c_str())) {
+    LOG_ERR("OPDS", "Failed to apply response filename: %s -> %s", path.c_str(), responsePath.c_str());
+    if (replacingExisting && !Storage.rename(backupPath.c_str(), responsePath.c_str())) {
+      LOG_ERR("OPDS", "Failed to restore replaced file: %s", responsePath.c_str());
+    }
+    return false;
+  }
+  if (replacingExisting && !Storage.remove(backupPath.c_str())) {
+    LOG_ERR("OPDS", "Failed to remove replacement backup: %s", backupPath.c_str());
+  }
+
+  LOG_INF("OPDS", "Applied response filename: %s", cleanFilename.c_str());
+  path = responsePath;
+  return true;
 }
 }  // namespace
 
@@ -403,6 +459,8 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
+  std::string responseFilename;
+  downloadOptions.responseFilename = &responseFilename;
 
   const auto result = HttpDownloader::downloadToFile(
       downloadUrl, filename,
@@ -414,6 +472,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
       &cancelRequested, server.username, server.password, downloadOptions);
 
   if (result == HttpDownloader::OK) {
+    applyResponseFilename(folder, responseFilename, filename);
     clearBookCache(filename);
     state = BrowserState::BROWSING;
   } else if (result == HttpDownloader::ABORTED) {

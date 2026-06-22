@@ -15,6 +15,7 @@
 #include <utility>
 
 #include "AppVersion.h"
+#include "HttpHeaderUtils.h"
 #include "network/WifiPowerSaveGuard.h"
 
 namespace {
@@ -43,11 +44,24 @@ bool isRedirect(const int status) {
   return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
 }
 
-esp_err_t captureLocationHeader(esp_http_client_event_t* evt) {
-  auto* location = static_cast<std::string*>(evt->user_data);
-  if (evt->event_id == HTTP_EVENT_ON_HEADER && location != nullptr && evt->header_key != nullptr &&
-      evt->header_value != nullptr && strcasecmp(evt->header_key, "Location") == 0) {
-    location->assign(evt->header_value);
+struct ResponseHeaders {
+  std::string redirectLocation;
+  std::string* responseFilename = nullptr;
+};
+
+esp_err_t captureResponseHeaders(esp_http_client_event_t* evt) {
+  auto* headers = static_cast<ResponseHeaders*>(evt->user_data);
+  if (evt->event_id != HTTP_EVENT_ON_HEADER || headers == nullptr || evt->header_key == nullptr ||
+      evt->header_value == nullptr) {
+    return ESP_OK;
+  }
+
+  if (strcasecmp(evt->header_key, "Location") == 0) {
+    headers->redirectLocation.assign(evt->header_value);
+  } else if (headers->responseFilename != nullptr && strcasecmp(evt->header_key, "Content-Disposition") == 0) {
+    if (!HttpHeaderUtils::extractContentDispositionFilename(evt->header_value, *headers->responseFilename)) {
+      headers->responseFilename->clear();
+    }
   }
   return ESP_OK;
 }
@@ -162,6 +176,7 @@ struct Sink {
   size_t downloaded = 0;
   size_t total = 0;
   bool rangeIgnored = false;
+  std::string* responseFilename = nullptr;
 };
 
 void setRequestHeaders(esp_http_client_handle_t client, const std::string& username, const std::string& password,
@@ -202,7 +217,9 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
     ParsedUrl currentOrigin;
     const bool currentParsed = parseUrl(currentUrl, currentOrigin);
     const bool sendAuthorization = hasCredentials && currentParsed && sameOrigin(currentOrigin, credentialOrigin);
-    std::string redirectLocation;
+    if (sink.responseFilename != nullptr) sink.responseFilename->clear();
+    ResponseHeaders responseHeaders;
+    responseHeaders.responseFilename = sink.responseFilename;
 
     esp_http_client_config_t config = {};
     config.url = currentUrl.c_str();
@@ -211,8 +228,8 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
     config.timeout_ms = HTTP_TIMEOUT_MS;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.keep_alive_enable = false;
-    config.event_handler = captureLocationHeader;
-    config.user_data = &redirectLocation;
+    config.event_handler = captureResponseHeaders;
+    config.user_data = &responseHeaders;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
@@ -242,14 +259,14 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
     }
 
     if (isRedirect(status)) {
-      if (redirectLocation.empty()) {
+      if (responseHeaders.redirectLocation.empty()) {
         LOG_ERR("HTTP", "Redirect missing Location header");
         logNetworkState("Redirect missing Location");
         esp_http_client_cleanup(client);
         return HttpDownloader::HTTP_ERROR;
       }
 
-      const std::string redirectUrl = buildRedirectUrl(currentUrl, redirectLocation);
+      const std::string redirectUrl = buildRedirectUrl(currentUrl, responseHeaders.redirectLocation);
       ParsedUrl redirect;
       if (!parseUrl(redirectUrl, redirect)) {
         LOG_ERR("HTTP", "Rejected redirect with unsupported Location");
@@ -448,6 +465,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
   sink.cancelFlag = cancelFlag;
   sink.shouldCancel = std::move(options.shouldCancel);
   sink.resumeOffset = resumeOffset;
+  sink.responseFilename = options.responseFilename;
 
   FsFile file;
   bool fileOpen = false;

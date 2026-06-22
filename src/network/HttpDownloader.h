@@ -28,16 +28,20 @@ class HttpDownloader {
 
   struct DownloadOptions {
     explicit DownloadOptions(bool preservePartial = false, bool resumePartial = false,
-                             CancelCallback shouldCancel = nullptr, size_t bufferSize = 0)
+                             CancelCallback shouldCancel = nullptr, size_t bufferSize = 0,
+                             std::string* responseFilename = nullptr)
         : preservePartial(preservePartial),
           resumePartial(resumePartial),
           shouldCancel(std::move(shouldCancel)),
-          bufferSize(bufferSize) {}
+          bufferSize(bufferSize),
+          responseFilename(responseFilename) {}
 
     bool preservePartial;
     bool resumePartial;
     CancelCallback shouldCancel;
     size_t bufferSize;
+    // Optional output populated from the final response's Content-Disposition header.
+    std::string* responseFilename;
   };
 
   /**

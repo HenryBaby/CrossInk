@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- OPDS downloads now preserve EPUB filenames supplied by the server through `Content-Disposition`, while retaining the configured download folder and falling back to the existing filename format when needed.
+
 ## [v1.3.7] - 2026-06-13
 
 ### Changed
