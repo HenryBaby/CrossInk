@@ -34,7 +34,9 @@ std::string buildBookFilenameBase(const OpdsEntry& book, const OpdsFilenameForma
   if (book.author.empty()) return book.title;
   if (book.title.empty()) return book.author;
   if (format == OpdsFilenameFormat::TITLE) return book.title;
-  if (format == OpdsFilenameFormat::TITLE_AUTHOR) return book.title + " - " + book.author;
+  if (format == OpdsFilenameFormat::TITLE_AUTHOR || format == OpdsFilenameFormat::SERVER_FILENAME) {
+    return book.title + " - " + book.author;
+  }
   return book.author + " - " + book.title;
 }
 
@@ -460,7 +462,9 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
   std::string responseFilename;
-  downloadOptions.responseFilename = &responseFilename;
+  if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
+    downloadOptions.responseFilename = &responseFilename;
+  }
 
   const auto result = HttpDownloader::downloadToFile(
       downloadUrl, filename,
@@ -472,7 +476,9 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
       &cancelRequested, server.username, server.password, downloadOptions);
 
   if (result == HttpDownloader::OK) {
-    applyResponseFilename(folder, responseFilename, filename);
+    if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
+      applyResponseFilename(folder, responseFilename, filename);
+    }
     clearBookCache(filename);
     state = BrowserState::BROWSING;
   } else if (result == HttpDownloader::ABORTED) {

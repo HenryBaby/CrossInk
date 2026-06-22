@@ -2,8 +2,10 @@
 
 ## [Unreleased]
 
+## [v1.3.8] - 2026-06-22
+
 ### Added
-- OPDS downloads now preserve EPUB filenames supplied by the server through `Content-Disposition`, while retaining the configured download folder and falling back to the existing filename format when needed.
+- Per-server OPDS filename settings now include `Server filename`, preserving valid EPUB filenames supplied through `Content-Disposition` and falling back to `Title - Author` when needed.
 
 ## [v1.3.7] - 2026-06-13
 

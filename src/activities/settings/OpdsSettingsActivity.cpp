@@ -24,6 +24,8 @@ OpdsFilenameFormat nextFilenameFormat(const OpdsFilenameFormat format) {
     case OpdsFilenameFormat::TITLE_AUTHOR:
       return OpdsFilenameFormat::TITLE;
     case OpdsFilenameFormat::TITLE:
+      return OpdsFilenameFormat::SERVER_FILENAME;
+    case OpdsFilenameFormat::SERVER_FILENAME:
     default:
       return OpdsFilenameFormat::AUTHOR_TITLE;
   }
@@ -35,6 +37,8 @@ const char* filenameFormatLabel(const OpdsFilenameFormat format) {
       return tr(STR_TITLE_AUTHOR);
     case OpdsFilenameFormat::TITLE:
       return tr(STR_TITLE);
+    case OpdsFilenameFormat::SERVER_FILENAME:
+      return tr(STR_SERVER_FILENAME);
     case OpdsFilenameFormat::AUTHOR_TITLE:
     default:
       return tr(STR_AUTHOR_TITLE);

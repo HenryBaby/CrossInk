@@ -9,5 +9,5 @@
 - OPDS organization:
   - Per-server download folders with optional author subfolders.
   - Optional title-only filenames for OPDS downloads.
-  - Server-provided EPUB filenames can be preserved during downloads.
+  - Per-server filename choices include preserving the filename supplied by the OPDS server.
   - Finished books keep the same author-folder organization when moved to the Read folder.

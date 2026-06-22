@@ -16,6 +16,7 @@ constexpr char OPDS_FILE_JSON[] = "/.crosspoint/opds.json";
 constexpr char FILENAME_FORMAT_AUTHOR_TITLE[] = "author_title";
 constexpr char FILENAME_FORMAT_TITLE_AUTHOR[] = "title_author";
 constexpr char FILENAME_FORMAT_TITLE[] = "title";
+constexpr char FILENAME_FORMAT_SERVER_FILENAME[] = "server_filename";
 constexpr char FOLDER_ORGANIZATION_FLAT[] = "flat";
 constexpr char FOLDER_ORGANIZATION_AUTHOR[] = "author";
 constexpr size_t MAX_OPDS_DOWNLOAD_FOLDER_BYTES = 127;
@@ -23,6 +24,8 @@ constexpr size_t MAX_OPDS_DOWNLOAD_FOLDER_BYTES = 127;
 
 const char* opdsFilenameFormatToJson(const OpdsFilenameFormat format) {
   switch (format) {
+    case OpdsFilenameFormat::SERVER_FILENAME:
+      return FILENAME_FORMAT_SERVER_FILENAME;
     case OpdsFilenameFormat::TITLE:
       return FILENAME_FORMAT_TITLE;
     case OpdsFilenameFormat::TITLE_AUTHOR:
@@ -39,6 +42,9 @@ OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value) {
   }
   if (value && strcmp(value, FILENAME_FORMAT_TITLE) == 0) {
     return OpdsFilenameFormat::TITLE;
+  }
+  if (value && strcmp(value, FILENAME_FORMAT_SERVER_FILENAME) == 0) {
+    return OpdsFilenameFormat::SERVER_FILENAME;
   }
   return OpdsFilenameFormat::AUTHOR_TITLE;
 }

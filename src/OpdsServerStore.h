@@ -7,6 +7,7 @@ enum class OpdsFilenameFormat : uint8_t {
   AUTHOR_TITLE = 0,
   TITLE_AUTHOR = 1,
   TITLE = 2,
+  SERVER_FILENAME = 3,
 };
 
 enum class OpdsFolderOrganization : uint8_t {

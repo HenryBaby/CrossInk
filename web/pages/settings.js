@@ -437,6 +437,7 @@ let allSettings = [];
           '<option value="author_title"' + ((srv.filenameFormat || 'author_title') === 'author_title' ? ' selected' : '') + '>Author - Title</option>' +
           '<option value="title_author"' + (srv.filenameFormat === 'title_author' ? ' selected' : '') + '>Title - Author</option>' +
           '<option value="title"' + (srv.filenameFormat === 'title' ? ' selected' : '') + '>Title</option>' +
+          '<option value="server_filename"' + (srv.filenameFormat === 'server_filename' ? ' selected' : '') + '>Server filename</option>' +
         '</select></span>' +
       '</div>' +
       '<div class="setting-row">' +
