@@ -214,6 +214,7 @@ class CrossPointSettings {
     CALIBRE_WIRELESS = 18,
     JOIN_NETWORK = 19,
     CREATE_HOTSPOT = 20,
+    CREATE_CLIPPING = 21,
     SHORT_PWRBTN_COUNT
   };
 
@@ -275,6 +276,7 @@ class CrossPointSettings {
     LONG_MENU_CALIBRE_WIRELESS = 17,
     LONG_MENU_JOIN_NETWORK = 18,
     LONG_MENU_CREATE_HOTSPOT = 19,
+    LONG_MENU_CREATE_CLIPPING = 20,
     LONG_PRESS_MENU_ACTION_COUNT
   };
 
@@ -301,6 +303,7 @@ class CrossPointSettings {
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
   uint8_t statusBarBookProgressPercentage = 1;
+  uint8_t stablePageNumbers = 0;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
@@ -400,6 +403,8 @@ class CrossPointSettings {
   uint8_t bionicReadingEnabled = 0;
   // Guide Dots - places a middle dot between words to guide the eye
   uint8_t guideReadingEnabled = 0;
+  // Per-book EPUB render mode runtime value. This is intentionally not saved as a global setting.
+  uint8_t epubRenderMode = 0;
   // SD card font family name, including optional range suffix (empty = use built-in fontFamily)
   char sdFontFamilyName[64] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)

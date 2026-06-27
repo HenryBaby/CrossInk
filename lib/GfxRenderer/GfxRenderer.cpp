@@ -1338,27 +1338,20 @@ void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const in
                                    const int height) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
 
-  // Portrait-mode coordinate transform (x↔y swap), matching drawIcon.
+  // Portrait-mode coordinate transform (x<->y swap), matching drawIcon.
   // OR with ~srcByte sets framebuffer bits to 1 (white) wherever the icon
-  // bitmap is 0 (black) — produces a white icon on a black background.
+  // bitmap is 0 (black), producing a white icon on a black background.
   const int physX = y;
   const int physY = getScreenWidth() - width - x;
-  const int imgW = height;  // dimensions swapped by portrait transform
+  const int imgW = height;
   const int imgH = width;
-  const int srcStride = (imgW + 7) / 8;  // round up so non-byte-aligned widths copy fully
+  const int srcStride = (imgW + 7) / 8;
 
-  // Trivial off-screen rejection.
   if (physX + imgW <= 0 || physX >= panelWidth) return;
   if (physY + imgH <= 0 || physY >= panelHeight) return;
 
-  // Floor-divide so a negative physX produces the correct (negative) base byte;
-  // C++ integer division truncates toward zero, which would round up for negatives.
   const int baseByte = (physX >= 0) ? (physX >> 3) : -(((-physX) + 7) >> 3);
-  const int bitShift = ((physX % 8) + 8) % 8;  // 0..7
-
-  // Strip spurious low bits in the trailing source byte when imgW is not a
-  // multiple of 8 — without this, ~bitmap would set them to 1 and bleed extra
-  // white pixels past the icon's right edge.
+  const int bitShift = ((physX % 8) + 8) % 8;
   const int trail = srcStride * 8 - imgW;
   const uint8_t trailMask = static_cast<uint8_t>(0xFF << trail);
   const int lastCol = srcStride - 1;
@@ -1993,8 +1986,18 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
     int32_t widthFP = 0;
     const bool isSupSub = (style & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0;
     const uint8_t styleIdx = resolveSdCardStyle(*sdIt->second, style);
+    const auto fontIt = fontMap.find(fontId);
+    if (fontIt == fontMap.end()) {
+      LOG_ERR("GFX", "Font %d not found", fontId);
+      return 0;
+    }
+    const auto& font = fontIt->second;
     while (uint32_t cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text))) {
       int32_t advFP = sdIt->second->getAdvance(cp, styleIdx);
+      if (advFP == 0 && !utf8IsCombiningMark(cp)) {
+        const EpdGlyph* glyph = font.getGlyph(cp, style);
+        advFP = glyph ? glyph->advanceX : 0;
+      }
       widthFP += isSupSub ? (advFP + 1) / 2 : advFP;
     }
     return fp4::toPixel(widthFP);
@@ -2207,6 +2210,30 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 
 // unused
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
+
+void GfxRenderer::displayGrayscaleBase(HalDisplay::RefreshMode fallback, const bool turnOffScreen) const {
+  display.displayGrayscaleBase(fallback, fadingFix || turnOffScreen);
+}
+
+void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
+
+void GfxRenderer::preconditionGrayscale(int x, int y, int w, int h) const {
+  if (w <= 0 || h <= 0) return;
+  // Rotate the logical rect's opposite corners to physical panel coords; the
+  // physical bbox stays axis-aligned for all four orientations.
+  int ax, ay, bx, by;
+  rotateCoordinates(orientation, x, y, &ax, &ay, panelWidth, panelHeight);
+  rotateCoordinates(orientation, x + w - 1, y + h - 1, &bx, &by, panelWidth, panelHeight);
+  int x0 = ax < bx ? ax : bx, x1 = ax > bx ? ax : bx;
+  int y0 = ay < by ? ay : by, y1 = ay > by ? ay : by;
+  if (x0 < 0) x0 = 0;
+  if (y0 < 0) y0 = 0;
+  if (x1 >= panelWidth) x1 = panelWidth - 1;
+  if (y1 >= panelHeight) y1 = panelHeight - 1;
+  if (x1 < x0 || y1 < y0) return;
+  display.preconditionGrayscale(static_cast<uint16_t>(x0), static_cast<uint16_t>(y0),
+                                static_cast<uint16_t>(x1 - x0 + 1), static_cast<uint16_t>(y1 - y0 + 1));
+}
 
 void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuffers(frameBuffer); }
 

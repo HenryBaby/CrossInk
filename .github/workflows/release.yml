@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          token: ${{ secrets.RELEASE_PAT }}
           submodules: recursive
           fetch-depth: 0
 
@@ -85,7 +86,12 @@ jobs:
       - name: Build CrossInk
         env:
           CROSSPOINT_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-        run: pio run -e teensy -e tiny -e xlarge -e no_emoji
+        run: pio run -e teensy -e tiny -e xlarge
+
+      - name: Create legacy no_emoji OTA alias
+        run: |
+          cp ".pio/build/tiny/firmware-tiny-v${{ env.RELEASE_VERSION }}.bin" \
+            ".pio/build/tiny/firmware-no_emoji-v${{ env.RELEASE_VERSION }}.bin"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -100,5 +106,5 @@ jobs:
           files: |
             .pio/build/teensy/firmware-teensy-v${{ env.RELEASE_VERSION }}.bin
             .pio/build/tiny/firmware-tiny-v${{ env.RELEASE_VERSION }}.bin
+            .pio/build/tiny/firmware-no_emoji-v${{ env.RELEASE_VERSION }}.bin
             .pio/build/xlarge/firmware-xlarge-v${{ env.RELEASE_VERSION }}.bin
-            .pio/build/no_emoji/firmware-no_emoji-v${{ env.RELEASE_VERSION }}.bin

@@ -256,6 +256,7 @@
     operationCancelled = false;
     isUploadInProgress = false;
     document.getElementById('uploadModalClose').classList.remove('disabled');
+    document.getElementById('fileInput').disabled = false;
     const progressFill = document.getElementById('progress-fill');
     const progressText = document.getElementById('progress-text');
     progressFill.style.width = '0%';
@@ -276,6 +277,7 @@
     const fileInput = document.getElementById('fileInput');
     fileInput.value = '';
     fileInput.classList.remove('has-files');
+    fileInput.disabled = false;
     const uploadBtn = document.getElementById('uploadBtn');
     uploadBtn.disabled = true;
     uploadBtn.style.display = 'block';
@@ -1125,7 +1127,7 @@
     document.getElementById('deleteModal').classList.remove('open');
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (!deleteItemsGlobal || deleteItemsGlobal.length === 0) {
       closeDeleteModal();
       return;
@@ -1138,23 +1140,45 @@
       return p;
     });
 
-    const body = 'paths=' + encodeURIComponent(JSON.stringify(paths));
-    fetch('/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body
-    }).then(async res => {
-      if (res.ok) {
-        window.location.reload();
-      } else {
-        const text = await res.text();
-        alert('Failed to delete: ' + text);
-        closeDeleteModal();
+    const deleteBtn = document.querySelector('#deleteModal .delete-btn-confirm');
+    if (deleteBtn) {
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = 'Deleting...';
+    }
+
+    const failed = [];
+    try {
+      for (const path of paths) {
+        const res = await fetch('/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'path=' + encodeURIComponent(path)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          failed.push(path + ': ' + text);
+        }
       }
-    }).catch(() => {
+
+      if (failed.length === 0) {
+        window.location.reload();
+        return;
+      }
+
+      const shown = failed.slice(0, 3).join('\n');
+      const hiddenCount = failed.length - 3;
+      alert('Failed to delete ' + failed.length + ' item' + (failed.length === 1 ? '' : 's') + ':\n' +
+            shown + (hiddenCount > 0 ? '\n...and ' + hiddenCount + ' more' : ''));
+      closeDeleteModal();
+    } catch (_) {
       alert('Failed to delete - network error');
       closeDeleteModal();
-    });
+    } finally {
+      if (deleteBtn) {
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = 'Delete';
+      }
+    }
   }
 
   // Helper to clear image picker state
@@ -1189,6 +1213,60 @@
         }
       }, 10);
     });
+
+    // Drag-and-drop: route dropped files through the existing file input so the
+    // normal validateFile() pipeline (EPUB optimize options, batch mode, upload)
+    // runs unchanged.
+    const dropZone = document.getElementById('dropZone');
+    if (dropZone) {
+      // dragenter/dragleave fire for child elements too; a counter avoids the
+      // highlight flickering as the cursor moves over the hint text or input.
+      let dragDepth = 0;
+
+      const uploadBusy = () =>
+        typeof isUploadInProgress !== 'undefined' && isUploadInProgress;
+
+      dropZone.addEventListener('click', function(e) {
+        if (uploadBusy()) return;
+        if (e.target !== fileInput) fileInput.click();
+      });
+
+      dropZone.addEventListener('dragenter', function(e) {
+        e.preventDefault();
+        dragDepth++;
+        if (!uploadBusy()) dropZone.classList.add('dragover');
+      });
+
+      dropZone.addEventListener('dragover', function(e) {
+        // Required so the browser doesn't navigate to / open the dropped file.
+        e.preventDefault();
+      });
+
+      dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) dropZone.classList.remove('dragover');
+      });
+
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dragDepth = 0;
+        dropZone.classList.remove('dragover');
+
+        // Don't let a drop disrupt an in-flight transfer.
+        if (uploadBusy()) return;
+
+        const dropped = e.dataTransfer && e.dataTransfer.files;
+        if (!dropped || dropped.length === 0) return;
+
+        // Replace the current selection, matching native file-picker semantics.
+        const dt = new DataTransfer();
+        for (const file of dropped) dt.items.add(file);
+        fileInput.files = dt.files;
+
+        validateFile();
+      });
+    }
   })();
 
   function validateFile() {
@@ -1236,7 +1314,7 @@
       }
 
       updateBatchModeUI(files.length > 1);
-      uploadBtn.disabled = false;
+      uploadBtn.disabled = isUploadInProgress;
     } else {
       updateBatchModeUI(false);
       uploadBtn.disabled = true;
@@ -1697,6 +1775,9 @@ function exportLogToFile(filename = null, isBatch = false) {
 
 /** Defensive CSS injected into every XHTML <head> — prevents e-ink overflow. */
 const DEFENSIVE_STYLE = '<style type="text/css">img,svg{max-width:100%;height:auto}body{overflow-wrap:break-word}table{max-width:100%;table-layout:fixed}pre,code{white-space:pre-wrap;word-wrap:break-word}*{box-sizing:border-box}</style>';
+const CROSSINK_LOCATION_MANIFEST_PATH = 'META-INF/x-locations.json';
+const CROSSINK_LOCATION_WORDS_PER_UNIT = 64;
+const CROSSINK_REFERENCE_WORDS_PER_PAGE = 250;
 
 /** Escape a string for safe insertion into XML attribute values / text content. */
 function xmlEscape(str) {
@@ -1712,6 +1793,58 @@ function escapeRegex(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function decodeHref(href) {
   try { return decodeURIComponent(href); }
   catch (e) { return href; }
+}
+
+const SCRUBBED_BLANK_CODEPOINT_RANGES = [
+  [0x0000, 0x0008],
+  [0x000B, 0x000C],
+  [0x000E, 0x001F],
+  [0x007F, 0x009F],
+  [0x00AD, 0x00AD],
+  [0x034F, 0x034F],
+  [0x061C, 0x061C],
+  [0x180B, 0x180F],
+  [0x200B, 0x200F],
+  [0x202A, 0x202E],
+  [0x2060, 0x2064],
+  [0x2066, 0x206F],
+  [0xFE00, 0xFE0F],
+  [0xFEFF, 0xFEFF]
+];
+
+const SCRUBBED_BLANK_CODEPOINT_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFEFF]/g;
+const NUMERIC_CHARACTER_REFERENCE_RE = /&#(?:x([0-9A-Fa-f]+)|([0-9]+));/g;
+
+function isScrubbedBlankCodepoint(codePoint) {
+  return SCRUBBED_BLANK_CODEPOINT_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end);
+}
+
+function scrubBlankCodepoints(text) {
+  let count = 0;
+  const withoutLiterals = text.replace(SCRUBBED_BLANK_CODEPOINT_RE, () => {
+    count++;
+    return '';
+  });
+
+  const cleaned = withoutLiterals.replace(NUMERIC_CHARACTER_REFERENCE_RE, (match, hexValue, decimalValue) => {
+    const rawValue = hexValue || decimalValue;
+    const codePoint = Number.parseInt(rawValue, hexValue ? 16 : 10);
+    if (Number.isFinite(codePoint) && isScrubbedBlankCodepoint(codePoint)) {
+      count++;
+      return '';
+    }
+    return match;
+  });
+
+  return { text: cleaned, count };
+}
+
+function scrubEpubTextResource(path, text) {
+  const scrubbed = scrubBlankCodepoints(text);
+  if (scrubbed.count > 0) {
+    logFix('Blank codepoints', `${escapeHtml(path.split('/').pop())} (${scrubbed.count} removed)`);
+  }
+  return scrubbed.text;
 }
 
 /**
@@ -1820,6 +1953,149 @@ function protectWhitespaceOnlyTextNodes(content) {
         return Number.isInteger(index) && index >= 0 && index < preserved.length ? preserved[index] : match;
       });
     }
+  };
+}
+
+function getElementsByLocalName(root, localName) {
+  const seen = new Set();
+  const elements = [];
+  for (const element of [...root.getElementsByTagNameNS('*', localName), ...root.getElementsByTagName(localName)]) {
+    if (seen.has(element)) continue;
+    seen.add(element);
+    elements.push(element);
+  }
+  return elements;
+}
+
+function parseOpfSpineHrefs(opfContent, opfPath) {
+  const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')) : '';
+  const opfBasePath = opfDir ? `${opfDir}/content.opf` : 'content.opf';
+
+  try {
+    const doc = new DOMParser().parseFromString(opfContent, 'application/xml');
+    if (!doc.querySelector('parsererror')) {
+      const manifest = {};
+      for (const item of getElementsByLocalName(doc, 'item')) {
+        const id = item.getAttribute('id');
+        const href = item.getAttribute('href');
+        if (id && href) {
+          manifest[id] = resolvePath(opfBasePath, decodeHref(href.split('#')[0]));
+        }
+      }
+
+      const spineHrefs = [];
+      for (const itemref of getElementsByLocalName(doc, 'itemref')) {
+        const idref = itemref.getAttribute('idref');
+        if (idref && manifest[idref]) spineHrefs.push(manifest[idref]);
+      }
+      if (spineHrefs.length > 0) return spineHrefs;
+    }
+  } catch (e) { /* fall through to regex parser */ }
+
+  const manifest = {};
+  const itemRegex = /<item\b[^>]*>/gi;
+  let match;
+  while ((match = itemRegex.exec(opfContent)) !== null) {
+    const tag = match[0];
+    const idMatch = tag.match(/\bid=["']([^"']+)["']/i);
+    const hrefMatch = tag.match(/\bhref=["']([^"']+)["']/i);
+    if (idMatch && hrefMatch) {
+      manifest[idMatch[1]] = resolvePath(opfBasePath, decodeHref(hrefMatch[1].split('#')[0]));
+    }
+  }
+
+  const spineHrefs = [];
+  const itemrefRegex = /<itemref\b[^>]*idref=["']([^"']+)["'][^>]*>/gi;
+  while ((match = itemrefRegex.exec(opfContent)) !== null) {
+    if (manifest[match[1]]) spineHrefs.push(manifest[match[1]]);
+  }
+  return spineHrefs;
+}
+
+function extractLocationText(xhtmlContent) {
+  try {
+    const doc = new DOMParser().parseFromString(xhtmlContent, 'application/xhtml+xml');
+    if (!doc.querySelector('parsererror')) {
+      doc.querySelectorAll('script,style,svg,metadata').forEach(el => el.remove());
+      return (doc.body || doc.documentElement).textContent || '';
+    }
+  } catch (e) { /* fall through to HTML parser */ }
+
+  try {
+    const doc = new DOMParser().parseFromString(xhtmlContent, 'text/html');
+    doc.querySelectorAll('script,style,svg,metadata').forEach(el => el.remove());
+    return (doc.body || doc.documentElement).textContent || '';
+  } catch (e) {
+    return xhtmlContent.replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                       .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                       .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+                       .replace(/<[^>]+>/g, ' ');
+  }
+}
+
+function countLocationWords(text) {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return 0;
+  try {
+    return (normalized.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
+  } catch (e) {
+    return (normalized.match(/[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*/g) || []).length;
+  }
+}
+
+function resolveXhtmlContentForLocation(path, xhtmlFiles) {
+  if (xhtmlFiles[path]) return xhtmlFiles[path];
+  const decoded = decodeHref(path);
+  if (xhtmlFiles[decoded]) return xhtmlFiles[decoded];
+  const filename = decoded.split('/').pop();
+  const match = Object.entries(xhtmlFiles).find(([candidate]) => candidate === decoded || candidate.endsWith('/' + filename));
+  return match ? match[1] : null;
+}
+
+function buildCrossInkLocationManifest(opfContent, opfPath, xhtmlFiles) {
+  const spineHrefs = parseOpfSpineHrefs(opfContent, opfPath);
+  if (spineHrefs.length === 0) return null;
+
+  const spine = [];
+  let totalWords = 0;
+  let nextLocation = 1;
+
+  for (let index = 0; index < spineHrefs.length; index++) {
+    const href = spineHrefs[index];
+    const content = resolveXhtmlContentForLocation(href, xhtmlFiles);
+    const wordCount = content ? countLocationWords(extractLocationText(content)) : 0;
+    const locationCount = Math.ceil(wordCount / CROSSINK_LOCATION_WORDS_PER_UNIT);
+    const startLocation = locationCount > 0 ? nextLocation : 0;
+    const endLocation = locationCount > 0 ? nextLocation + locationCount - 1 : 0;
+    const startReferencePage = wordCount > 0 ? Math.floor(totalWords / CROSSINK_REFERENCE_WORDS_PER_PAGE) + 1 : 0;
+    const endReferencePage = wordCount > 0 ? Math.ceil((totalWords + wordCount) / CROSSINK_REFERENCE_WORDS_PER_PAGE) : 0;
+
+    spine.push({
+      index,
+      href,
+      wordStart: totalWords,
+      wordCount,
+      startLocation,
+      endLocation,
+      startReferencePage,
+      endReferencePage
+    });
+
+    totalWords += wordCount;
+    nextLocation += locationCount;
+  }
+
+  return {
+    format: 'crossink-locations',
+    version: 1,
+    generator: 'crossink-web-uploader',
+    unit: 'word',
+    wordsPerLocation: CROSSINK_LOCATION_WORDS_PER_UNIT,
+    wordsPerReferencePage: CROSSINK_REFERENCE_WORDS_PER_PAGE,
+    totalWords,
+    totalLocations: Math.max(0, nextLocation - 1),
+    totalReferencePages: Math.ceil(totalWords / CROSSINK_REFERENCE_WORDS_PER_PAGE),
+    spine
   };
 }
 
@@ -2573,6 +2849,7 @@ async function convertEpubFile(file, progressCallback) {
   const entries = Object.entries(zip.files);
   const splitImages = {};
   const xhtmlFiles = {};
+  const processedXhtmlFiles = {};
   let opfPath = null, opfContent = null;
   let mainIdentifier = null;
 
@@ -2677,7 +2954,7 @@ async function convertEpubFile(file, progressCallback) {
   // Second pass: update XHTML using DOMParser
   for (const [xhtmlPath, content] of Object.entries(xhtmlFiles)) {
     if (operationCancelled) throw new Error('Cancelled by user');
-    let t = content;
+    let t = scrubEpubTextResource(xhtmlPath, content);
     const r = fixSvgCover(t);
     if (r.fixed) { t = r.c; logFix('SVG cover', xhtmlPath.split('/').pop()); }
 
@@ -2832,6 +3109,7 @@ async function convertEpubFile(file, progressCallback) {
     }
 
     out.file(xhtmlPath, t, { compression: 'DEFLATE', compressionOptions: { level: 8 }, createFolders: false });
+    processedXhtmlFiles[xhtmlPath] = t;
   }
 
   // Extract main identifier from OPF using DOMParser with regex fallback
@@ -2841,7 +3119,7 @@ async function convertEpubFile(file, progressCallback) {
 
   // Third pass: update OPF using fixOPF (DOMParser with regex fallback)
   if (opfContent) {
-    let t = opfContent;
+    let t = scrubEpubTextResource(opfPath, opfContent);
     for (const [o, n] of Object.entries(renamed)) {
       t = t.split(o.split('/').pop()).join(n.split('/').pop());
     }
@@ -2849,6 +3127,17 @@ async function convertEpubFile(file, progressCallback) {
     t = fixOPF(t, opfContent, opfDir, splitImages);
     if (t !== opfContent) logFix('OPF', 'manifest updated');
     out.file(opfPath, t, { compression: 'DEFLATE', compressionOptions: { level: 8 }, createFolders: false });
+
+    const locationManifest = buildCrossInkLocationManifest(t, opfPath, processedXhtmlFiles);
+    if (locationManifest) {
+      out.file(CROSSINK_LOCATION_MANIFEST_PATH, JSON.stringify(locationManifest), {
+        compression: 'DEFLATE',
+        compressionOptions: { level: 8 },
+        createFolders: false
+      });
+      logFix('CrossInk locations',
+             `${locationManifest.totalLocations} locations, ${locationManifest.totalReferencePages} reference pages`);
+    }
   }
 
   // Copy remaining files
@@ -2856,23 +3145,27 @@ async function convertEpubFile(file, progressCallback) {
     if (operationCancelled) throw new Error('Cancelled by user');
     if (fileObj.dir || path === 'mimetype') continue;
     const low = path.toLowerCase();
+    if (low === CROSSINK_LOCATION_MANIFEST_PATH.toLowerCase()) continue;
     if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/) || low.match(/\.(xhtml|html|htm)$/) || low.endsWith('.opf')) continue;
 
     let data = await fileObj.async('arraybuffer');
     if (low.endsWith('.css')) {
-      let t = await safeReadText(fileObj);
+      let t = scrubEpubTextResource(path, await safeReadText(fileObj));
       for (const [o, n] of Object.entries(renamed)) {
         t = t.split(o.split('/').pop()).join(n.split('/').pop());
       }
       data = new TextEncoder().encode(t);
     } else if (low.endsWith('.ncx')) {
-      let t = await safeReadText(fileObj);
+      let t = scrubEpubTextResource(path, await safeReadText(fileObj));
       for (const [o, n] of Object.entries(renamed)) {
         t = t.split(o.split('/').pop()).join(n.split('/').pop());
       }
       const oldT = t;
       t = syncNCXIdentifier(t, mainIdentifier);
       if (t !== oldT) logFix('NCX identifier', 'Synced with OPF');
+      data = new TextEncoder().encode(t);
+    } else if (low.match(/\.(xml|svg)$/)) {
+      const t = scrubEpubTextResource(path, await safeReadText(fileObj));
       data = new TextEncoder().encode(t);
     }
     out.file(path, data, { compression: 'DEFLATE', compressionOptions: { level: 8 }, createFolders: false });
@@ -3059,6 +3352,8 @@ function uploadFileHTTP(file, onProgress, onComplete, onError) {
 }
 
 function uploadFile() {
+  if (isUploadInProgress) return;
+
   const fileInput = document.getElementById('fileInput');
   const files = Array.from(fileInput.files);
   const convertEnabled = document.getElementById('convertBeforeUpload').checked;
@@ -3073,6 +3368,7 @@ function uploadFile() {
   uploadGeneration++;
   const myGeneration = uploadGeneration;
   document.getElementById('uploadModalClose').classList.add('disabled');
+  fileInput.disabled = true;
 
   const progressContainer = document.getElementById('progress-container');
   const progressFill = document.getElementById('progress-fill');

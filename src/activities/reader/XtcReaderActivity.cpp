@@ -84,14 +84,18 @@ void XtcReaderActivity::loop() {
     }
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && longPressBackHandled) {
-    longPressBackHandled = false;
+  if (longPressBackHandled) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back) ||
+        !mappedInput.isPressed(MappedInputManager::Button::Back)) {
+      longPressBackHandled = false;
+    }
     return;
   }
 
   if (!longPressBackHandled && mappedInput.isPressed(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     longPressBackHandled = true;
+    mappedInput.suppressNextBackRelease();
     executeLongPressBackAction();
     return;
   }
@@ -135,6 +139,8 @@ void XtcReaderActivity::loop() {
       case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
         activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
         return true;
+      case CrossPointSettings::SHORT_PWRBTN::CREATE_CLIPPING:
+        return false;
       default:
         return false;
     }
@@ -281,6 +287,8 @@ bool XtcReaderActivity::executeLongPressBackAction() {
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_FILE_BROWSER:
       activityManager.goToFileBrowser(xtc ? xtc->getPath() : "");
       return true;
+    case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_CREATE_CLIPPING:
+      return false;
     default:
       return false;
   }
@@ -464,8 +472,19 @@ void XtcReaderActivity::renderPage() {
       }
     }
 
-    // Display BW with conditional refresh based on pagesUntilFullRefresh
-    ReaderUtils::displayWithRefreshCycle(renderer, pagesUntilFullRefresh);
+    if (pagesUntilFullRefresh <= 1) {
+      // Periodic ghost cleanup: scrub via the normal path, then run the
+      // settle flavor of the grayscale base pass (DTM planes are equal after
+      // the display sync, so only the gentle reinforcement cells fire).
+      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      renderer.preconditionGrayscale();
+      pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
+    } else {
+      // OEM grayscale pipeline base: differential "AA-pre-BW(mid)" update as
+      // the page turn on X3; plain FAST refresh on X4 (previous behavior).
+      renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
+      pagesUntilFullRefresh--;
+    }
 
     // Pass 2: LSB buffer - mark DARK gray only (XTH value 1)
     // In LUT: 0 bit = apply gray effect, 1 bit = untouched

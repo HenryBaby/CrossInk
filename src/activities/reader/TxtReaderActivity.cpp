@@ -147,14 +147,18 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && longPressBackHandled) {
-    longPressBackHandled = false;
+  if (longPressBackHandled) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back) ||
+        !mappedInput.isPressed(MappedInputManager::Button::Back)) {
+      longPressBackHandled = false;
+    }
     return;
   }
 
   if (!longPressBackHandled && mappedInput.isPressed(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     longPressBackHandled = true;
+    mappedInput.suppressNextBackRelease();
     executeLongPressBackAction();
     return;
   }
@@ -253,8 +257,6 @@ void TxtReaderActivity::loop() {
     if (currentPage < totalPages - 1) {
       currentPage++;
       requestUpdate();
-    } else {
-      onGoHome();
     }
   }
 }
@@ -266,12 +268,17 @@ void TxtReaderActivity::toggleDarkMode() {
 }
 
 bool TxtReaderActivity::consumeLongPowerButtonRelease() {
-  if (!mappedInput.wasReleased(MappedInputManager::Button::Power) || !longPowerButtonHandled) {
+  if (!longPowerButtonHandled) {
     return false;
   }
 
-  longPowerButtonHandled = false;
-  return true;
+  if (mappedInput.wasReleased(MappedInputManager::Button::Power) ||
+      !mappedInput.isPressed(MappedInputManager::Button::Power)) {
+    longPowerButtonHandled = false;
+    return true;
+  }
+
+  return false;
 }
 
 bool TxtReaderActivity::consumeLongPowerButtonHold() {
@@ -305,6 +312,8 @@ bool TxtReaderActivity::executePowerButtonAction() {
       case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
         activityManager.goToFileBrowser(txt ? txt->getPath() : "");
         return true;
+      case CrossPointSettings::SHORT_PWRBTN::CREATE_CLIPPING:
+        return false;
       default:
         return false;
     }
@@ -354,6 +363,8 @@ bool TxtReaderActivity::executeLongPressBackAction() {
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_FILE_BROWSER:
       activityManager.goToFileBrowser(txt ? txt->getPath() : "");
       return true;
+    case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_CREATE_CLIPPING:
+      return false;
     default:
       return false;
   }

@@ -20,7 +20,9 @@
 #include "MappedInputManager.h"
 #include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
+#include "activities/reader/EpubReaderActivity.h"
 #include "activities/util/ConfirmationActivity.h"
+#include "activities/util/OptionSelectionActivity.h"
 #include "components/UITheme.h"
 #include "components/icons/book.h"
 #include "components/themes/lyra/LyraTheme.h"
@@ -504,6 +506,23 @@ void RecentBooksGridActivity::showBookActionMenu(const int bookIndex, const bool
                   reloadAfterBookAction();
                 });
             return;
+          case FileBrowserAction::ResetReaderSettings:
+            startActivityForResult(
+                std::make_unique<ConfirmationActivity>(
+                    renderer, mappedInput, BookActions::confirmationHeading(StrId::STR_RESET_BOOK_READER_SETTINGS),
+                    book.title),
+                [this, book](const ActivityResult& confirmation) {
+                  if (!confirmation.isCancelled) {
+                    if (!BookActions::resetBookReaderSettings(book.path)) {
+                      LOG_ERR("RBGA", "Failed to reset reader settings for: %s", book.path.c_str());
+                    } else {
+                      BookActions::drawToast(renderer, tr(STR_BOOK_READER_SETTINGS_RESET));
+                      delay(1000);
+                    }
+                  }
+                  reloadAfterBookAction();
+                });
+            return;
           case FileBrowserAction::ToggleCompleted: {
             bool completed = false;
             if (BookActions::toggleEpubCompleted(book.path, book.title, completed)) {
@@ -513,6 +532,26 @@ void RecentBooksGridActivity::showBookActionMenu(const int bookIndex, const bool
             reloadAfterBookAction();
             return;
           }
+          case FileBrowserAction::EpubRenderMode: {
+            const uint8_t currentIndex =
+                BookActions::epubRenderModeDisplayIndex(EpubReaderActivity::loadBookRenderMode(book.path));
+            startActivityForResult(
+                std::make_unique<OptionSelectionActivity>(renderer, mappedInput, "RecentGridEpubRenderModeSelect",
+                                                          StrId::STR_EPUB_RENDER_MODE,
+                                                          BookActions::epubRenderModeOptions(), currentIndex),
+                [this, book](const ActivityResult& selectionResult) {
+                  if (!selectionResult.isCancelled) {
+                    const auto* selection = std::get_if<OptionSelectionResult>(&selectionResult.data);
+                    if (selection != nullptr &&
+                        !EpubReaderActivity::saveBookRenderMode(
+                            book.path, BookActions::epubRenderModeForDisplayIndex(selection->index))) {
+                      LOG_ERR("RBGA", "Failed to save render mode for: %s", book.path.c_str());
+                    }
+                  }
+                  reloadAfterBookAction();
+                });
+            return;
+          }
           case FileBrowserAction::RemoveFromRecents:
             promptRemoveBook(book.path, book.title);
             return;
@@ -520,6 +559,10 @@ void RecentBooksGridActivity::showBookActionMenu(const int bookIndex, const bool
           case FileBrowserAction::UnpinFavorite:
           case FileBrowserAction::SetSleepFolder:
           case FileBrowserAction::ClearSleepFolder:
+          case FileBrowserAction::ViewBookmarks:
+          case FileBrowserAction::ViewClippings:
+          case FileBrowserAction::DeleteBookmarks:
+          case FileBrowserAction::DeleteClippings:
             return;
         }
       });

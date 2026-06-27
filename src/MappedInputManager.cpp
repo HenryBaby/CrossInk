@@ -237,6 +237,19 @@ bool MappedInputManager::wasReleased(const Button button) const {
     return !isPowerButtonActionAvailableOutsideReader(action);
   }
 
+  if (button == Button::Power) {
+    if (!mapButton(button, &HalGPIO::wasReleased)) {
+      return false;
+    }
+
+    if (suppressPowerRelease) {
+      suppressPowerRelease = false;
+      return false;
+    }
+
+    return true;
+  }
+
   return mapButton(button, &HalGPIO::wasReleased);
 }
 

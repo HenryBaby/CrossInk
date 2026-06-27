@@ -15,19 +15,45 @@
 #include "activities/Activity.h"
 
 class EpubReaderActivity final : public Activity {
+ public:
+  struct ReaderSettingsSnapshot {
+    uint8_t fontFamily = 0;
+    uint8_t fontSize = 0;
+    uint8_t lineHeightPercent = 100;
+    uint8_t orientation = 0;
+    uint8_t screenMargin = 5;
+    uint8_t publisherPageNumbers = 0;
+    uint8_t paragraphAlignment = 0;
+    uint8_t embeddedStyle = 1;
+    uint8_t hyphenationEnabled = 0;
+    uint8_t textAntiAliasing = 1;
+    uint8_t readerDarkMode = 0;
+    uint8_t imageRendering = 0;
+    uint8_t extraParagraphSpacing = 1;
+    uint8_t forceParagraphIndents = 0;
+    uint8_t bionicReadingEnabled = 0;
+    uint8_t guideReadingEnabled = 0;
+    uint8_t epubRenderMode = 0;
+    char sdFontFamilyName[64] = "";
+  };
+
+ private:
   std::shared_ptr<Epub> epub;
   std::unique_ptr<Section> section = nullptr;
   int currentSpineIndex = 0;
   int nextPageNumber = 0;
   int activeSectionFontId = 0;
-  bool activeSectionUsesFallbackFont = false;
   std::optional<uint16_t> pendingPageJump;
   // Set when navigating to a footnote href with a fragment (e.g. #note1).
   // Cleared on the next render after the new section loads and resolves it to a page.
   std::string pendingAnchor;
+  std::string pendingFootnotePreviewAnchor;
+  bool activeFootnotePreview = false;
   int pagesUntilFullRefresh = 0;
   int cachedSpineIndex = 0;
+  int cachedChapterPageNumber = 0;
   int cachedChapterTotalPageCount = 0;
+  uint16_t cachedPageParagraphIndex = UINT16_MAX;
   unsigned long lastPageTurnTime = 0UL;
   unsigned long pageTurnDuration = 0UL;
   unsigned long pageShownAtMs = 0UL;
@@ -36,6 +62,13 @@ class EpubReaderActivity final : public Activity {
   uint16_t sessionPaceSampleCount = 0;
   uint32_t sessionReadingSeconds = 0;
   uint16_t lastAutoPageTurnIntervalSeconds = 0;
+  bool bookHasCustomReaderSettings = false;
+  bool bookHasAutoPageTurnInterval = false;
+  bool bookHasRenderModeOverride = false;
+  bool restoreGlobalReaderSettingsOnExit = false;
+  ReaderSettingsSnapshot globalReaderSettingsBeforeBook;
+  bool bookReaderSettingsSuspendedForGlobalEdit = false;
+  ReaderSettingsSnapshot suspendedBookReaderSettings;
   BookReadingStats stats;
   GlobalReadingStats globalStats;
   ReadingStatsDateTime sessionStartLocalDateTime;
@@ -45,7 +78,8 @@ class EpubReaderActivity final : public Activity {
   bool pendingPercentJump = false;
   // Normalized 0.0-1.0 progress within the target spine item, computed from book percentage.
   float pendingSpineProgress = 0.0f;
-  uint16_t pendingBookmarkParagraphIndex = UINT16_MAX;
+  uint16_t pendingParagraphIndex = UINT16_MAX;
+  uint16_t pendingClippingIndex = UINT16_MAX;
   bool pendingScreenshot = false;
   bool pendingSyncSaveError = false;
   bool skipNextButtonCheck = false;  // Skip button processing for one frame after subactivity exit
@@ -70,6 +104,12 @@ class EpubReaderActivity final : public Activity {
   bool pendingTiltPageTurnFeedback = false;
   bool tiltPageTurnFeedbackEnabled = false;
   unsigned long tiltPageTurnFeedbackShowTime = 0UL;
+  bool pendingRenderModeToast = false;
+  bool renderModeToastShown = false;
+  bool pendingSafeModeToast = false;
+  bool safeModeToastShown = false;
+  uint8_t renderModeToastMode = 0;
+  unsigned long renderModeToastShowTime = 0UL;
   int completionTriggerSpineIndex = -1;
   float completionTriggerSpineProgress = 1.0f;
   bool completionPromptQueued = false;
@@ -97,9 +137,14 @@ class EpubReaderActivity final : public Activity {
 
   void renderContents(std::unique_ptr<Page> page, int fontId, int orientedMarginTop, int orientedMarginRight,
                       int orientedMarginBottom, int orientedMarginLeft);
+  void drawClippingHighlights(const Page& page, int fontId, int orientedMarginTop, int orientedMarginLeft) const;
   void renderStatusBar() const;
+  bool shouldUseFootnotePreview(int targetSpineIndex, const std::string& anchor) const;
+  std::string footnotePreviewCacheSuffix(EpubRenderMode renderMode, const std::string& anchor) const;
+  void clearFootnotePreviewState();
   void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
   bool saveProgress(int spineIndex, int currentPage, int pageCount);
+  void cacheCurrentSectionPosition();
   void pauseReadingPaceTimer(const char* reason = "unknown");
   void resumeReadingPaceTimer(const char* reason = "unknown");
   void armReadingPaceWarmup(const char* reason = "unknown");
@@ -114,22 +159,39 @@ class EpubReaderActivity final : public Activity {
   bool estimateProgressTimeLeftSeconds(uint32_t& seconds) const;
   bool estimateTimeLeftSeconds(bool bookEstimate, uint32_t& seconds) const;
   bool formatTimeLeftLabel(char* buf, size_t len) const;
+  void refreshCachedTimeLeftEstimate();
   void resetCurrentBookStatsAfterDelete();
   void openFileTransfer();
   void openAutoPageTurnIntervalPicker(bool ignoreInitialConfirmRelease = false);
+  void startClipSelection();
   void resetReadingPaceData();
+  void captureGlobalReaderSettings();
+  void restoreGlobalReaderSettings();
+  void loadBookReaderSettings();
+  void saveCurrentBookReaderSettings();
+  void saveGlobalSettingsPreservingBookOverrides();
+  void beginGlobalSettingsEdit();
+  void endGlobalSettingsEdit();
+  static void saveReaderOptionsForBook(void* ctx);
+  static void saveGlobalSettingsForBookReader(void* ctx);
+  static void beginGlobalSettingsEditForBookReader(void* ctx);
+  static void endGlobalSettingsEditForBookReader(void* ctx);
   // Jump to a percentage of the book (0-100), mapping it to spine and page.
   void jumpToPercent(int percent);
   void reindexCurrentSection();
   void executeReaderQuickAction(CrossPointSettings::LONG_PRESS_MENU_ACTION action);
-  void executeFootnoteQuickAction();
+  bool quickActionUsesConfirmRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action) const;
+  bool quickActionUsesPowerRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action) const;
+  void suppressConfirmShortcutRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action);
+  void executeFootnoteQuickAction(bool suppressInitialPowerRelease = false);
+  void suppressPowerShortcutRelease();
   bool consumeLongPowerButtonRelease();
   bool consumeLongPowerButtonHold();
   bool executeShortPowerButtonAction();
   bool executeLongPowerButtonAction();
+  void handleClippingJump(const ClippingJumpResult& clipping);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
   void applyOrientation(uint8_t orientation);
-  void executeLongPressMenuAction();
   void pageTurn(bool isForwardTurn, const char* source = "unknown");
   float getCurrentBookProgressPercent() const;
   void initializeCompletionPromptTrigger();
@@ -139,6 +201,8 @@ class EpubReaderActivity final : public Activity {
   void setBookCompleted(bool isCompleted);
   void showCompletedFeedback(bool isCompleted);
   void showTiltPageTurnFeedback(bool enabled);
+  void showRenderModeToast(uint8_t renderMode);
+  void showSafeModeToast();
 
   // Footnote navigation
   void navigateToHref(const std::string& href, bool savePosition = false);
@@ -162,5 +226,8 @@ class EpubReaderActivity final : public Activity {
   // Used by SleepActivity to prepare the background for the overlay sleep mode.
   // Returns false if the page cannot be loaded (missing cache / file error).
   static bool drawCurrentPageToBuffer(const std::string& filePath, GfxRenderer& renderer);
+  static uint8_t loadBookRenderMode(const std::string& filePath);
+  static bool saveBookRenderMode(const std::string& filePath, uint8_t renderMode);
+  static bool resetBookReaderSettings(const std::string& filePath);
   ScreenshotInfo getScreenshotInfo() const override;
 };

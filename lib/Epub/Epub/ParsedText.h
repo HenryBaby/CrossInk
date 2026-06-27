@@ -11,13 +11,15 @@
 #include "blocks/TextBlock.h"
 
 class GfxRenderer;
+struct Arena;
 
 class ParsedText {
   std::vector<std::string> words;
   std::vector<EpdFontFamily::Style> wordStyles;
-  std::vector<bool> wordContinues;       // true = word attaches to previous (no space before it)
-  std::vector<bool> wordIsBionicSuffix;  // true = token is the regular tail of a bionic bold-prefix split
-  std::vector<bool> wordIsGuideDot;      // true = token is a guide dot (U+00B7) inserted between words
+  std::vector<bool> wordContinues;          // true = word attaches to previous (no space before it)
+  std::vector<bool> wordNoSpaceBefore;      // true = may break before token, but no synthetic space when joined
+  std::vector<uint8_t> wordBionicBoundary;  // UTF-8 byte offset where the regular suffix starts; 0 = no split
+  std::vector<bool> wordGuideDotBefore;     // true = virtual guide dot belongs between previous token and this one
   std::vector<uint8_t> wordBackgroundBlack;
   bool extraParagraphSpacing;
   bool forceParagraphIndents;
@@ -30,22 +32,26 @@ class ParsedText {
   std::vector<EpdFontFamily::Style> reorderedStylesScratch;
   std::vector<uint16_t> reorderedWidthsScratch;
   std::vector<bool> reorderedContinuesScratch;
-  std::vector<bool> reorderedBionicSuffixScratch;
-  std::vector<bool> reorderedGuideDotScratch;
+  std::vector<bool> reorderedNoSpaceBeforeScratch;
+  std::vector<uint8_t> reorderedBionicBoundaryScratch;
+  std::vector<bool> reorderedGuideDotBeforeScratch;
   std::vector<uint8_t> reorderedBackgroundBlackScratch;
   std::vector<uint16_t> visualOrderScratch;
 
   int resolveFirstLineIndent(bool isFirstLine, const GfxRenderer& renderer, int fontId) const;
-  std::vector<size_t> computeLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
-                                        std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec);
+  std::vector<size_t> computeLineBreaks(Arena& scratchArena, const GfxRenderer& renderer, int fontId, int pageWidth,
+                                        std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
+                                        std::vector<bool>& noSpaceBeforeVec);
   std::vector<size_t> computeHyphenatedLineBreaks(const GfxRenderer& renderer, int fontId, int pageWidth,
-                                                  std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec);
+                                                  std::vector<uint16_t>& wordWidths, std::vector<bool>& continuesVec,
+                                                  std::vector<bool>& noSpaceBeforeVec);
   bool hyphenateWordAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                             std::vector<uint16_t>& wordWidths, bool allowFallbackBreaks);
   bool splitPathologicalTokenAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                                      std::vector<uint16_t>& wordWidths);
-  void extractLine(size_t breakIndex, int pageWidth, const std::vector<uint16_t>& wordWidths,
-                   const std::vector<bool>& continuesVec, const std::vector<size_t>& lineBreakIndices,
+  bool extractLine(Arena& scratchArena, size_t breakIndex, int pageWidth, const std::vector<uint16_t>& wordWidths,
+                   const std::vector<bool>& continuesVec, const std::vector<bool>& noSpaceBeforeVec,
+                   const std::vector<size_t>& lineBreakIndices,
                    const std::function<void(std::shared_ptr<TextBlock>)>& processLine, const GfxRenderer& renderer,
                    int fontId);
   std::vector<uint16_t> calculateWordWidths(const GfxRenderer& renderer, int fontId);
@@ -69,7 +75,7 @@ class ParsedText {
   BlockStyle& getBlockStyle() { return blockStyle; }
   size_t size() const { return words.size(); }
   bool isEmpty() const { return words.empty(); }
-  void layoutAndExtractLines(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
+  bool layoutAndExtractLines(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
                              const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
                              bool includeLastLine = true);
 };

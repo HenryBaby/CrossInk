@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <HalStorage.h>
 #include <Logging.h>
+#include <Memory.h>
 #include <MemoryBudget.h>
 #include <Serialization.h>
 
@@ -13,24 +14,49 @@
 
 namespace {
 constexpr uint32_t SECTION_CACHE_MAGIC = 0x535843FF;  // bytes: 0xFF, "CXS"
-constexpr uint8_t SECTION_FILE_VERSION = 40;
-constexpr uint8_t INITIAL_PAGE_LUT_RESERVE = 32;
+// v41: busts public v40 caches for updated text/layout metadata in this release.
+constexpr uint8_t SECTION_FILE_VERSION = 41;
+constexpr uint16_t INITIAL_SECTION_PAGE_LUT_ENTRIES = 1024;
 constexpr uint32_t HEADER_SIZE = sizeof(SECTION_CACHE_MAGIC) + sizeof(uint8_t) + sizeof(int) + sizeof(float) +
                                  sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(uint16_t) + sizeof(uint16_t) +
                                  sizeof(uint16_t) + sizeof(bool) + sizeof(bool) + sizeof(uint8_t) + sizeof(bool) +
-                                 sizeof(bool) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) +
-                                 sizeof(uint32_t);
+                                 sizeof(bool) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) +
+                                 sizeof(uint32_t) + sizeof(uint32_t);
 
 struct PageLutEntry {
   uint32_t fileOffset;
   uint16_t paragraphIndex;
   uint16_t listItemIndex;
 };
+
+bool ensurePageLutCapacity(std::unique_ptr<PageLutEntry[]>& lut, uint16_t& lutCapacity, const uint16_t lutCount) {
+  if (lutCount < lutCapacity) return true;
+  if (lutCapacity == UINT16_MAX) return false;
+
+  uint32_t nextCapacity = static_cast<uint32_t>(lutCapacity) * 2U;
+  if (nextCapacity > UINT16_MAX) {
+    nextCapacity = UINT16_MAX;
+  }
+
+  auto grown = makeUniqueNoThrow<PageLutEntry[]>(nextCapacity);
+  if (!grown) return false;
+
+  for (uint16_t i = 0; i < lutCount; i++) {
+    grown[i] = lut[i];
+  }
+  lut = std::move(grown);
+  lutCapacity = static_cast<uint16_t>(nextCapacity);
+  return true;
+}
 }  // namespace
 
 uint32_t Section::onPageComplete(std::unique_ptr<Page> page) {
   if (!file) {
     LOG_ERR("SCT", "File not open for writing page %d", pageCount);
+    return 0;
+  }
+  if (!page) {
+    LOG_ERR("SCT", "Cannot write null page %d", pageCount);
     return 0;
   }
 
@@ -51,7 +77,7 @@ bool Section::writeSectionFileHeader(const int fontId, const float lineCompressi
                                      const uint16_t viewportWidth, const uint16_t viewportHeight,
                                      const bool hyphenationEnabled, const bool embeddedStyle,
                                      const uint8_t imageRendering, const bool bionicReadingEnabled,
-                                     const bool guideReadingEnabled) {
+                                     const bool guideReadingEnabled, const EpubRenderMode renderMode) {
   if (!file) {
     LOG_DBG("SCT", "File not open for writing header");
     return false;
@@ -61,7 +87,7 @@ bool Section::writeSectionFileHeader(const int fontId, const float lineCompressi
                                    sizeof(forceParagraphIndents) + sizeof(paragraphAlignment) + sizeof(viewportWidth) +
                                    sizeof(viewportHeight) + sizeof(pageCount) + sizeof(hyphenationEnabled) +
                                    sizeof(embeddedStyle) + sizeof(imageRendering) + sizeof(bionicReadingEnabled) +
-                                   sizeof(guideReadingEnabled) + sizeof(uint32_t) + sizeof(uint32_t) +
+                                   sizeof(guideReadingEnabled) + sizeof(uint8_t) + sizeof(uint32_t) + sizeof(uint32_t) +
                                    sizeof(uint32_t) + sizeof(uint32_t),
                 "Header size mismatch");
   return serialization::tryWritePod(file, SECTION_CACHE_MAGIC) &&
@@ -73,6 +99,7 @@ bool Section::writeSectionFileHeader(const int fontId, const float lineCompressi
          serialization::tryWritePod(file, embeddedStyle) && serialization::tryWritePod(file, imageRendering) &&
          serialization::tryWritePod(file, bionicReadingEnabled) &&
          serialization::tryWritePod(file, guideReadingEnabled) &&
+         serialization::tryWritePod(file, static_cast<uint8_t>(renderMode)) &&
          serialization::tryWritePod(file,
                                     pageCount) &&  // Placeholder for page count (will be initially 0, patched later)
          serialization::tryWritePod(file, static_cast<uint32_t>(0)) &&  // Placeholder for LUT offset (patched later)
@@ -88,7 +115,8 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
                               const bool forceParagraphIndents, const uint8_t paragraphAlignment,
                               const uint16_t viewportWidth, const uint16_t viewportHeight,
                               const bool hyphenationEnabled, const bool embeddedStyle, const uint8_t imageRendering,
-                              const bool bionicReadingEnabled, const bool guideReadingEnabled) {
+                              const bool bionicReadingEnabled, const bool guideReadingEnabled,
+                              const EpubRenderMode renderMode) {
   if (!Storage.openFileForRead("SCT", filePath, file)) {
     return false;
   }
@@ -135,6 +163,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
     uint8_t fileImageRendering;
     bool fileBionicReadingEnabled;
     bool fileGuideReadingEnabled;
+    uint8_t fileRenderMode;
     if (!serialization::tryReadPod(file, fileFontId) || !serialization::tryReadPod(file, fileLineCompression) ||
         !serialization::tryReadPod(file, fileExtraParagraphSpacing) ||
         !serialization::tryReadPod(file, fileForceParagraphIndents) ||
@@ -143,7 +172,7 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
         !serialization::tryReadPod(file, fileHyphenationEnabled) ||
         !serialization::tryReadPod(file, fileEmbeddedStyle) || !serialization::tryReadPod(file, fileImageRendering) ||
         !serialization::tryReadPod(file, fileBionicReadingEnabled) ||
-        !serialization::tryReadPod(file, fileGuideReadingEnabled)) {
+        !serialization::tryReadPod(file, fileGuideReadingEnabled) || !serialization::tryReadPod(file, fileRenderMode)) {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: truncated section header");
       clearCache();
@@ -155,7 +184,8 @@ bool Section::loadSectionFile(const int fontId, const float lineCompression, con
         paragraphAlignment != fileParagraphAlignment || viewportWidth != fileViewportWidth ||
         viewportHeight != fileViewportHeight || hyphenationEnabled != fileHyphenationEnabled ||
         embeddedStyle != fileEmbeddedStyle || imageRendering != fileImageRendering ||
-        bionicReadingEnabled != fileBionicReadingEnabled || guideReadingEnabled != fileGuideReadingEnabled) {
+        bionicReadingEnabled != fileBionicReadingEnabled || guideReadingEnabled != fileGuideReadingEnabled ||
+        static_cast<uint8_t>(renderMode) != fileRenderMode) {
       file.close();
       LOG_ERR("SCT", "Deserialization failed: Parameters do not match");
       clearCache();
@@ -197,14 +227,20 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
                                 const bool hyphenationEnabled, const bool embeddedStyle, const uint8_t imageRendering,
                                 const bool bionicReadingEnabled, const bool guideReadingEnabled,
                                 const std::function<void()>& popupFn, bool* imagesWereSuppressed,
-                                bool* layoutAbortedForLowMemory) {
+                                bool* layoutAbortedForLowMemory, const EpubRenderMode renderMode,
+                                const SectionBuildOptions buildOptions) {
   const auto localPath = epub->getSpineItem(spineIndex).href;
   const auto tmpHtmlPath = epub->getCachePath() + "/.tmp_" + std::to_string(spineIndex) + ".html";
   const auto tmpSectionPath = filePath + ".tmp";
   pageCount = 0;
   if (layoutAbortedForLowMemory) *layoutAbortedForLowMemory = false;
-  LOG_DBG("SCT", "Create section start: spine=%d viewport=%ux%u image=%u bionic=%u guide=%u free=%u maxAlloc=%u",
-          spineIndex, viewportWidth, viewportHeight, imageRendering, bionicReadingEnabled, guideReadingEnabled,
+  const bool effectiveBionicReadingEnabled = bionicReadingEnabled;
+  const bool effectiveGuideReadingEnabled = guideReadingEnabled;
+  LOG_DBG("SCT",
+          "Create section start: spine=%d mode=%u preview=%u viewport=%ux%u image=%u bionic=%u guide=%u free=%u "
+          "maxAlloc=%u",
+          spineIndex, static_cast<unsigned>(renderMode), buildOptions.isPreview() ? 1U : 0U, viewportWidth,
+          viewportHeight, imageRendering, effectiveBionicReadingEnabled, effectiveGuideReadingEnabled,
           ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Create cache directory if it doesn't exist
@@ -260,14 +296,24 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
   if (!writeSectionFileHeader(fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents, paragraphAlignment,
                               viewportWidth, viewportHeight, hyphenationEnabled, embeddedStyle, imageRendering,
-                              bionicReadingEnabled, guideReadingEnabled)) {
+                              effectiveBionicReadingEnabled, effectiveGuideReadingEnabled, renderMode)) {
     LOG_ERR("SCT", "Failed to write section header");
     file.close();
     Storage.remove(tmpSectionPath.c_str());
     return false;
   }
-  std::vector<PageLutEntry> lut = {};
-  lut.reserve(INITIAL_PAGE_LUT_RESERVE);
+  // 1024 entries is 8 KB. Stack is too small, and std::vector growth in the page callback can abort on OOM.
+  uint16_t lutCapacity = INITIAL_SECTION_PAGE_LUT_ENTRIES;
+  auto lut = makeUniqueNoThrow<PageLutEntry[]>(lutCapacity);
+  if (!lut) {
+    LOG_ERR("SCT", "Failed to allocate page LUT (%u bytes)", static_cast<unsigned>(sizeof(PageLutEntry) * lutCapacity));
+    if (layoutAbortedForLowMemory) *layoutAbortedForLowMemory = true;
+    file.close();
+    Storage.remove(tmpSectionPath.c_str());
+    return false;
+  }
+  uint16_t lutCount = 0;
+  bool pageCompletionFailed = false;
 
   // Derive the content base directory and image cache path prefix for the parser
   size_t lastSlash = localPath.find_last_of('/');
@@ -295,7 +341,7 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   // Collect TOC anchors for this spine so the parser can insert page breaks at chapter boundaries
   std::vector<std::string> tocAnchors;
-  const int startTocIndex = epub->getTocIndexForSpineIndex(spineIndex);
+  const int startTocIndex = buildOptions.isPreview() ? -1 : epub->getTocIndexForSpineIndex(spineIndex);
   if (startTocIndex >= 0) {
     for (int i = startTocIndex; i < epub->getTocItemsCount(); i++) {
       auto entry = epub->getTocItem(i);
@@ -308,11 +354,33 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
 
   ChapterHtmlSlimParser visitor(
       epub, tmpHtmlPath, renderer, fontId, lineCompression, extraParagraphSpacing, forceParagraphIndents,
-      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled, bionicReadingEnabled, guideReadingEnabled,
-      [this, &lut](std::unique_ptr<Page> page, const uint16_t paragraphIndex, const uint16_t listItemIndex) {
-        lut.push_back({this->onPageComplete(std::move(page)), paragraphIndex, listItemIndex});
+      paragraphAlignment, viewportWidth, viewportHeight, hyphenationEnabled, effectiveBionicReadingEnabled,
+      effectiveGuideReadingEnabled,
+      [this, &lut, &lutCapacity, &lutCount, &pageCompletionFailed, layoutAbortedForLowMemory](
+          std::unique_ptr<Page> page, const uint16_t paragraphIndex, const uint16_t listItemIndex) {
+        if (pageCompletionFailed) {
+          return;
+        }
+        if (lutCount == UINT16_MAX) {
+          LOG_ERR("SCT", "Section page count exceeded cache format limit");
+          pageCompletionFailed = true;
+          return;
+        }
+        if (!ensurePageLutCapacity(lut, lutCapacity, lutCount)) {
+          LOG_ERR("SCT", "Failed to grow section page LUT from %u entries", lutCapacity);
+          if (layoutAbortedForLowMemory) *layoutAbortedForLowMemory = true;
+          pageCompletionFailed = true;
+          return;
+        }
+        const uint32_t fileOffset = this->onPageComplete(std::move(page));
+        if (fileOffset == 0) {
+          pageCompletionFailed = true;
+          return;
+        }
+        lut[lutCount++] = {fileOffset, paragraphIndex, listItemIndex};
       },
-      embeddedStyle, contentBase, imageBasePath, imageRendering, std::move(tocAnchors), popupFn, cssParser);
+      embeddedStyle, contentBase, imageBasePath, imageRendering, std::move(tocAnchors), popupFn, cssParser, renderMode,
+      buildOptions.isPreview() ? std::string(buildOptions.previewAnchor) : std::string{}, buildOptions.previewMaxPages);
   Hyphenator::setPreferredLanguage(epub->getLanguage());
   LOG_DBG("SCT", "Parser start: spine=%d free=%u maxAlloc=%u", spineIndex, ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   success = visitor.parseAndBuildPages();
@@ -320,10 +388,12 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
           ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   if (imagesWereSuppressed) *imagesWereSuppressed = visitor.wasLowMemoryFallbackTriggered();
-  if (layoutAbortedForLowMemory) *layoutAbortedForLowMemory = visitor.wasLowMemoryAbortTriggered();
+  if (layoutAbortedForLowMemory) {
+    *layoutAbortedForLowMemory = *layoutAbortedForLowMemory || visitor.wasLowMemoryAbortTriggered();
+  }
 
   Storage.remove(tmpHtmlPath.c_str());
-  if (!success) {
+  if (!success || pageCompletionFailed) {
     LOG_ERR("SCT", "Failed to parse XML and build pages");
     // Explicitly close() file before calling Storage.remove()
     file.close();
@@ -337,12 +407,12 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   const uint32_t lutOffset = file.position();
   bool hasFailedLutRecords = false;
   // Write LUT
-  for (const auto& entry : lut) {
-    if (entry.fileOffset == 0) {
+  for (uint16_t i = 0; i < lutCount; i++) {
+    if (lut[i].fileOffset == 0) {
       hasFailedLutRecords = true;
       break;
     }
-    if (!serialization::tryWritePod(file, entry.fileOffset)) {
+    if (!serialization::tryWritePod(file, lut[i].fileOffset)) {
       hasFailedLutRecords = true;
       break;
     }
@@ -373,13 +443,13 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   const uint32_t paragraphLutOffset = file.position();
-  if (!serialization::tryWritePod(file, static_cast<uint16_t>(lut.size()))) {
+  if (!serialization::tryWritePod(file, lutCount)) {
     file.close();
     Storage.remove(tmpSectionPath.c_str());
     return false;
   }
-  for (const auto& entry : lut) {
-    if (!serialization::tryWritePod(file, entry.paragraphIndex)) {
+  for (uint16_t i = 0; i < lutCount; i++) {
+    if (!serialization::tryWritePod(file, lut[i].paragraphIndex)) {
       file.close();
       Storage.remove(tmpSectionPath.c_str());
       return false;
@@ -387,8 +457,8 @@ bool Section::createSectionFile(const int fontId, const float lineCompression, c
   }
 
   const uint32_t liLutFileOffset = static_cast<uint32_t>(file.position());
-  for (const auto& entry : lut) {
-    if (!serialization::tryWritePod(file, entry.listItemIndex)) {
+  for (uint16_t i = 0; i < lutCount; i++) {
+    if (!serialization::tryWritePod(file, lut[i].listItemIndex)) {
       file.close();
       Storage.remove(tmpSectionPath.c_str());
       return false;
