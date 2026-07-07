@@ -1,4 +1,5 @@
-THE CHANGES IN THIS FORK IS VIBE-CODED. YOU SHOULD NOT BE USING THIS!
+> [!CAUTION]
+> THE CHANGES IN THIS FORK IS VIBE-CODED. YOU SHOULD NOT BE USING THIS!
 
 > **This is a personal fork of [CrossInk](https://github.com/uxjulia/CrossInk), which is itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader).**
 >
