@@ -5,40 +5,41 @@
 
 ### Changed
 - Synced this fork with upstream CrossInk v1.4.0.
-- Large EPUBs and SD-card font-heavy books now build pages with less temporary memory churn, reducing slow first opens and low-memory failures.
-- EPUB indexing now avoids more small temporary allocations while processing text and HTML attributes.
-- Home and sleep screens now do more EPUB cover and thumbnail work on demand, reducing reader startup work and reusing cached cover data where possible.
-- Built-in reader font choices have been reduced to Lexend Deca and Bitter, reducing firmware size while keeping fallback glyph coverage.
+- Upstream large EPUB and SD-card font-heavy book handling now builds pages with less temporary memory churn, reducing slow first opens and low-memory failures.
+- Upstream EPUB indexing now avoids more small temporary allocations while processing text and HTML attributes.
+- Upstream Home and sleep screens now do more EPUB cover and thumbnail work on demand, reducing reader startup work and reusing cached cover data where possible.
+- Upstream built-in reader font choices have been reduced to Lexend Deca and Bitter, reducing firmware size while keeping fallback glyph coverage.
 
 ### Added
-- Dashboard UI theme for the Home screen, showing the current book cover and reading stats.
-- Nearby Position Sync for sending or applying the current EPUB position between two CrossInk devices over ESP-NOW.
-- Web EPUB optimizer support for CrossInk location metadata, so optimized EPUBs can keep better progress and stable page numbers.
-- Reading Stats support for XTC and XTCH books, including the XTC reader menu, Home and sleep screen stats, mark finished, delete stats, and cache-clearing preservation.
+- Upstream Dashboard UI theme for the Home screen, showing the current book cover and reading stats.
+- Upstream Nearby Position Sync for sending or applying the current EPUB position between two CrossInk devices over ESP-NOW.
+- Upstream Web EPUB optimizer support for CrossInk location metadata, so optimized EPUBs can keep better progress and stable page numbers.
+- Upstream Reading Stats support for XTC and XTCH books, including the XTC reader menu, Home and sleep screen stats, mark finished, delete stats, and cache-clearing preservation.
 
 ### Removed
-- Teensy firmware builds are no longer produced for releases or release candidates.
+- Upstream removed Teensy firmware builds.
+- This fork continues to publish only the tiny firmware artifact in automatic releases.
 
 ### Fixed
-- KOSync now frees SD-card font registry memory before TLS requests and releases the EPUB before upload, reducing sync low-memory failures with many SD fonts installed.
-- Web file manager actions now handle filenames with special characters safely and reject unsafe rename characters before saving.
-- Auto Turn interval settings and related action prompts opened from long-press shortcuts now stay open after releasing the shortcut button.
-- EPUB footnote previews no longer show clipped status-bar labels or misleading reader progress indicators.
-- Font selection no longer reopens the font preview after choosing a font.
-- EPUB chapters now rebuild stale publisher CSS caches instead of opening without the book's styling.
-- Large SD-card font EPUBs no longer overlap characters after font or line-spacing changes, and clipping selection can fall back to a built-in UI font when needed.
-- EPUB cover and thumbnail generation is more reliable with custom SD-card fonts selected.
-- Web EPUB optimizer no longer leaves transparent PNG artwork blank or replaced by alt text.
-- Web EPUB optimizer now rasterizes SVG images to JPEG so optimized EPUBs preserve more dividers and artwork on-device.
-- Unsupported SVG images in EPUB chapters are now skipped silently instead of triggering low-memory image warnings.
-- Nearby Position Sync now silently restarts back into the reader after using ESP-NOW, matching other WiFi sync flows and reducing post-sync memory fragmentation.
-- EPUB grayscale page turns on X3 now use the grayscale-aware display base, reducing the moment where new text appears too dark before the anti-aliased overlay finishes.
-- EPUB chapters with many inline anchors, footnote links, or malformed XHTML are less likely to fail or get stuck on the indexing screen.
-- EPUB chapters with large publisher style caches and SD-card fonts now keep more heap available during indexing and retry lighter render modes after low-memory incremental builds.
-- EPUB opening and image rendering now handle more low-memory allocation failures without rebooting, and landscape image pages read less cached image data during tiled grayscale rendering.
-- EPUB clipping selection now follows right-to-left line order when selecting Hebrew and other RTL text.
-- Lyra Carousel no longer shows a blank carousel after returning from WiFi-related File Transfer screens and moving between the menu row and book row.
-- Generated SD-card font packages now include the same core glyph coverage as built-in reader fonts.
+- Upstream KOSync now frees SD-card font registry memory before TLS requests and releases the EPUB before upload, reducing sync low-memory failures with many SD fonts installed.
+- Upstream web file manager actions now handle filenames with special characters safely and reject unsafe rename characters before saving.
+- Upstream Auto Turn interval settings and related action prompts opened from long-press shortcuts now stay open after releasing the shortcut button.
+- Upstream EPUB footnote previews no longer show clipped status-bar labels or misleading reader progress indicators.
+- Upstream font selection no longer reopens the font preview after choosing a font.
+- Upstream EPUB chapters now rebuild stale publisher CSS caches instead of opening without the book's styling.
+- Upstream large SD-card font EPUBs no longer overlap characters after font or line-spacing changes, and clipping selection can fall back to a built-in UI font when needed.
+- Upstream EPUB cover and thumbnail generation is more reliable with custom SD-card fonts selected.
+- Upstream Web EPUB optimizer no longer leaves transparent PNG artwork blank or replaced by alt text.
+- Upstream Web EPUB optimizer now rasterizes SVG images to JPEG so optimized EPUBs preserve more dividers and artwork on-device.
+- Upstream unsupported SVG images in EPUB chapters are now skipped silently instead of triggering low-memory image warnings.
+- Upstream Nearby Position Sync now silently restarts back into the reader after using ESP-NOW, matching other WiFi sync flows and reducing post-sync memory fragmentation.
+- Upstream EPUB grayscale page turns on X3 now use the grayscale-aware display base, reducing the moment where new text appears too dark before the anti-aliased overlay finishes.
+- Upstream EPUB chapters with many inline anchors, footnote links, or malformed XHTML are less likely to fail or get stuck on the indexing screen.
+- Upstream EPUB chapters with large publisher style caches and SD-card fonts now keep more heap available during indexing and retry lighter render modes after low-memory incremental builds.
+- Upstream EPUB opening and image rendering now handle more low-memory allocation failures without rebooting, and landscape image pages read less cached image data during tiled grayscale rendering.
+- Upstream EPUB clipping selection now follows right-to-left line order when selecting Hebrew and other RTL text.
+- Upstream Lyra Carousel no longer shows a blank carousel after returning from WiFi-related File Transfer screens and moving between the menu row and book row.
+- Upstream generated SD-card font packages now include the same core glyph coverage as built-in reader fonts.
 
 ## [v1.3.9] - 2026-06-27
 

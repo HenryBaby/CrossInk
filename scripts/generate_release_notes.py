@@ -84,7 +84,11 @@ def default_intro(version):
     now, timezone_name = crossink_local_time()
     time_text = now.strftime('%I:%M%p').lower()
     date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
-    return f'This release is up to date with the release/v{version} branch of CrossInk as of {time_text} {timezone_name} {date_text}'
+    return (
+        f'This fork release syncs HenryBaby/CrossInk with upstream uxjulia/CrossInk '
+        f'release/v{version} as of {time_text} {timezone_name} {date_text}. '
+        'Unless explicitly marked as fork-specific, the changes listed below come from upstream CrossInk.'
+    )
 
 
 def parse_args():
