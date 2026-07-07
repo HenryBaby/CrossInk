@@ -504,6 +504,7 @@ bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) 
 
   store.recentBooks.clear();
   JsonArray arr = doc["books"].as<JsonArray>();
+  store.recentBooks.reserve(std::min(arr.size(), (size_t)10));
   for (JsonObject obj : arr) {
     if (store.getCount() >= 10) break;
     RecentBook book;

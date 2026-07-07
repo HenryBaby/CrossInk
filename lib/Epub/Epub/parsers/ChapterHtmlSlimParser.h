@@ -1,12 +1,14 @@
 #pragma once
 
 #include <Arena.h>
+#include <HalStorage.h>
 #include <expat.h>
 
 #include <climits>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Epub/EpubRenderMode.h"
@@ -76,7 +78,10 @@ class ChapterHtmlSlimParser {
   uint16_t previewMaxPages = 0;
   bool previewAnchorFound = false;
   bool previewStopRequested = false;
+  bool malformedMarkupTruncated = false;
   XML_Parser activeParser = nullptr;
+  FsFile parseFile_;
+  uint32_t parseStartTime_ = 0;
 
   // Style tracking (replaces depth-based approach)
   struct StyleStackEntry {
@@ -144,7 +149,8 @@ class ChapterHtmlSlimParser {
   // Anchor-to-page mapping: tracks which page each HTML id attribute lands on
   int completedPageCount = 0;
   std::vector<std::pair<std::string, uint16_t>> anchorData;
-  std::string pendingAnchorId;          // deferred until after previous text block is flushed
+  std::string pendingAnchorId;  // deferred until after previous text block is flushed
+  bool pendingAnchorFromInlineA = false;
   std::vector<std::string> tocAnchors;  // the list of anchors that are TOC chapter boundaries
   uint16_t xpathParagraphIndex = 0;
   uint16_t xpathListItemIndex = 0;
@@ -173,7 +179,7 @@ class ChapterHtmlSlimParser {
   void addPendingPublisherPageMarker(const char* label);
   void attachPendingPublisherPageMarkers(int yPos);
   void flushPartWordBuffer();
-  void flushLongTextRunIfNeeded();
+  void flushLongTextRunIfNeeded(bool force = false);
   size_t bufferedWordsBeforeLayoutLimit() const;
   uint16_t textRunBytesBeforeLayoutLimit() const;
   void makePages();
@@ -187,7 +193,7 @@ class ChapterHtmlSlimParser {
   bool flattensTables() const { return renderMode != EpubRenderMode::CrossInkDefault; }
   bool isLightMode() const { return renderMode == EpubRenderMode::Light; }
   bool honorsPublisherDecorations() const { return renderMode != EpubRenderMode::Light; }
-  void pushCssAncestor(int depth, const char* tag, const std::string& classAttr);
+  void pushCssAncestor(int depth, const char* tag, std::string_view classAttr);
   static void applyDirectionToEntry(StyleStackEntry& entry, const CssStyle& css);
   void emitHorizontalRule(const BlockStyle& blockStyle);
   void finalizeCurrentTableCell();
@@ -196,6 +202,9 @@ class ChapterHtmlSlimParser {
   void emitCurrentTableBuffer();
   void fallbackCurrentTableBufferToParagraphs(const char* reason);
   void fallbackCurrentTableBufferIfNeeded(const char* stage);
+  void flushMalformedPartialContent();
+  bool appendMalformedMarkupWarningPage();
+  void prewarmSectionAdvanceTable(FsFile& file) const;
   // XML callbacks
   static void XMLCALL startElement(void* userData, const XML_Char* name, const XML_Char** atts);
   static void XMLCALL characterData(void* userData, const XML_Char* s, int len);
@@ -239,10 +248,22 @@ class ChapterHtmlSlimParser {
         imageBasePath(imageBasePath),
         tocAnchors(std::move(tocAnchors)) {}
 
-  ~ChapterHtmlSlimParser() = default;
+  ~ChapterHtmlSlimParser();
   bool parseAndBuildPages();
+  enum class ParseStatus { More, Done, Error };
+  bool beginParse();
+  ParseStatus parseStep();
+  bool finishParse();  // flush the trailing page and tear down; returns true
+  void abortParse();   // tear down without flushing (error / abandon)
+
   void addLineToPage(std::shared_ptr<TextBlock> line);
   const std::vector<std::pair<std::string, uint16_t>>& getAnchors() const { return anchorData; }
   bool wasLowMemoryFallbackTriggered() const { return lowMemoryImageFallback; }
   bool wasLowMemoryAbortTriggered() const { return lowMemoryAbort; }
+
+  // Byte progress of the in-flight parse, used to estimate a still-building section's total page
+  // count (a giant single-spine book never fully lays out, so its real count is unknown). Valid
+  // between beginParse() and finishParse()/abortParse().
+  size_t parseBytesConsumed() { return parseFile_ ? parseFile_.position() : 0; }
+  size_t parseTotalBytes() { return parseFile_ ? parseFile_.size() : 0; }
 };

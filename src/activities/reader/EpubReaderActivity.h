@@ -10,6 +10,7 @@
 
 #include "BookReadingStats.h"
 #include "BookmarkStore.h"
+#include "EndOfBookOptions.h"
 #include "EpubReaderMenuActivity.h"
 #include "GlobalReadingStats.h"
 #include "activities/Activity.h"
@@ -53,7 +54,10 @@ class EpubReaderActivity final : public Activity {
   int cachedSpineIndex = 0;
   int cachedChapterPageNumber = 0;
   int cachedChapterTotalPageCount = 0;
+  bool pendingRelayoutReposition = false;
   uint16_t cachedPageParagraphIndex = UINT16_MAX;
+  uint16_t cachedPageParagraphOffset = 0;
+  uint16_t cachedPageParagraphSpan = 0;
   unsigned long lastPageTurnTime = 0UL;
   unsigned long pageTurnDuration = 0UL;
   unsigned long pageShownAtMs = 0UL;
@@ -124,6 +128,8 @@ class EpubReaderActivity final : public Activity {
   // Set when the reader is left at end-of-book and SETTINGS.moveFinishedToReadFolder is on.
   // Consumed in onExit() to relocate the finished book into /Read/.
   bool pendingReadFolderMove = false;
+  // Next-book suggestion menu for the End-of-Book screen
+  EndOfBookOptions endOfBookOptions;
 
   // Footnote support
   std::vector<FootnoteEntry> currentPageFootnotes;
@@ -142,7 +148,31 @@ class EpubReaderActivity final : public Activity {
   bool shouldUseFootnotePreview(int targetSpineIndex, const std::string& anchor) const;
   std::string footnotePreviewCacheSuffix(EpubRenderMode renderMode, const std::string& anchor) const;
   void clearFootnotePreviewState();
-  void silentIndexNextChapterIfNeeded(uint16_t viewportWidth, uint16_t viewportHeight);
+  // Pages laid out per incremental-build pump: on the render path (catching up to the page
+  // being shown) and per loop() tick (background build of a large chapter). Kept small so a
+  // background build chunk never noticeably delays input or a pending render.
+  static constexpr int BUILD_PAGES_PER_CHUNK = 8;
+  static constexpr int BACKGROUND_BUILD_PAGES_PER_TICK = 2;
+  // How many pages to keep laid out ahead of the reader for a still-building section. A page
+  // turn is ~1s on e-ink and a page builds in ~30ms, so the reader can't out-click the builder
+  // -- a tiny buffer is enough. The background build stops once the watermark is this far
+  // ahead and resumes as the reader advances; building unbounded instead locked up input by
+  // monopolizing the RenderLock. A giant single-spine book therefore never finalizes its .bin
+  // in one sitting -- instant reopen comes from Section::suspendBuild() persisting the pages
+  // already laid out as a partial file on exit/sleep.
+  static constexpr int BUILD_WINDOW_AHEAD = 5;
+  // Show the indexing popup when an initial build must lay out more than this many pages up front
+  // (a deep resume/jump into a not-yet-built section), so it isn't a silent wait. Kept independent
+  // of the small look-ahead window so ordinary landings stay popup-free.
+  static constexpr int BUILD_POPUP_PAGE_THRESHOLD = 20;
+  // Also show the popup when first building a spine larger than this (uncompressed bytes): its
+  // whole HTML must be inflated before page 1 can lay out (the giant single-spine case), which is
+  // a multi-second wait. Normal chapters are well under this and stay popup-free.
+  static constexpr size_t BUILD_POPUP_BYTE_THRESHOLD = 96 * 1024;
+  // Remap the cached relative reading position once the section's real page count is known
+  // (used after a settings change re-paginates a chapter). Returns true if currentPage moved.
+  // No-op while the section is still building or when the pagination is unchanged (plain resume).
+  bool applyDeferredReposition();
   bool saveProgress(int spineIndex, int currentPage, int pageCount);
   void cacheCurrentSectionPosition();
   void pauseReadingPaceTimer(const char* reason = "unknown");
@@ -191,6 +221,8 @@ class EpubReaderActivity final : public Activity {
   bool executeLongPowerButtonAction();
   void handleClippingJump(const ClippingJumpResult& clipping);
   void onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction action);
+  // Opens the reader menu for the current position (short-press Confirm)
+  void openReaderMenu();
   void applyOrientation(uint8_t orientation);
   void pageTurn(bool isForwardTurn, const char* source = "unknown");
   float getCurrentBookProgressPercent() const;
