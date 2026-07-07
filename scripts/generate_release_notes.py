@@ -80,11 +80,11 @@ def crossink_local_time():
     return now_utc + timedelta(hours=1), 'CET'
 
 
-def default_intro():
+def default_intro(version):
     now, timezone_name = crossink_local_time()
     time_text = now.strftime('%I:%M%p').lower()
     date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
-    return f'This release is up to date with the master branch of CrossInk as of {time_text} {timezone_name} {date_text}'
+    return f'This release is up to date with the release/v{version} branch of CrossInk as of {time_text} {timezone_name} {date_text}'
 
 
 def parse_args():
@@ -101,7 +101,7 @@ def main():
     version = normalize_version(args.version)
     changelog = args.changelog.read_text(encoding='utf-8')
     section = normalize_section_titles(extract_version_section(changelog, version))
-    intro = args.intro.strip() if args.intro else default_intro()
+    intro = args.intro.strip() if args.intro else default_intro(version)
 
     body = f"""> {intro}
 
