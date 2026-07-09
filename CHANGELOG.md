@@ -1,6 +1,12 @@
 # Changelog
 ## [Unreleased]
 
+## [v1.4.0.3] - 2026-07-09
+
+### Changed
+- Published a test release to verify OTA updates from v1.4.0.2.
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.0.2] - 2026-07-09
 
 ### Changed
