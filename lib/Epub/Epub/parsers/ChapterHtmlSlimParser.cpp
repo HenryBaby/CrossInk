@@ -672,7 +672,7 @@ void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
   const int16_t xPos = static_cast<int16_t>(blockStyle.leftInset() + ((availableWidth - width) / 2));
   const int16_t totalHeight = static_cast<int16_t>(topSpacing + ruleThickness + bottomSpacing);
 
-  if (!currentPage->elements.empty() && currentPageNextY + totalHeight > viewportHeight) {
+  if (!headingOpenerActive && !currentPage->elements.empty() && currentPageNextY + totalHeight > viewportHeight) {
     completePageFn(std::move(currentPage), xpathParagraphIndex, xpathListItemIndex);
     completedPageCount++;
     stopPreviewIfPageLimitReached();
@@ -695,6 +695,7 @@ void ChapterHtmlSlimParser::emitHorizontalRule(const BlockStyle& blockStyle) {
   }
   currentPage->elements.push_back(pageRule);
   currentPageNextY = static_cast<int16_t>(currentPageNextY + ruleThickness + bottomSpacing);
+  headingOpenerActive = false;
 
   if (!pendingAnchorId.empty()) {
     anchorData.push_back({std::move(pendingAnchorId), static_cast<uint16_t>(completedPageCount)});
@@ -1699,7 +1700,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
                   }
 
                   // Create page for image - only break if image won't fit remaining space
-                  if (self->currentPage && !self->currentPage->elements.empty() &&
+                  if (!self->headingOpenerActive && self->currentPage && !self->currentPage->elements.empty() &&
                       (self->currentPageNextY + imageMarginTop + displayHeight + imageMarginBottom >
                        self->viewportHeight)) {
                     self->completePageFn(std::move(self->currentPage), self->xpathParagraphIndex,
@@ -1913,6 +1914,8 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
   }
 
   if (matches(name, HEADER_TAGS, std::size(HEADER_TAGS))) {
+    self->headingDepth = self->depth;
+    self->headingOpenerActive = true;
     self->currentCssStyle = cssStyle;
     auto headerBlockStyle = BlockStyle::fromCssStyle(cssStyle, emSize, CssTextAlign::Center, self->viewportWidth);
     headerBlockStyle.textAlignDefined = true;
@@ -1933,6 +1936,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
     self->boldUntilDepth = std::min(self->boldUntilDepth, self->depth);
     self->updateEffectiveInlineStyle();
   } else if (matches(name, BLOCK_TAGS, std::size(BLOCK_TAGS))) {
+    if (self->headingOpenerActive) {
+      self->headingOpenerActive = false;
+    }
     if (strcmp(name, "br") == 0) {
       if (self->partWordBufferIndex > 0) {
         // flush word preceding <br/> to currentTextBlock before calling startNewTextBlock
@@ -2670,6 +2676,12 @@ bool ChapterHtmlSlimParser::beginParse() {
   paragraphAlignmentBlockStyle.alignment = align;
   if (!isPreviewBuild()) {
     startNewTextBlock(paragraphAlignmentBlockStyle);
+    if (lowMemoryAbort) {
+      parseArena_.release();
+      inlineStyleBuf_ = nullptr;
+      blockStyleBuf_ = nullptr;
+      return false;
+    }
   }
 
   if (!usesSimpleCssLookup()) {

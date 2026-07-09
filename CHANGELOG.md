@@ -1,6 +1,11 @@
 # Changelog
 ## [Unreleased]
 
+## [v1.4.0.1] - 2026-07-09
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.0] - 2026-07-07
 
 ### Changed

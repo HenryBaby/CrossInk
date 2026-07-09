@@ -26,6 +26,8 @@ SKIP_RELEASE_BULLET_PREFIXES = (
     '- This fork continues to publish only the tiny firmware artifact ',
 )
 
+UPSTREAM_SYNC_LINE = re.compile(r'^- Synced this fork with upstream CrossInk (?:release/)?v?([0-9][A-Za-z0-9.\-]*)\.$')
+
 TIP = """\
 ---
 
@@ -123,11 +125,19 @@ def crossink_local_time():
     return now_utc + timedelta(hours=1), 'CET'
 
 
-def default_intro(version):
+def upstream_ref_from_section(section, fallback_version):
+    for line in section.splitlines():
+        match = UPSTREAM_SYNC_LINE.match(line.strip())
+        if match:
+            return f"release/v{normalize_version(match.group(1))}"
+    return f"release/v{fallback_version}"
+
+
+def default_intro(upstream_ref):
     now, timezone_name = crossink_local_time()
     time_text = now.strftime('%I:%M%p').lower()
     date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
-    return f'This release is up to date with upstream uxjulia/CrossInk release/v{version} as of {time_text} {timezone_name} {date_text}'
+    return f'This release is up to date with upstream uxjulia/CrossInk {upstream_ref} as of {time_text} {timezone_name} {date_text}'
 
 
 def parse_args():
@@ -144,12 +154,14 @@ def main():
     args = parse_args()
     version = normalize_version(args.version)
     changelog = args.changelog.read_text(encoding='utf-8')
-    section = filter_release_section(normalize_section_titles(extract_version_section(changelog, version)))
+    raw_section = extract_version_section(changelog, version)
+    upstream_ref = upstream_ref_from_section(raw_section, version)
+    section = filter_release_section(normalize_section_titles(raw_section))
     if not section:
         section = extract_readme_fork_summary(args.readme.read_text(encoding='utf-8'))
     if not section:
         raise SystemExit('No fork-specific release notes or README fork summary found')
-    intro = args.intro.strip() if args.intro else default_intro(version)
+    intro = args.intro.strip() if args.intro else default_intro(upstream_ref)
 
     body = f"""> {intro}
 

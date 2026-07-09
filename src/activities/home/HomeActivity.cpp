@@ -6,6 +6,8 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <InflateReader.h>
+#include <ScratchWorkspace.h>
 #include <Serialization.h>
 #include <Utf8.h>
 #include <Xtc.h>
@@ -628,7 +630,19 @@ void HomeActivity::loadAllBookStats() {
 }
 
 void HomeActivity::loadRecentCovers(int coverHeight) {
+  // Thumbnail generation may need a 32 KB contiguous inflate buffer. The Home
+  // cover snapshot is only a redraw cache, so release it before ZIP work.
+  if (coverBuffer) {
+    freeCoverBuffer();
+    coverRendered = false;
+  }
+
   recentsLoading = true;
+  // EPUB cover extraction needs the ZIP inflater's 32KB history buffer. Drop
+  // the saved cover tile while generating thumbnails so Home has a larger
+  // contiguous heap block available.
+  freeCoverBuffer();
+  auto zipInflateScratch = ScratchWorkspace::acquire(InflateReader::STREAMING_DICT_SIZE, "Home EPUB thumbnails");
   bool showingLoading = false;
   Rect popupRect;
 
@@ -1392,9 +1406,10 @@ void HomeActivity::loop() {
         minimalSuppressInitialFrontRelease = false;
         return;
       }
-      if (!isAnyFrontButtonPressed(mappedInput)) {
-        minimalSuppressInitialFrontRelease = false;
+      if (isAnyFrontButtonPressed(mappedInput)) {
+        return;
       }
+      minimalSuppressInitialFrontRelease = false;
     }
 
     if (homeBookSwapLongPressHandled) {
