@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+## [v1.4.0] - 2026-07-09
+
+### Changed
+- Test release for verifying OTA updates from the corrected v1.3.9 firmware path.
+
 ## [v1.3.9] - 2026-07-09
 
 ### Changed
