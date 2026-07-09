@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- Release automation now builds only the tiny firmware variant and publishes it with the generic `firmware-v<version>.bin` asset name.
+
+### Fixed
+- OTA update checks now accept the generic release firmware asset name while still recognizing older tiny-specific release assets.
+
 ## [v1.3.8] - 2026-06-22
 
 ### Added

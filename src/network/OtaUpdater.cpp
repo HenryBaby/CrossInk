@@ -32,6 +32,8 @@ constexpr char firmwareAssetStem[] = "firmware";
 constexpr char firmwareAssetName[] = "firmware.bin";
 #endif
 
+constexpr char genericFirmwareAssetStem[] = "firmware";
+constexpr char genericFirmwareAssetName[] = "firmware.bin";
 constexpr char binSuffix[] = ".bin";
 constexpr size_t VERSION_SEGMENT_COUNT = 4;
 
@@ -119,8 +121,12 @@ bool endsWith(const char* value, const char* suffix) {
 bool isMatchingFirmwareAssetName(const char* assetName) {
   if (assetName == nullptr) return false;
   if (strcmp(assetName, firmwareAssetName) == 0) return true;
-  if (!startsWith(assetName, firmwareAssetStem)) return false;
-  if (assetName[strlen(firmwareAssetStem)] != '-') return false;
+  if (strcmp(assetName, genericFirmwareAssetName) == 0) return true;
+  if (startsWith(assetName, firmwareAssetStem) && assetName[strlen(firmwareAssetStem)] == '-') {
+    return endsWith(assetName, binSuffix);
+  }
+  if (!startsWith(assetName, genericFirmwareAssetStem)) return false;
+  if (assetName[strlen(genericFirmwareAssetStem)] != '-') return false;
   return endsWith(assetName, binSuffix);
 }
 

@@ -11,10 +11,12 @@ Default outputs:
 Release-candidate outputs when CROSSPOINT_RC_ARTIFACTS=1:
   .pio/build/teensy/firmware-teensy-<branch>-<hash>-RC.bin
   .pio/build/tiny/firmware-tiny-<branch>-<hash>-RC.bin
+  .pio/build/tiny/firmware-<branch>-<hash>-RC.bin (when custom_rc_artifact_stem = firmware)
 
 Release outputs when CROSSPOINT_RELEASE_VERSION is set:
   .pio/build/teensy/firmware-teensy-v<version>.bin
   .pio/build/tiny/firmware-tiny-v<version>.bin
+  .pio/build/tiny/firmware-v<version>.bin (when custom_release_artifact_stem = firmware)
 """
 
 import os
@@ -80,6 +82,7 @@ def _sanitize_branch(branch):
 
 
 def _get_rc_artifact_name(project_dir, env):
+    artifact_stem = _get_project_option(env, 'custom_rc_artifact_stem')
     env_name = _get_project_option(env, 'custom_rc_variant') or env['PIOENV']
     branch = (
         _get_project_option(env, 'custom_rc_branch')
@@ -99,6 +102,8 @@ def _get_rc_artifact_name(project_dir, env):
     )
     branch = _sanitize_branch(branch)
     short_hash = re.sub(r'[^A-Za-z0-9]+', '', short_hash)[:12] or '00000'
+    if artifact_stem:
+        return f'{artifact_stem}-{branch}-{short_hash}-RC.bin'
     return f'firmware-{env_name}-{branch}-{short_hash}-RC.bin'
 
 
@@ -134,8 +139,12 @@ def rename_firmware(source, target, env):
 
     release_version = _get_release_version(env)
     if release_version:
+        release_artifact_stem = _get_project_option(env, 'custom_release_artifact_stem')
         release_env_name = _get_project_option(env, 'custom_rc_variant') or env_name
-        release_dst = os.path.join(build_dir, f'firmware-{release_env_name}-{release_version}.bin')
+        if release_artifact_stem:
+            release_dst = os.path.join(build_dir, f'{release_artifact_stem}-{release_version}.bin')
+        else:
+            release_dst = os.path.join(build_dir, f'firmware-{release_env_name}-{release_version}.bin')
         _copy_artifact(src, release_dst)
 
 
