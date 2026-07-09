@@ -229,6 +229,8 @@ void formatSha256(const uint8_t digest[32], char output[65]) {
 
 bool isHttpUrl(const std::string& url) { return url.rfind("http://", 0) == 0; }
 
+bool isGithubReleaseAssetHost(const ParsedUrl& url) { return url.https && url.host == "release-assets.githubusercontent.com"; }
+
 bool endsWith(const char* value, const char* suffix) {
   if (value == nullptr || suffix == nullptr) return false;
   const size_t valueLength = strlen(value);
@@ -473,9 +475,17 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   int64_t contentLength = -1;
   int statusCode = 0;
   esp_err_t esp_err = ESP_OK;
+  bool releaseAssetHost = false;
+  bool usedHashVerifiedAssetFallback = false;
 
   for (uint8_t hop = 0; hop < OTA_MAX_REDIRECTS; ++hop) {
     std::string redirectLocation;
+    ParsedUrl currentParsed;
+    if (!parseUrl(currentUrl, currentParsed)) {
+      LOG_ERR("OTA", "Rejected firmware URL before open");
+      return HTTP_ERROR;
+    }
+    releaseAssetHost = isGithubReleaseAssetHost(currentParsed);
     esp_http_client_config_t client_config = {};
     client_config.url = currentUrl.c_str();
     client_config.timeout_ms = 15000;
@@ -511,7 +521,37 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
               ESP.getMaxAllocHeap());
       logTlsError(client, "Firmware open failure");
       esp_http_client_cleanup(client);
-      return HTTP_ERROR;
+      client = nullptr;
+
+      if (!releaseAssetHost || !isSha256Hex(otaSha256.c_str())) {
+        return HTTP_ERROR;
+      }
+
+      LOG_INF("OTA", "Retrying GitHub release asset with SHA-256 verification fallback");
+      client_config.crt_bundle_attach = nullptr;
+      client = esp_http_client_init(&client_config);
+      if (client == nullptr) {
+        LOG_ERR("OTA", "Fallback HTTP client init failed (heap=%u maxAlloc=%u)", ESP.getFreeHeap(),
+                ESP.getMaxAllocHeap());
+        return HTTP_ERROR;
+      }
+
+      esp_err = http_client_set_header_cb(client);
+      if (esp_err != ESP_OK) {
+        LOG_ERR("OTA", "Failed to set fallback OTA User-Agent: %s", esp_err_to_name(esp_err));
+        esp_http_client_cleanup(client);
+        return INTERNAL_UPDATE_ERROR;
+      }
+
+      esp_err = esp_http_client_open(client, 0);
+      if (esp_err != ESP_OK) {
+        LOG_ERR("OTA", "Fallback firmware HTTP open failed: %s (heap=%u maxAlloc=%u)", esp_err_to_name(esp_err),
+                ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+        logTlsError(client, "Fallback firmware open failure");
+        esp_http_client_cleanup(client);
+        return HTTP_ERROR;
+      }
+      usedHashVerifiedAssetFallback = true;
     }
 
     LOG_INF("OTA", "Fetching firmware headers");
@@ -534,7 +574,6 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
     }
 
     const std::string redirectUrl = buildRedirectUrl(currentUrl, redirectLocation);
-    ParsedUrl currentParsed;
     ParsedUrl redirectParsed;
     if (!parseUrl(redirectUrl, redirectParsed)) {
       LOG_ERR("OTA", "Rejected firmware redirect with unsupported Location");
@@ -556,6 +595,11 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   if (client == nullptr) {
     LOG_ERR("OTA", "Firmware redirect limit exceeded");
     return HTTP_ERROR;
+  }
+  if (usedHashVerifiedAssetFallback && !isSha256Hex(otaSha256.c_str())) {
+    LOG_ERR("OTA", "Release asset fallback used without valid sha256");
+    esp_http_client_cleanup(client);
+    return JSON_PARSE_ERROR;
   }
   if (statusCode < 200 || statusCode >= 300) {
     LOG_ERR("OTA", "Firmware HTTP status: %d", statusCode);
@@ -681,6 +725,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
       return HASH_MISMATCH_ERROR;
     }
     LOG_INF("OTA", "Firmware sha256 verified");
+    if (usedHashVerifiedAssetFallback) {
+      LOG_INF("OTA", "Hash-verified release asset fallback accepted");
+    }
   }
 
   esp_err = esp_ota_end(otaHandle);

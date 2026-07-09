@@ -1,6 +1,14 @@
 # Changelog
 ## [Unreleased]
 
+## [v1.4.0.2] - 2026-07-09
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
+### Fixed
+- OTA updates now read GitHub release asset digests and can retry GitHub release-asset downloads with SHA-256 verification when the release asset certificate chain fails on-device.
+
 ## [v1.4.0.1] - 2026-07-09
 
 ### Changed

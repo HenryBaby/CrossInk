@@ -338,6 +338,31 @@ void testFirmwareSha256() {
   PASS();
 }
 
+void testFirmwareGithubDigest() {
+  printf("testFirmwareGithubDigest...\n");
+
+  const char* json = R"({
+      "tag_name": "v3.4",
+      "assets": [{
+        "name": "firmware.bin",
+        "digest": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        "size": 6666,
+        "browser_download_url": "https://example.com/fw5.bin"
+      }]
+    })";
+
+  ReleaseJsonParser p;
+  p.feed(json, strlen(json));
+
+  ASSERT_TRUE(p.foundFirmware());
+  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/fw5.bin");
+  ASSERT_EQ(p.getFirmwareSize(), 6666u);
+  ASSERT_STREQ(p.getFirmwareSha256(), "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
+
+  printf("  passed\n");
+  PASS();
+}
+
 void testCustomAssetMatcher() {
   printf("testCustomAssetMatcher...\n");
 
@@ -859,6 +884,7 @@ int main() {
   testFieldOrderSizeBeforeUrl();
   testFieldOrderNameFirst();
   testFirmwareSha256();
+  testFirmwareGithubDigest();
   testCustomAssetMatcher();
   testAssetsBeforeTagName();
   testChunkedFeedingRealisticSmallChunks();

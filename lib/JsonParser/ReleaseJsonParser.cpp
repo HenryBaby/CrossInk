@@ -11,6 +11,25 @@ void safeCopy(char* dst, size_t dstSize, const char* src, size_t srcLen) {
   dst[n] = '\0';
 }
 
+bool isHexChar(char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
+
+bool isGithubSha256Digest(const char* value, size_t len) {
+  constexpr char prefix[] = "sha256:";
+  constexpr size_t prefixLen = sizeof(prefix) - 1;
+  constexpr size_t shaLen = 64;
+  if (len != prefixLen + shaLen || memcmp(value, prefix, prefixLen) != 0) return false;
+  for (size_t i = prefixLen; i < len; ++i) {
+    if (!isHexChar(value[i])) return false;
+  }
+  return true;
+}
+
+void copyGithubSha256Digest(char* dst, size_t dstSize, const char* value, size_t len) {
+  constexpr size_t prefixLen = 7;
+  if (!isGithubSha256Digest(value, len)) return;
+  safeCopy(dst, dstSize, value + prefixLen, len - prefixLen);
+}
+
 }  // namespace
 
 ReleaseJsonParser::ReleaseJsonParser(AssetMatcher assetMatcher)
@@ -90,6 +109,8 @@ void ReleaseJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
           self->lastKey = LastKey::ASSET_SIZE;
         else if (len == 6 && memcmp(key, "sha256", 6) == 0)
           self->lastKey = LastKey::ASSET_SHA256;
+        else if (len == 6 && memcmp(key, "digest", 6) == 0)
+          self->lastKey = LastKey::ASSET_SHA256;
         else
           self->lastKey = LastKey::NONE;
       }
@@ -118,8 +139,13 @@ void ReleaseJsonParser::sOnString(void* ctx, const char* value, size_t len) {
         safeCopy(self->currentAssetUrl, sizeof(self->currentAssetUrl), value, len);
       break;
     case LastKey::ASSET_SHA256:
-      if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
-        safeCopy(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
+      if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1) {
+        if (isGithubSha256Digest(value, len)) {
+          copyGithubSha256Digest(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
+        } else {
+          safeCopy(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
+        }
+      }
       break;
     default:
       break;
