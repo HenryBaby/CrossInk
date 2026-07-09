@@ -21,10 +21,13 @@ Open the reader menu and select **Reader Options** to adjust settings such as:
 - Margins
 - Alignment
 - Image rendering
-- Guide Dots
+- Bionic Reading / Guide Dots
 - Dark Reader Mode
 
 Changes take effect immediately.
+
+For books that are slow to index or fail because of complex publisher styling,
+see [EPUB Render Modes](./epub-render-modes.md).
 
 ## Font Sizes And Downloadable Font Ranges
 
@@ -99,6 +102,25 @@ You can:
 - Jump back to saved locations
 - Delete individual bookmarks
 
+## Clippings And Highlights
+
+CrossInk supports EPUB text clippings from the reader. Use **Create Clipping**
+from the reader menu, select text on the current page, and save it.
+
+A saved clipping is used in three ways:
+
+- It appears as a highlight in the reader
+- It appears in the in-app clipping list for that book
+- It is appended to `/My Clippings.txt` on the SD card in a Kindle-style text format
+
+The in-app clipping list is stored separately from the text export. Deleting a
+clipping from CrossInk removes the saved clipping and highlight from the device
+UI, but it does not rewrite old entries that were already appended to
+`/My Clippings.txt`.
+
+For storage paths and binary format details, see [Data Cache](./data-cache.md)
+and [File Formats](./file-formats.md).
+
 ## Reading Stats
 
 CrossInk tracks per-book reading stats automatically and aggregates them into global stats.
@@ -116,6 +138,18 @@ Recent CrossInk versions expanded this into a larger stats system, including syn
 Reading stats can also be used as a sleep screen, including the Minimal Stats sleep screen on supported builds.
 
 For two-device syncing, see [Reading Stats Sync](./reading-stats-sync.md).
+
+## Nearby Position Sync
+
+CrossInk can copy the current EPUB position from one nearby CrossInk reader to
+another over ESP-NOW. Open the same EPUB on both readers, choose **Nearby
+Position Sync** from the in-book menu on both devices, and press **Share** on
+the reader that is already at the correct page.
+
+The receiving reader shows the incoming position and only applies it after you
+confirm it.
+
+For details and troubleshooting, see [Nearby Position Sync](./nearby-position-sync.md).
 
 ## Finished Books And Read Folder
 

@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          token: ${{ github.token }}
           submodules: recursive
           fetch-depth: 0
 
@@ -85,7 +86,18 @@ jobs:
       - name: Build CrossInk
         env:
           CROSSPOINT_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-        run: pio run -e tiny
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if pio run -e tiny; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            echo "PlatformIO build failed on attempt $attempt; retrying after transient dependency/download failure..."
+            sleep 20
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3

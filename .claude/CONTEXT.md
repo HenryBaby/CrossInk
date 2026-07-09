@@ -27,3 +27,5 @@ Keep this file focused on repo-specific gotchas that are worth reusing in future
 
 - POSIX TZ signs are inverted from ISO 8601 in `TimeStore::applyTimezone()`: `"UTC-1"` means UTC+1.
 - `LyraTheme::drawHeader()` does not call `BaseTheme::drawHeader()`, so header changes in the base theme must be duplicated in Lyra if needed.
+- During upstream CrossInk syncs, keep this fork's `README.md`; do not take upstream README content.
+- During upstream CrossInk syncs, keep OTA installs on `esp_https_ota`; do not reintroduce the manual `esp_http_client_open` / `esp_ota_write` streaming path.

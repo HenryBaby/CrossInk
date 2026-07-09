@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [v1.4.1] - 2026-07-09
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+- Kept this fork's OTA updater on the working `esp_https_ota` path.
+- Release automation continues to build only the tiny firmware variant and publish it as `firmware-v<version>.bin`.
+
+### Added
+- Fork-specific OPDS organization remains available: per-server download folders, optional author subfolders, title-only filenames, OPDS server filename preservation, and matching author-folder organization when finished books move to `/Read`.
+- Docker-based firmware builds remain available for building firmware without a full local PlatformIO setup.
+
 ## [v1.4.0] - 2026-07-09
 
 ### Changed

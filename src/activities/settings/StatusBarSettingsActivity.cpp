@@ -12,13 +12,13 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
-#include "activities/util/OptionSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
 namespace {
 enum MenuItem {
   ITEM_CHAPTER_PAGE_COUNT = 0,
+  ITEM_STABLE_PAGE_NUMBERS,
   ITEM_BOOK_PROGRESS_PERCENTAGE,
   ITEM_PROGRESS_BAR,
   ITEM_PROGRESS_BAR_THICKNESS,
@@ -31,6 +31,7 @@ enum MenuItem {
 
 const StrId menuNames[ITEM_COUNT] = {
     StrId::STR_CHAPTER_PAGE_COUNT,
+    StrId::STR_STABLE_PAGE_NUMBERS,
     StrId::STR_BOOK_PROGRESS_PERCENTAGE,
     StrId::STR_PROGRESS_BAR,
     StrId::STR_PROGRESS_BAR_THICKNESS,
@@ -167,6 +168,8 @@ std::string valueTextForItem(const int item) {
   switch (item) {
     case ITEM_CHAPTER_PAGE_COUNT:
       return SETTINGS.statusBarChapterPageCount ? tr(STR_SHOW) : tr(STR_HIDE);
+    case ITEM_STABLE_PAGE_NUMBERS:
+      return SETTINGS.stablePageNumbers ? tr(STR_SHOW) : tr(STR_HIDE);
     case ITEM_BOOK_PROGRESS_PERCENTAGE:
       return SETTINGS.statusBarBookProgressPercentage ? tr(STR_SHOW) : tr(STR_HIDE);
     case ITEM_BATTERY:
@@ -186,7 +189,7 @@ void StatusBarSettingsActivity::onEnter() {
   Activity::onEnter();
 
   selectedIndex = 0;
-  visibleItemCount = ITEM_COUNT;
+  visibleItemCount = stablePageNumbersAvailable ? ITEM_COUNT : ITEM_COUNT - 1;
 
   // Clamp statusBarProgressBar and statusBarTitle in case of corrupt/migrated data
   if (SETTINGS.statusBarProgressBar >= PROGRESS_BAR_ITEMS) {
@@ -215,8 +218,10 @@ void StatusBarSettingsActivity::onEnter() {
 void StatusBarSettingsActivity::onExit() { Activity::onExit(); }
 
 void StatusBarSettingsActivity::loop() {
+  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    finish();
+    finishAfterBackPress();
     return;
   }
 
@@ -248,17 +253,27 @@ void StatusBarSettingsActivity::loop() {
   });
 }
 
-bool StatusBarSettingsActivity::selectedItemUsesOptionMenu() const { return optionCountForItem(selectedIndex) > 2; }
+int StatusBarSettingsActivity::itemForVisibleIndex(const int visibleIndex) const {
+  return !stablePageNumbersAvailable && visibleIndex >= ITEM_STABLE_PAGE_NUMBERS ? visibleIndex + 1 : visibleIndex;
+}
+
+bool StatusBarSettingsActivity::selectedItemUsesOptionMenu() const {
+  return optionCountForItem(itemForVisibleIndex(selectedIndex)) > 2;
+}
 
 void StatusBarSettingsActivity::handleSelection() {
+  const int item = itemForVisibleIndex(selectedIndex);
   if (selectedItemUsesOptionMenu()) {
     openOptionPicker();
     return;
   }
 
-  switch (selectedIndex) {
+  switch (item) {
     case ITEM_CHAPTER_PAGE_COUNT:
       SETTINGS.statusBarChapterPageCount = (SETTINGS.statusBarChapterPageCount + 1) % 2;
+      break;
+    case ITEM_STABLE_PAGE_NUMBERS:
+      SETTINGS.stablePageNumbers = (SETTINGS.stablePageNumbers + 1) % 2;
       break;
     case ITEM_BOOK_PROGRESS_PERCENTAGE:
       SETTINGS.statusBarBookProgressPercentage = (SETTINGS.statusBarBookProgressPercentage + 1) % 2;
@@ -273,7 +288,7 @@ void StatusBarSettingsActivity::handleSelection() {
 }
 
 void StatusBarSettingsActivity::openOptionPicker() {
-  const int item = selectedIndex;
+  const int item = itemForVisibleIndex(selectedIndex);
   const int optionCount = optionCountForItem(item);
   if (optionCount <= 0) return;
 
@@ -286,25 +301,17 @@ void StatusBarSettingsActivity::openOptionPicker() {
   uint8_t currentIndex = currentOptionIndexForItem(item);
   if (currentIndex >= optionCount) currentIndex = 0;
 
-  startActivityForResult(
-      std::make_unique<OptionSelectionActivity>(renderer, mappedInput, "StatusBarOptionSelect", menuNames[item],
-                                                std::move(options), currentIndex, readerContext),
-      [this, item](const ActivityResult& result) {
-        if (result.isCancelled) {
-          requestUpdate();
-          return;
-        }
-
-        const auto* selection = std::get_if<OptionSelectionResult>(&result.data);
-        if (selection != nullptr) {
-          setOptionIndexForItem(item, selection->index);
-          SETTINGS.saveToFile();
-        }
-        requestUpdate();
-      });
+  optionPopup.show(menuNames[item], options, currentIndex, [this, item](int selectedIndex) {
+    setOptionIndexForItem(item, static_cast<uint8_t>(selectedIndex));
+    SETTINGS.saveToFile();
+    requestUpdate();
+  });
+  requestUpdate();
 }
 
 void StatusBarSettingsActivity::render(RenderLock&&) {
+  if (optionPopup.processRender(renderer, mappedInput)) return;
+
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
@@ -337,8 +344,9 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
 
   GUI.drawList(
       renderer, Rect{contentX, contentTop, contentWidth, contentHeight}, visibleItemCount,
-      static_cast<int>(selectedIndex), [](int index) { return std::string(I18N.get(menuNames[index])); }, nullptr,
-      nullptr, [](int index) -> std::string { return valueTextForItem(index); }, true);
+      static_cast<int>(selectedIndex),
+      [this](int index) { return std::string(I18N.get(menuNames[itemForVisibleIndex(index)])); }, nullptr, nullptr,
+      [this](int index) -> std::string { return valueTextForItem(itemForVisibleIndex(index)); }, true);
   // Draw button hints
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 
@@ -364,7 +372,8 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   const int previewLabelY = bottomPreviewTop - previewLabelLineHeight - previewLabelGap;
 
   renderer.drawText(UI_10_FONT_ID, previewX, previewLabelY, tr(STR_PREVIEW));
-  GUI.drawStatusBar(renderer, 75, 8, 32, title, bottomPreviewPadding, 0, false, timeLeftPreview);
+  GUI.drawStatusBar(renderer, 75, 8, 32, title, bottomPreviewPadding, 0, false, timeLeftPreview, false, -1.0f,
+                    stablePageNumbersAvailable ? 120 : 0, stablePageNumbersAvailable ? 540 : 0);
 
   renderer.displayBuffer();
 }

@@ -4,13 +4,17 @@
 #include <freertos/task.h>
 
 #include "activities/Activity.h"
+#include "components/OptionPopup.h"
 #include "util/ButtonNavigator.h"
 
 // Reader status bar configuration activity
 class StatusBarSettingsActivity final : public Activity {
  public:
-  explicit StatusBarSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool readerContext = false)
-      : Activity("StatusBarSettings", renderer, mappedInput), readerContext(readerContext) {}
+  explicit StatusBarSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool readerContext = false,
+                                     bool stablePageNumbersAvailable = false)
+      : Activity("StatusBarSettings", renderer, mappedInput),
+        readerContext(readerContext),
+        stablePageNumbersAvailable(stablePageNumbersAvailable) {}
 
   void onEnter() override;
   void onExit() override;
@@ -19,11 +23,14 @@ class StatusBarSettingsActivity final : public Activity {
 
  private:
   ButtonNavigator buttonNavigator;
+  OptionPopup optionPopup;
 
   int selectedIndex = 0;
   int visibleItemCount = 0;
   bool readerContext = false;
+  bool stablePageNumbersAvailable = false;
 
+  int itemForVisibleIndex(int visibleIndex) const;
   bool selectedItemUsesOptionMenu() const;
   void handleSelection();
   void openOptionPicker();
