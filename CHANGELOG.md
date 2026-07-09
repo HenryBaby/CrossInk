@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [v1.3.9] - 2026-07-09
+
 ### Changed
 - Release automation now builds only the tiny firmware variant and publishes it with the generic `firmware-v<version>.bin` asset name.
 
