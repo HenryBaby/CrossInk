@@ -641,12 +641,9 @@ void MinimalTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, cons
 void MinimalTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                        int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                        bool& bufferRestored, const std::function<bool()>& storeCoverBuffer,
-                                       const BookReadingStats* stats, float progressPercent,
-                                       const GlobalReadingStats* globalStats, const char* currentChapterTitle) const {
+                                       const BookReadingStats* stats, float progressPercent) const {
   (void)selectorIndex;
   (void)bufferRestored;
-  (void)globalStats;
-  (void)currentChapterTitle;
 
   const Rect coverRect = coverRectForScreen(renderer, rect);
   if (recentBooks.empty()) {
@@ -704,7 +701,7 @@ void MinimalTheme::drawStatsSleepScreen(const GfxRenderer& renderer, const Recen
 }
 
 void MinimalTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                                  const std::function<const char*(int index)>& buttonLabel,
+                                  const std::function<std::string(int index)>& buttonLabel,
                                   const std::function<UIIcon(int index)>& rowIcon) const {
   (void)rect;
   (void)rowIcon;
@@ -731,10 +728,9 @@ void MinimalTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCo
       renderer.fillPolygon(triangleXPoints, triangleYPoints, 3, true);
     }
 
-    const char* label = buttonLabel != nullptr ? buttonLabel(i) : "";
-    if (!label) label = "";
-    const int labelW = renderer.getTextWidth(UI_12_FONT_ID, label);
+    const std::string label = buttonLabel(i);
+    const int labelW = renderer.getTextWidth(UI_12_FONT_ID, label.c_str());
     const int labelY = rowY + (kMenuRowHeight - renderer.getLineHeight(UI_12_FONT_ID)) / 2;
-    renderer.drawText(UI_12_FONT_ID, panelX + (panelW - labelW) / 2, labelY, label);
+    renderer.drawText(UI_12_FONT_ID, panelX + (panelW - labelW) / 2, labelY, label.c_str());
   }
 }

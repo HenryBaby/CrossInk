@@ -1,6 +1,5 @@
 #include "ReaderOptionsActivity.h"
 
-#include <Epub/EpubRenderMode.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
 
@@ -68,21 +67,12 @@ uint8_t valueOptionCount(const SettingInfo& setting) {
   const uint8_t step = setting.valueRange.step == 0 ? 1 : setting.valueRange.step;
   return static_cast<uint8_t>(((setting.valueRange.max - setting.valueRange.min) / step) + 1);
 }
-
-SettingInfo buildReaderRenderModeSetting() {
-  return SettingInfo::Enum(
-             StrId::STR_EPUB_RENDER_MODE, &CrossPointSettings::epubRenderMode,
-             {StrId::STR_RENDER_MODE_CROSSINK_DEFAULT, StrId::STR_RENDER_MODE_BALANCED, StrId::STR_RENDER_MODE_LIGHT})
-      .withEnumRawValues({static_cast<uint8_t>(EpubRenderMode::CrossInkDefault),
-                          static_cast<uint8_t>(EpubRenderMode::Balanced), static_cast<uint8_t>(EpubRenderMode::Light)});
-}
 }  // namespace
 
 void ReaderOptionsActivity::onEnter() {
   Activity::onEnter();
 
   activeSubmenu = SettingAction::None;
-  settingsDirty = false;
   rebuildSettingsList();
   requestUpdate();
 }
@@ -94,46 +84,11 @@ void ReaderOptionsActivity::rebuildSettingsList() {
   sdFontSystem.refreshIfDirty();
   const auto allSettings = getSettingsList(&sdFontSystem.registry());
   settings = buildReaderSettingsParentList(allSettings);
-  settings.push_back(buildReaderRenderModeSetting());
   fontSettings = buildReaderFontSettingsList(allSettings);
   pageLayoutSettings = buildReaderPageLayoutSettingsList(allSettings);
-  fontSettings.erase(std::remove_if(fontSettings.begin(), fontSettings.end(),
-                                    [](const SettingInfo& setting) {
-                                      return setting.nameId == StrId::STR_SD_FONT_SIZE_RANGE ||
-                                             setting.nameId == StrId::STR_MANAGE_FONTS;
-                                    }),
-                     fontSettings.end());
 
   setCurrentSettings();
   selectedIndex = 0;
-}
-
-void ReaderOptionsActivity::persistReaderSettings() {
-  if (saveSettingsCallback) {
-    saveSettingsCallback(saveSettingsContext);
-  } else {
-    SETTINGS.saveToFile();
-  }
-}
-
-void ReaderOptionsActivity::persistGlobalSettings() {
-  if (saveGlobalSettingsCallback) {
-    saveGlobalSettingsCallback(saveGlobalSettingsContext);
-  } else {
-    SETTINGS.saveToFile();
-  }
-}
-
-void ReaderOptionsActivity::beginGlobalSettingsEdit() {
-  if (beginGlobalSettingsEditCallback) {
-    beginGlobalSettingsEditCallback(beginGlobalSettingsEditContext);
-  }
-}
-
-void ReaderOptionsActivity::endGlobalSettingsEdit() {
-  if (endGlobalSettingsEditCallback) {
-    endGlobalSettingsEditCallback(endGlobalSettingsEditContext);
-  }
 }
 
 void ReaderOptionsActivity::setCurrentSettings() {
@@ -213,18 +168,30 @@ void ReaderOptionsActivity::openEnumOptionPicker(const SettingInfo& setting) {
   if (currentIndex >= optionCount) currentIndex = 0;
 
   const SettingInfo selectedSetting = setting;
-  optionPopup.show(setting.nameId, options, currentIndex, [this, selectedSetting](int selectedIndex) {
-    if (selectedSetting.valuePtr != nullptr) {
-      SETTINGS.*(selectedSetting.valuePtr) =
-          enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
-    } else if (selectedSetting.valueSetter) {
-      selectedSetting.valueSetter(static_cast<uint8_t>(selectedIndex));
-    }
+  startActivityForResult(
+      std::make_unique<OptionSelectionActivity>(renderer, mappedInput, "ReaderOptionsOptionSelect", setting.nameId,
+                                                std::move(options), currentIndex, true),
+      [this, selectedSetting](const ActivityResult& result) {
+        if (result.isCancelled) {
+          requestUpdate();
+          return;
+        }
 
-    persistReaderSettings();
-    requestUpdate();
-  });
-  requestUpdate();
+        const auto* selection = std::get_if<OptionSelectionResult>(&result.data);
+        if (selection == nullptr) {
+          requestUpdate();
+          return;
+        }
+
+        if (selectedSetting.valuePtr != nullptr) {
+          SETTINGS.*(selectedSetting.valuePtr) = enumRawValueForDisplayIndex(selectedSetting, selection->index);
+        } else if (selectedSetting.valueSetter) {
+          selectedSetting.valueSetter(selection->index);
+        }
+
+        SETTINGS.saveToFile();
+        requestUpdate();
+      });
 }
 
 void ReaderOptionsActivity::openScreenMarginPicker(const SettingInfo& setting) {
@@ -253,7 +220,7 @@ void ReaderOptionsActivity::openScreenMarginPicker(const SettingInfo& setting) {
         const auto* selection = std::get_if<OptionSelectionResult>(&result.data);
         if (selection != nullptr && selectedSetting.valuePtr != nullptr) {
           SETTINGS.*(selectedSetting.valuePtr) = rawValueForValueDisplayIndex(selectedSetting, selection->index);
-          persistReaderSettings();
+          SETTINGS.saveToFile();
         }
         requestUpdate();
       });
@@ -265,10 +232,8 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
 
   if (setting.nameId == StrId::STR_FONT_FAMILY && setting.type == SettingType::ENUM) {
     startActivityForResult(std::make_unique<FontSelectionActivity>(renderer, mappedInput, &sdFontSystem.registry()),
-                           [this](const ActivityResult& result) {
-                             if (!result.isCancelled) {
-                               persistReaderSettings();
-                             }
+                           [this](const ActivityResult&) {
+                             SETTINGS.saveToFile();
                              sdFontSystem.refreshIfDirty();
                              rebuildSettingsList();
                              requestUpdate();
@@ -279,7 +244,6 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
   if (setting.type == SettingType::TOGGLE && setting.valuePtr != nullptr) {
     const bool cur = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !cur;
-    settingsDirty = true;
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     if (currentSettingUsesOptionMenu(setting)) {
       openEnumOptionPicker(setting);
@@ -291,7 +255,6 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
     if (optionCount == 0) return;
     const uint8_t nextIndex = (currentIndex + 1) % static_cast<uint8_t>(optionCount);
     SETTINGS.*(setting.valuePtr) = enumRawValueForDisplayIndex(setting, nextIndex);
-    settingsDirty = true;
   } else if (setting.type == SettingType::ENUM && setting.valueGetter && setting.valueSetter) {
     if (currentSettingUsesOptionMenu(setting)) {
       openEnumOptionPicker(setting);
@@ -302,7 +265,6 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
     const uint8_t totalValues = static_cast<uint8_t>(optionCount);
     const uint8_t cur = setting.valueGetter();
     setting.valueSetter((cur + 1) % totalValues);
-    settingsDirty = true;
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     if (setting.valuePtr == &CrossPointSettings::lineHeightPercent) {
       openLineHeightPicker();
@@ -318,16 +280,11 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
     } else {
       SETTINGS.*(setting.valuePtr) = cur + setting.valueRange.step;
     }
-    settingsDirty = true;
   } else if (setting.type == SettingType::ACTION) {
     if (setting.action == SettingAction::DownloadFonts) {
-      if (settingsDirty) {
-        persistReaderSettings();
-        settingsDirty = false;
-      }
       startActivityForResult(std::make_unique<FontDownloadActivity>(renderer, mappedInput),
                              [this](const ActivityResult&) {
-                               persistGlobalSettings();
+                               SETTINGS.saveToFile();
                                sdFontSystem.refreshIfDirty();
                                rebuildSettingsList();
                                requestUpdate();
@@ -335,17 +292,8 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
       return;
     }
     if (setting.action == SettingAction::CustomiseStatusBar) {
-      if (settingsDirty) {
-        persistReaderSettings();
-        settingsDirty = false;
-      }
-      beginGlobalSettingsEdit();
-      startActivityForResult(
-          std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput, true, stablePageNumbersAvailable),
-          [this](const ActivityResult&) {
-            persistGlobalSettings();
-            endGlobalSettingsEdit();
-          });
+      startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput, true),
+                             [](const ActivityResult&) { SETTINGS.saveToFile(); });
       return;
     }
   } else if (setting.type == SettingType::SUBMENU) {
@@ -357,23 +305,21 @@ void ReaderOptionsActivity::toggleCurrentSetting() {
 void ReaderOptionsActivity::openLineHeightPicker() {
   startActivityForResult(
       std::make_unique<IntervalSelectionActivity>(
-          renderer, mappedInput, "ReaderOptionsLineHeightInterval", StrId::STR_LINE_SPACING, SETTINGS.lineHeightPercent,
-          CrossPointSettings::MIN_LINE_HEIGHT_PERCENT, CrossPointSettings::MAX_LINE_HEIGHT_PERCENT, 1, 10,
-          StrId::STR_NONE_OPT, /*readerActivity=*/true,
+          renderer, mappedInput, "ReaderOptionsLineHeightInterval", StrId::STR_LINE_SPACING,
+          StrId::STR_PERCENT_STEP_HINT, SETTINGS.lineHeightPercent, CrossPointSettings::MIN_LINE_HEIGHT_PERCENT,
+          CrossPointSettings::MAX_LINE_HEIGHT_PERCENT, 1, 10, StrId::STR_NONE_OPT, /*readerActivity=*/true,
           /*allowPowerAsConfirm=*/true, /*ignoreInitialConfirmRelease=*/false, /*showPercentValue=*/true),
       [this](const ActivityResult& result) {
         if (!result.isCancelled) {
           SETTINGS.lineHeightPercent = CrossPointSettings::clampedLineHeightPercent(
               static_cast<uint8_t>(std::get<IntervalResult>(result.data).value));
-          persistReaderSettings();
+          SETTINGS.saveToFile();
         }
         requestUpdate();
       });
 }
 
 void ReaderOptionsActivity::loop() {
-  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
-
   buttonNavigator.onNextRelease([this] {
     moveSelection(true);
     requestUpdate();
@@ -396,18 +342,13 @@ void ReaderOptionsActivity::loop() {
       requestUpdate();
       return;
     }
-    if (settingsDirty) {
-      persistReaderSettings();
-      settingsDirty = false;
-    }
+    SETTINGS.saveToFile();
     finish();
     return;
   }
 }
 
 void ReaderOptionsActivity::render(RenderLock&&) {
-  if (optionPopup.processRender(renderer, mappedInput)) return;
-
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();

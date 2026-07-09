@@ -5,7 +5,6 @@
 #include <HalStorage.h>
 #include <JPEGDEC.h>
 #include <Logging.h>
-#include <Memory.h>
 #include <MemoryBudget.h>
 
 #include <cstdlib>
@@ -51,16 +50,13 @@ struct JpegContext {
 // File I/O callbacks use pFile->fHandle to access the FsFile*,
 // avoiding the need for global file state.
 void* jpegOpen(const char* filename, int32_t* size) {
-  auto f = makeUniqueNoThrow<FsFile>();
-  if (!f) {
-    LOG_ERR("JPG", "OOM: JPEG file handle (%u free, %u max alloc)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-    return nullptr;
-  }
+  FsFile* f = new FsFile();
   if (!Storage.openFileForRead("JPG", std::string(filename), *f)) {
+    delete f;
     return nullptr;
   }
   *size = f->size();
-  return f.release();  // JPEGDEC owns this handle until jpegClose deletes it.
+  return f;
 }
 
 void jpegClose(void* handle) {

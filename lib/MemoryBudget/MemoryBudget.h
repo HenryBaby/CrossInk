@@ -20,14 +20,12 @@ struct HeapRequirement {
 
 constexpr uint32_t EPUB_INLINE_IMAGE_MIN_FREE = 72U * 1024U;
 constexpr uint32_t EPUB_INLINE_IMAGE_MIN_MAX_ALLOC = 48U * 1024U;
+constexpr uint32_t EPUB_INLINE_JPEG_MIN_MAX_ALLOC = 36U * 1024U;
 constexpr uint32_t EPUB_INLINE_IMAGE_SD_FONT_RELEASE_MIN_FREE = 120U * 1024U;
 constexpr uint32_t EPUB_INLINE_IMAGE_SD_FONT_RELEASE_MIN_MAX_ALLOC = 80U * 1024U;
 constexpr uint32_t OPTIONAL_EPUB_REBUILD_MIN_FREE = 96U * 1024U;
 constexpr uint32_t OPTIONAL_EPUB_REBUILD_MIN_MAX_ALLOC = 48U * 1024U;
 constexpr uint32_t IMAGE_DECODER_HEADROOM = 16U * 1024U;
-constexpr uint32_t JPEG_DECODER_APPROX_BYTES = 20U * 1024U;
-constexpr uint32_t EPUB_INLINE_JPEG_MIN_FREE = JPEG_DECODER_APPROX_BYTES + IMAGE_DECODER_HEADROOM;
-constexpr uint32_t EPUB_INLINE_JPEG_MIN_MAX_ALLOC = JPEG_DECODER_APPROX_BYTES;
 
 inline HeapSnapshot snapshot() { return {ESP.getFreeHeap(), ESP.getMaxAllocHeap()}; }
 
@@ -55,10 +53,8 @@ inline bool isJpegSource(const char* source) {
 }
 
 inline HeapRequirement epubInlineImageRequirementForSource(const char* source) {
-  if (isJpegSource(source)) {
-    return {EPUB_INLINE_JPEG_MIN_FREE, EPUB_INLINE_JPEG_MIN_MAX_ALLOC};
-  }
-  return {EPUB_INLINE_IMAGE_MIN_FREE, EPUB_INLINE_IMAGE_MIN_MAX_ALLOC};
+  return {EPUB_INLINE_IMAGE_MIN_FREE,
+          isJpegSource(source) ? EPUB_INLINE_JPEG_MIN_MAX_ALLOC : EPUB_INLINE_IMAGE_MIN_MAX_ALLOC};
 }
 
 inline bool shouldReleaseSdFontCachesForEpubInlineImage(const HeapSnapshot heap) {

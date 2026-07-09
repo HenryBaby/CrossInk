@@ -9,7 +9,6 @@
 
 #include "CrossPointSettings.h"
 #include "activities/Activity.h"
-#include "components/OptionPopup.h"
 #include "util/ButtonNavigator.h"
 
 enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING, SECTION_HEADER, SUBMENU };
@@ -247,8 +246,6 @@ class SettingsActivity final : public Activity {
   SettingAction activeSubmenu = SettingAction::None;
   SettingAction parentSubmenu = SettingAction::None;
 
-  OptionPopup optionPopup;
-
   static constexpr int categoryCount = 4;
   static const StrId categoryNames[categoryCount];
 
@@ -260,7 +257,6 @@ class SettingsActivity final : public Activity {
   bool currentSettingUsesOptionMenu(const SettingInfo& setting) const;
   void openEnumOptionPicker(const SettingInfo& setting);
   void openScreenMarginPicker(const SettingInfo& setting);
-  void openLanguagePicker();
   void openIdleTimeThresholdPicker();
   void toggleCurrentSetting();
   void openSleepTimeoutPicker();

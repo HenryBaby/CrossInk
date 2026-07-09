@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
-#include <mutex>
 #include <string>
 
 #include "I18nKeys.h"
@@ -47,7 +46,6 @@ constexpr uint8_t SLEEP_SCREEN_STORAGE_ORDER[] = {
     static_cast<uint8_t>(CrossPointSettings::MINIMAL_SLEEP),
     static_cast<uint8_t>(CrossPointSettings::QUICK_RESUME),
     static_cast<uint8_t>(CrossPointSettings::MINIMAL_STATS_SLEEP),
-    static_cast<uint8_t>(CrossPointSettings::DASHBOARD_SLEEP),
 };
 constexpr uint8_t SLEEP_SCREEN_STORAGE_ORDER_COUNT =
     sizeof(SLEEP_SCREEN_STORAGE_ORDER) / sizeof(SLEEP_SCREEN_STORAGE_ORDER[0]);
@@ -145,6 +143,26 @@ CrossPointSettings::FONT_SIZE firstAvailableReaderFontSize() {
 
 int getFallbackReaderFontIdForFamily(const CrossPointSettings::FONT_FAMILY family) {
   switch (family) {
+    case CrossPointSettings::CHAREINK:
+#ifndef OMIT_TINY_FONT
+      return CHAREINK_10_FONT_ID;
+#elif !defined(OMIT_SMALL_FONT)
+      return CHAREINK_12_FONT_ID;
+#elif !defined(OMIT_MEDIUM_FONT)
+      return CHAREINK_14_FONT_ID;
+#elif !defined(OMIT_LARGE_FONT)
+      return CHAREINK_16_FONT_ID;
+#elif !defined(OMIT_XLARGE_FONT)
+      return CHAREINK_18_FONT_ID;
+#elif !defined(OMIT_HUGE_FONT)
+      return CHAREINK_20_FONT_ID;
+#elif !defined(OMIT_TEENSY_FONT)
+      return CHAREINK_8_FONT_ID;
+#elif !defined(OMIT_ITTY_BITTY_FONT)
+      return CHAREINK_9_FONT_ID;
+#else
+#error "No reader fonts enabled for CHAREINK"
+#endif
     case CrossPointSettings::BITTER:
 #ifndef OMIT_TINY_FONT
       return BITTER_10_FONT_ID;
@@ -311,6 +329,7 @@ uint8_t CrossPointSettings::legacyLineSpacingToPercent(const uint8_t legacyValue
   }
 
   switch (fontFamily) {
+    case CHAREINK:
     case BITTER:
       switch (legacyValue) {
         case TIGHT:
@@ -359,7 +378,6 @@ uint16_t CrossPointSettings::getReadingIdleTimeThresholdSeconds() const {
 }
 
 bool CrossPointSettings::saveToFile() const {
-  std::lock_guard<std::mutex> lock(_mutex);
   Storage.mkdir("/.crosspoint");
   return JsonSettingsIO::saveSettings(*this, SETTINGS_FILE_JSON);
 }
@@ -373,11 +391,7 @@ bool CrossPointSettings::loadFromFile() {
     String json = Storage.readFile(path);
     if (!json.isEmpty()) {
       bool resave = false;
-      bool result;
-      {
-        std::lock_guard<std::mutex> lock(_mutex);
-        result = JsonSettingsIO::loadSettings(*this, json.c_str(), &resave);
-      }
+      bool result = JsonSettingsIO::loadSettings(*this, json.c_str(), &resave);
       if (result && (resave || migrateToCurrentPath)) {
         if (saveToFile()) {
           LOG_DBG("CPS", migrateToCurrentPath ? "Migrated legacy settings.json to crossink-settings.json"
@@ -448,7 +462,6 @@ bool CrossPointSettings::loadFromBinaryFile() {
   if (!Storage.openFileForRead("CPS", SETTINGS_FILE_BIN, inputFile)) {
     return false;
   }
-  std::lock_guard<std::mutex> lock(_mutex);
 
   uint8_t version;
   serialization::readPod(inputFile, version);
@@ -603,7 +616,6 @@ bool CrossPointSettings::verifySleepScreenMigrationContract() {
   constexpr uint8_t minimalSleepStorageValue = 8;
   constexpr uint8_t quickResumeStorageValue = 9;
   constexpr uint8_t minimalStatsStorageValue = 10;
-  constexpr uint8_t dashboardSleepStorageValue = 11;
   for (uint8_t storedValue = 0; storedValue < legacyModeCountBeforeMinimal; storedValue++) {
     if (sleepScreenStorageToMode(storedValue) != storedValue) {
       return false;
@@ -616,8 +628,6 @@ bool CrossPointSettings::verifySleepScreenMigrationContract() {
          sleepScreenModeToStorage(QUICK_RESUME) == quickResumeStorageValue &&
          sleepScreenStorageToMode(minimalStatsStorageValue) == MINIMAL_STATS_SLEEP &&
          sleepScreenModeToStorage(MINIMAL_STATS_SLEEP) == minimalStatsStorageValue &&
-         sleepScreenStorageToMode(dashboardSleepStorageValue) == DASHBOARD_SLEEP &&
-         sleepScreenModeToStorage(DASHBOARD_SLEEP) == dashboardSleepStorageValue &&
          sleepScreenStorageToMode(UINT8_MAX) == DARK;
 }
 #endif
@@ -786,6 +796,46 @@ int CrossPointSettings::getBuiltInReaderFontId() const {
 #endif
       }
       return getFallbackReaderFontIdForFamily(LEXENDDECA);
+    case CHAREINK:
+      switch (effectiveSize) {
+#ifndef OMIT_TEENSY_FONT
+        case TEENSY:
+          return CHAREINK_8_FONT_ID;
+#endif
+#ifndef OMIT_ITTY_BITTY_FONT
+        case ITTY_BITTY:
+          return CHAREINK_9_FONT_ID;
+#endif
+#ifndef OMIT_TINY_FONT
+        case TINY:
+          return CHAREINK_10_FONT_ID;
+#endif
+#ifndef OMIT_SMALL_FONT
+        case SMALL:
+          return CHAREINK_12_FONT_ID;
+#endif
+#ifndef OMIT_MEDIUM_FONT
+        case MEDIUM:
+        default:
+          return CHAREINK_14_FONT_ID;
+#endif
+#ifndef OMIT_LARGE_FONT
+        case LARGE:
+#ifdef OMIT_MEDIUM_FONT
+        default:
+#endif
+          return CHAREINK_16_FONT_ID;
+#endif
+#ifndef OMIT_XLARGE_FONT
+        case EXTRA_LARGE:
+          return CHAREINK_18_FONT_ID;
+#endif
+#ifndef OMIT_HUGE_FONT
+        case HUGE_SIZE:
+          return CHAREINK_20_FONT_ID;
+#endif
+      }
+      return getFallbackReaderFontIdForFamily(CHAREINK);
     case BITTER:
       switch (effectiveSize) {
 #ifndef OMIT_TEENSY_FONT

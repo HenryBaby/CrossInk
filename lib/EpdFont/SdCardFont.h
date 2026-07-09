@@ -50,26 +50,23 @@ class SdCardFont {
   // Returns number of codepoints not found in font coverage.
   int buildAdvanceTable(const char* utf8Text, uint8_t styleMask = 0x0F);
   int buildAdvanceTable(const std::vector<std::string>& words, bool includeHyphen, uint8_t styleMask = 0x0F);
-  int buildAdvanceTableForCodepoints(const uint32_t* codepoints, uint32_t cpCount, bool includeSpace,
-                                     bool includeHyphen, uint8_t styleMask = 0x0F);
 
   // Look up advanceX for a codepoint from the advance table.
   // Returns the 12.4 fixed-point advance, or 0 if not found.
   uint16_t getAdvance(uint32_t codepoint, uint8_t style) const;
-  bool readAdvance(uint32_t codepoint, uint8_t style, uint16_t* outAdvance) const;
 
   // Returns true if advance table is populated for at least one style.
   bool hasAdvanceTable() const;
 
-  // Free mini data for all styles and restore stub EpdFontData.
-  // Preserves the persistent advance cache so repeated layout passes can reuse
-  // previously fetched metrics.
+  // Free mini data for all styles, restore stub EpdFontData.
+  // Also clears the temporary advance table (built per layout pass) but
+  // preserves the persistent advance cache (reused across passes).
   void clearCache();
 
   // Release optional resident caches before memory-heavy work such as EPUB
   // image extraction. Keeps the font loaded and usable, but future layout or
   // rendering may need to re-read font metadata from SD.
-  void releaseForLowMemory(bool preserveAdvanceTable = false);
+  void releaseForLowMemory();
 
   // Drop the persistent advance cache. Call when unloading the SD font or
   // when font/size/family/glyph-table state changes.
@@ -112,7 +109,6 @@ class SdCardFont {
   void logStats(const char* label = "SDCF");
   void resetStats();
   const Stats& getStats() const { return stats_; }
-  bool lastPrewarmFailed() const { return lastPrewarmFailed_; }
 
   // Content hash of the file header + style TOC entries (computed during load).
   // Used to generate deterministic font IDs for section cache invalidation.
@@ -149,14 +145,6 @@ class SdCardFont {
 
     // Full intervals loaded from file (kept in RAM for codepoint lookup)
     EpdUnicodeInterval* fullIntervals = nullptr;
-    struct BmpInterval16 {
-      uint16_t first;
-      uint16_t last;
-      uint16_t offset;
-    } __attribute__((packed));
-    static_assert(sizeof(BmpInterval16) == 6, "BmpInterval16 must remain compact");
-    BmpInterval16* bmpIntervals = nullptr;
-    bool intervalsAreBmp16 = false;
 
     // Persistent kern-class + ligature tables (lazy-loaded on first prewarm).
     // The full kern MATRIX is NOT resident — on Literata-class fonts a single
@@ -247,7 +235,6 @@ class SdCardFont {
   Stats stats_;
   uint32_t contentHash_ = 0;
   bool loaded_ = false;
-  bool lastPrewarmFailed_ = false;
 
   // Per-style helpers
   void freeStyleMiniData(PerStyle& s);
@@ -260,7 +247,6 @@ class SdCardFont {
   void applyGlyphMissCallback(uint8_t styleIdx);
   int32_t findGlobalGlyphIndex(const PerStyle& s, uint32_t codepoint) const;
   int fetchAdvancesForCodepoints(uint32_t* codepoints, uint32_t cpCount, uint8_t styleMask);
-  int failPrewarm(int missed);
   template <typename Iter>
   int buildAdvanceTableRange(Iter begin, Iter end, bool includeSpace, bool includeHyphen, uint8_t styleMask);
   int prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint32_t cpCount, bool metadataOnly);

@@ -3,7 +3,6 @@
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <I18n.h>
-#include <Memory.h>
 
 #include "CrossPointSettings.h"
 #include "Epub.h"
@@ -46,17 +45,7 @@ std::unique_ptr<Epub> ReaderActivity::loadEpub(const std::string& path) {
     return nullptr;
   }
 
-  auto epub = makeUniqueNoThrow<Epub>(path, "/.crosspoint");
-  if (!epub) {
-    LOG_ERR("READER", "Failed to allocate EPUB object");
-    return nullptr;
-  }
-  // First open: building the spine/TOC index (book.bin) takes a couple of seconds. Show the
-  // indexing popup so it isn't a silent wait on the home screen. The cachePath/hash is known at
-  // construction, so this check is valid before load(); a cached open loads in a blink -> no popup.
-  if (!Storage.exists((epub->getCachePath() + "/book.bin").c_str())) {
-    GUI.drawPopup(renderer, tr(STR_INDEXING));
-  }
+  auto epub = std::unique_ptr<Epub>(new Epub(path, "/.crosspoint"));
   if (epub->load(true, SETTINGS.embeddedStyle == 0)) {
     return epub;
   }
@@ -71,11 +60,7 @@ std::unique_ptr<Xtc> ReaderActivity::loadXtc(const std::string& path) {
     return nullptr;
   }
 
-  auto xtc = makeUniqueNoThrow<Xtc>(path, "/.crosspoint");
-  if (!xtc) {
-    LOG_ERR("READER", "Failed to allocate XTC object");
-    return nullptr;
-  }
+  auto xtc = std::unique_ptr<Xtc>(new Xtc(path, "/.crosspoint"));
   if (xtc->load()) {
     return xtc;
   }
@@ -90,11 +75,7 @@ std::unique_ptr<Txt> ReaderActivity::loadTxt(const std::string& path) {
     return nullptr;
   }
 
-  auto txt = makeUniqueNoThrow<Txt>(path, "/.crosspoint");
-  if (!txt) {
-    LOG_ERR("READER", "Failed to allocate TXT object");
-    return nullptr;
-  }
+  auto txt = std::unique_ptr<Txt>(new Txt(path, "/.crosspoint"));
   if (txt->load()) {
     return txt;
   }

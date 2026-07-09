@@ -24,8 +24,6 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
-  sdFontSystem.releaseForNetwork(renderer);
-
   {
     RenderLock lock(*this);
     state = AUTHENTICATING;
@@ -105,12 +103,8 @@ void KOReaderAuthActivity::render(RenderLock&&) {
 
 void KOReaderAuthActivity::loop() {
   if (state == SUCCESS || state == FAILED) {
-    if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-      finishAfterBackPress();
-      return;
-    }
-
-    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+    if (mappedInput.wasPressed(MappedInputManager::Button::Back) ||
+        mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       finish();
     }
   }

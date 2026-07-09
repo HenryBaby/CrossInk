@@ -503,16 +503,13 @@ void LyraTheme::drawSideButtonHints(const GfxRenderer& renderer, const char* top
 void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                     int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                     bool& bufferRestored, const std::function<bool()>& storeCoverBuffer,
-                                    const BookReadingStats* stats, float progressPercent,
-                                    const GlobalReadingStats* globalStats, const char* currentChapterTitle) const {
-  (void)globalStats;
-  (void)currentChapterTitle;
+                                    const BookReadingStats* stats, float progressPercent) const {
   const int tileWidth = rect.width - 2 * LyraMetrics::values.contentSidePadding;
   const int tileHeight = rect.height;
   const int tileY = rect.y;
   const bool hasContinueReading = !recentBooks.empty();
   if (coverWidth == 0) {
-    coverWidth = LyraMetrics::values.homeCoverHeight * 2 / 3;
+    coverWidth = LyraMetrics::values.homeCoverHeight * 0.6;
   }
 
   // Draw book card regardless, fill with message based on `hasContinueReading`
@@ -553,7 +550,7 @@ void LyraTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
         renderer.fillRect(tileX + hPaddingInSelection,
                           tileY + hPaddingInSelection + (LyraMetrics::values.homeCoverHeight / 3), coverWidth,
                           2 * LyraMetrics::values.homeCoverHeight / 3, true);
-        renderer.drawIcon(CoverIcon, tileX + hPaddingInSelection + 24, tileY + hPaddingInSelection + 24, 32);
+        renderer.drawIcon(CoverIcon, tileX + hPaddingInSelection + 24, tileY + hPaddingInSelection + 24, 32, 32);
       }
 
       coverBufferStored = storeCoverBuffer();
@@ -645,7 +642,7 @@ void LyraTheme::drawEmptyRecents(const GfxRenderer& renderer, const Rect rect) c
 }
 
 void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                               const std::function<const char*(int index)>& buttonLabel,
+                               const std::function<std::string(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
   const auto& menuMetrics = UITheme::getInstance().getMetrics();
 
@@ -683,8 +680,8 @@ void LyraTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
       renderer.fillRoundedRect(tileRect.x, tileRect.y, tileRect.width, tileRect.height, cornerRadius, Color::LightGray);
     }
 
-    const char* label = buttonLabel != nullptr ? buttonLabel(i) : "";
-    if (!label) label = "";
+    std::string labelStr = buttonLabel(i);
+    const char* label = labelStr.c_str();
     int textX = tileRect.x + 16;
     const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
     const int textY = tileRect.y + (menuMetrics.menuRowHeight - lineHeight) / 2;

@@ -5,7 +5,6 @@
 #include <Logging.h>
 
 #include "BookmarkStore.h"
-#include "ClippingStore.h"
 #include "CrossPointState.h"
 #include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
@@ -104,11 +103,6 @@ bool migrateMovedEpubState(const std::string& oldPath, const std::string& newPat
 
   if (!BookmarkStore::migrateForFilePath(oldPath, newPath, title, author, "epub")) {
     LOG_ERR("BookMove", "Failed to migrate bookmarks for moved book %s -> %s", oldPath.c_str(), newPath.c_str());
-    ok = false;
-  }
-
-  if (!ClippingStore::migrateForFilePath(oldPath, newPath, title, author, "epub")) {
-    LOG_ERR("BookMove", "Failed to migrate clippings for moved book %s -> %s", oldPath.c_str(), newPath.c_str());
     ok = false;
   }
 

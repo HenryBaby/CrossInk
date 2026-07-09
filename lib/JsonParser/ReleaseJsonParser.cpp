@@ -11,25 +11,6 @@ void safeCopy(char* dst, size_t dstSize, const char* src, size_t srcLen) {
   dst[n] = '\0';
 }
 
-bool isHexChar(char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }
-
-bool isGithubSha256Digest(const char* value, size_t len) {
-  constexpr char prefix[] = "sha256:";
-  constexpr size_t prefixLen = sizeof(prefix) - 1;
-  constexpr size_t shaLen = 64;
-  if (len != prefixLen + shaLen || memcmp(value, prefix, prefixLen) != 0) return false;
-  for (size_t i = prefixLen; i < len; ++i) {
-    if (!isHexChar(value[i])) return false;
-  }
-  return true;
-}
-
-void copyGithubSha256Digest(char* dst, size_t dstSize, const char* value, size_t len) {
-  constexpr size_t prefixLen = 7;
-  if (!isGithubSha256Digest(value, len)) return;
-  safeCopy(dst, dstSize, value + prefixLen, len - prefixLen);
-}
-
 }  // namespace
 
 ReleaseJsonParser::ReleaseJsonParser(AssetMatcher assetMatcher)
@@ -47,13 +28,11 @@ void ReleaseJsonParser::reset() {
   assetDepth = 0;
   tagName[0] = '\0';
   firmwareUrl[0] = '\0';
-  firmwareSha256[0] = '\0';
   firmwareSize = 0;
   tagFound = false;
   firmwareFound = false;
   currentAssetName[0] = '\0';
   currentAssetUrl[0] = '\0';
-  currentAssetSha256[0] = '\0';
   currentAssetSize = 0;
 }
 
@@ -66,20 +45,17 @@ bool ReleaseJsonParser::foundFirmware() const { return firmwareFound; }
 const char* ReleaseJsonParser::getTagName() const { return tagName; }
 const char* ReleaseJsonParser::getFirmwareUrl() const { return firmwareUrl; }
 size_t ReleaseJsonParser::getFirmwareSize() const { return firmwareSize; }
-const char* ReleaseJsonParser::getFirmwareSha256() const { return firmwareSha256; }
 
 void ReleaseJsonParser::commitAsset() {
   const bool matchesFirmware =
       assetMatcher != nullptr ? assetMatcher(currentAssetName) : strcmp(currentAssetName, "firmware.bin") == 0;
   if (!firmwareFound && matchesFirmware) {
     memcpy(firmwareUrl, currentAssetUrl, sizeof(firmwareUrl));
-    memcpy(firmwareSha256, currentAssetSha256, sizeof(firmwareSha256));
     firmwareSize = currentAssetSize;
     firmwareFound = true;
   }
   currentAssetName[0] = '\0';
   currentAssetUrl[0] = '\0';
-  currentAssetSha256[0] = '\0';
   currentAssetSize = 0;
 }
 
@@ -107,10 +83,6 @@ void ReleaseJsonParser::sOnKey(void* ctx, const char* key, size_t len) {
           self->lastKey = LastKey::ASSET_URL;
         else if (len == 4 && memcmp(key, "size", 4) == 0)
           self->lastKey = LastKey::ASSET_SIZE;
-        else if (len == 6 && memcmp(key, "sha256", 6) == 0)
-          self->lastKey = LastKey::ASSET_SHA256;
-        else if (len == 6 && memcmp(key, "digest", 6) == 0)
-          self->lastKey = LastKey::ASSET_SHA256;
         else
           self->lastKey = LastKey::NONE;
       }
@@ -137,15 +109,6 @@ void ReleaseJsonParser::sOnString(void* ctx, const char* value, size_t len) {
     case LastKey::ASSET_URL:
       if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1)
         safeCopy(self->currentAssetUrl, sizeof(self->currentAssetUrl), value, len);
-      break;
-    case LastKey::ASSET_SHA256:
-      if (self->position == Position::IN_ASSET_OBJECT && self->assetDepth == 1) {
-        if (isGithubSha256Digest(value, len)) {
-          copyGithubSha256Digest(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
-        } else {
-          safeCopy(self->currentAssetSha256, sizeof(self->currentAssetSha256), value, len);
-        }
-      }
       break;
     default:
       break;
@@ -181,7 +144,6 @@ void ReleaseJsonParser::sOnObjectStart(void* ctx) {
       self->assetDepth = 1;
       self->currentAssetName[0] = '\0';
       self->currentAssetUrl[0] = '\0';
-      self->currentAssetSha256[0] = '\0';
       self->currentAssetSize = 0;
       self->lastKey = LastKey::NONE;
       break;

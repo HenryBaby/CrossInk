@@ -1,6 +1,5 @@
 #include "JpegToBmpConverter.h"
 
-#include <Arena.h>
 #include <HalDisplay.h>
 #include <HalStorage.h>
 #include <JPEGDEC.h>
@@ -167,7 +166,6 @@ namespace {
 constexpr int MAX_MCU_HEIGHT = 16;
 constexpr size_t JPEG_DECODER_SIZE = 20 * 1024;
 constexpr size_t MIN_FREE_HEAP = JPEG_DECODER_SIZE + 32 * 1024;
-constexpr uint32_t FP_ONE = 1UL << 16;
 
 // Static file pointer for JPEGDEC open callback.
 // Safe in single-threaded embedded context; never accessed concurrently.
@@ -214,25 +212,18 @@ struct BmpConvertCtx {
   uint32_t scaleY_fp;
   uint32_t srcXOffset_fp;
   uint32_t srcYOffset_fp;
-  bool smoothUpscale;
 
   // Accumulates one MCU row (up to MAX_MCU_HEIGHT source rows × srcWidth pixels)
   // Filled column-by-column as JPEGDEC callbacks arrive for the same MCU row
-  uint8_t* mcuBuf;
+  std::unique_ptr<uint8_t[]> mcuBuf;
 
   // Y-axis area averaging accumulators (needsScaling only)
   int currentOutY;
   uint32_t nextOutY_srcStart;  // 16.16 fixed-point boundary for the next output row
-  uint32_t* rowAccum;
-  uint32_t* rowCount;
-  int smoothNextOutY;
-  int smoothPrevY;
-  uint8_t* smoothRows;
-  uint8_t* smoothPrevRow;
-  uint8_t* smoothCurrRow;
-  uint8_t* smoothOutRow;
+  std::unique_ptr<uint32_t[]> rowAccum;
+  std::unique_ptr<uint32_t[]> rowCount;
 
-  uint8_t* bmpRow;
+  std::unique_ptr<uint8_t[]> bmpRow;
 
   std::unique_ptr<AtkinsonDitherer> atkinsonDitherer;
   std::unique_ptr<FloydSteinbergDitherer> fsDitherer;
@@ -252,7 +243,7 @@ struct OutputGeometry {
 };
 
 static uint32_t fpPerOutputPixel(const uint64_t srcSpan_fp, const int outPixels) {
-  if (outPixels <= 0) return FP_ONE;
+  if (outPixels <= 0) return 65536;
   const uint64_t value = srcSpan_fp / static_cast<uint64_t>(outPixels);
   if (value == 0) return 1;
   if (value > UINT32_MAX) return UINT32_MAX;
@@ -261,7 +252,7 @@ static uint32_t fpPerOutputPixel(const uint64_t srcSpan_fp, const int outPixels)
 
 static OutputGeometry calculateOutputGeometry(const int srcWidth, const int srcHeight, const int targetWidth,
                                               const int targetHeight, const bool crop) {
-  OutputGeometry geometry{srcWidth, srcHeight, FP_ONE, FP_ONE, 0, 0, false};
+  OutputGeometry geometry{srcWidth, srcHeight, 65536, 65536, 0, 0, false};
   if (targetWidth <= 0 || targetHeight <= 0 || srcWidth <= 0 || srcHeight <= 0) {
     return geometry;
   }
@@ -329,7 +320,7 @@ static bool shouldContainAdaptive(const int srcWidth, const int srcHeight, const
 
 // Write a fully-assembled output row (grayscale bytes, length outWidth) to BMP
 static void writeOutputRow(BmpConvertCtx* ctx, const uint8_t* srcRow, int outY) {
-  memset(ctx->bmpRow, 0, ctx->bytesPerRow);
+  memset(ctx->bmpRow.get(), 0, ctx->bytesPerRow);
 
   if (USE_8BIT_OUTPUT && !ctx->oneBit) {
     for (int x = 0; x < ctx->outWidth; x++) {
@@ -361,83 +352,12 @@ static void writeOutputRow(BmpConvertCtx* ctx, const uint8_t* srcRow, int outY) 
       ctx->fsDitherer->nextRow();
   }
 
-  ctx->bmpOut->write(ctx->bmpRow, ctx->bytesPerRow);
-}
-
-static void scaleRowLinear(BmpConvertCtx* ctx, const uint8_t* srcRow, uint8_t* dstRow) {
-  for (int outX = 0; outX < ctx->outWidth; outX++) {
-    const uint64_t srcX_fp = static_cast<uint64_t>(ctx->srcXOffset_fp) + static_cast<uint64_t>(outX) * ctx->scaleX_fp;
-    const int x0 = std::min(ctx->srcWidth - 1, static_cast<int>(srcX_fp >> 16));
-    const int x1 = (x0 + 1 < ctx->srcWidth) ? (x0 + 1) : x0;
-    const uint32_t fx = static_cast<uint32_t>(srcX_fp & (FP_ONE - 1));
-    dstRow[outX] = static_cast<uint8_t>((srcRow[x0] * (FP_ONE - fx) + srcRow[x1] * fx) >> 16);
-  }
-}
-
-static void writeBlendedRow(BmpConvertCtx* ctx, const uint8_t* row0, const uint8_t* row1, const uint32_t fy,
-                            const int outY) {
-  const uint32_t invFy = FP_ONE - fy;
-  for (int outX = 0; outX < ctx->outWidth; outX++) {
-    ctx->smoothOutRow[outX] = static_cast<uint8_t>((row0[outX] * invFy + row1[outX] * fy) >> 16);
-  }
-  writeOutputRow(ctx, ctx->smoothOutRow, outY);
-  ctx->currentOutY++;
-}
-
-static void processSmoothSourceRow(BmpConvertCtx* ctx, const uint8_t* srcRow, const int srcY) {
-  scaleRowLinear(ctx, srcRow, ctx->smoothCurrRow);
-
-  if (ctx->smoothPrevY < 0) {
-    uint8_t* tmp = ctx->smoothPrevRow;
-    ctx->smoothPrevRow = ctx->smoothCurrRow;
-    ctx->smoothCurrRow = tmp;
-    ctx->smoothPrevY = srcY;
-    if (ctx->srcHeight <= 1) {
-      while (ctx->smoothNextOutY < ctx->outHeight) {
-        writeOutputRow(ctx, ctx->smoothPrevRow, ctx->smoothNextOutY);
-        ctx->smoothNextOutY++;
-        ctx->currentOutY++;
-      }
-    }
-    return;
-  }
-
-  while (ctx->smoothNextOutY < ctx->outHeight) {
-    const uint64_t srcY_fp =
-        static_cast<uint64_t>(ctx->srcYOffset_fp) + static_cast<uint64_t>(ctx->smoothNextOutY) * ctx->scaleY_fp;
-    const int y0 = std::min(ctx->srcHeight - 1, static_cast<int>(srcY_fp >> 16));
-    const int y1 = (y0 + 1 < ctx->srcHeight) ? (y0 + 1) : y0;
-    if (y1 > srcY) break;
-
-    const uint8_t* row0 = (y0 == srcY) ? ctx->smoothCurrRow : ctx->smoothPrevRow;
-    const uint8_t* row1 = (y1 == srcY) ? ctx->smoothCurrRow : ctx->smoothPrevRow;
-    writeBlendedRow(ctx, row0, row1, static_cast<uint32_t>(srcY_fp & (FP_ONE - 1)), ctx->smoothNextOutY);
-    ctx->smoothNextOutY++;
-  }
-
-  uint8_t* tmp = ctx->smoothPrevRow;
-  ctx->smoothPrevRow = ctx->smoothCurrRow;
-  ctx->smoothCurrRow = tmp;
-  ctx->smoothPrevY = srcY;
-}
-
-static void finishSmoothUpscale(BmpConvertCtx* ctx) {
-  if (ctx->smoothPrevY < 0) {
-    LOG_ERR("JPG", "No progressive rows decoded for smoothing");
-    ctx->error = true;
-    return;
-  }
-
-  while (ctx->smoothNextOutY < ctx->outHeight) {
-    writeOutputRow(ctx, ctx->smoothPrevRow, ctx->smoothNextOutY);
-    ctx->smoothNextOutY++;
-    ctx->currentOutY++;
-  }
+  ctx->bmpOut->write(ctx->bmpRow.get(), ctx->bytesPerRow);
 }
 
 // Flush one scaled output row from Y-axis accumulators and advance currentOutY
 static void flushScaledRow(BmpConvertCtx* ctx) {
-  memset(ctx->bmpRow, 0, ctx->bytesPerRow);
+  memset(ctx->bmpRow.get(), 0, ctx->bytesPerRow);
 
   if (USE_8BIT_OUTPUT && !ctx->oneBit) {
     for (int x = 0; x < ctx->outWidth; x++) {
@@ -471,7 +391,7 @@ static void flushScaledRow(BmpConvertCtx* ctx) {
       ctx->fsDitherer->nextRow();
   }
 
-  ctx->bmpOut->write(ctx->bmpRow, ctx->bytesPerRow);
+  ctx->bmpOut->write(ctx->bmpRow.get(), ctx->bytesPerRow);
   ctx->currentOutY++;
 }
 
@@ -494,7 +414,7 @@ int bmpDrawCallback(JPEGDRAW* pDraw) {
   for (int r = 0; r < blockH && r < MAX_MCU_HEIGHT; r++) {
     const int copyW = (blockX + validW <= ctx->srcWidth) ? validW : (ctx->srcWidth - blockX);
     if (copyW <= 0) continue;
-    memcpy(ctx->mcuBuf + r * ctx->srcWidth + blockX, pixels + r * stride, copyW);
+    memcpy(ctx->mcuBuf.get() + r * ctx->srcWidth + blockX, pixels + r * stride, copyW);
   }
 
   // Wait for the last MCU column before processing any rows
@@ -505,11 +425,9 @@ int bmpDrawCallback(JPEGDRAW* pDraw) {
   const int safeEndRow = blockY + std::min(blockH, MAX_MCU_HEIGHT);
 
   for (int y = blockY; y < safeEndRow && y < ctx->srcHeight; y++) {
-    const uint8_t* srcRow = ctx->mcuBuf + (y - blockY) * ctx->srcWidth;
+    const uint8_t* srcRow = ctx->mcuBuf.get() + (y - blockY) * ctx->srcWidth;
 
-    if (ctx->smoothUpscale) {
-      processSmoothSourceRow(ctx, srcRow, y);
-    } else if (!ctx->needsScaling) {
+    if (!ctx->needsScaling) {
       // 1:1 — outWidth == srcWidth, write directly
       writeOutputRow(ctx, srcRow, y);
     } else {
@@ -544,8 +462,8 @@ int bmpDrawCallback(JPEGDRAW* pDraw) {
         ctx->nextOutY_srcStart = static_cast<uint32_t>(static_cast<uint64_t>(ctx->srcYOffset_fp) +
                                                        static_cast<uint64_t>(ctx->currentOutY + 1) * ctx->scaleY_fp);
         if (srcY_fp >= ctx->nextOutY_srcStart) continue;
-        memset(ctx->rowAccum, 0, ctx->outWidth * sizeof(uint32_t));
-        memset(ctx->rowCount, 0, ctx->outWidth * sizeof(uint32_t));
+        memset(ctx->rowAccum.get(), 0, ctx->outWidth * sizeof(uint32_t));
+        memset(ctx->rowCount.get(), 0, ctx->outWidth * sizeof(uint32_t));
       }
     }
   }
@@ -650,9 +568,6 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   const int outWidth = geometry.outWidth;
   const int outHeight = geometry.outHeight;
   const bool needsScaling = geometry.needsScaling;
-  const bool smoothUpscale = progressive && needsScaling && geometry.scaleX_fp <= FP_ONE &&
-                             geometry.scaleY_fp <= FP_ONE &&
-                             (geometry.scaleX_fp < FP_ONE || geometry.scaleY_fp < FP_ONE);
   LOG_DBG("JPG", "Scaling %dx%d -> %dx%d (target %dx%d, mode=%s, offset %u,%u)", effectiveSrcW, effectiveSrcH, outWidth,
           outHeight, targetWidth, targetHeight, cropOutput ? "cover" : "contain", geometry.srcXOffset_fp >> 16,
           geometry.srcYOffset_fp >> 16);
@@ -683,57 +598,25 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
   ctx.scaleY_fp = geometry.scaleY_fp;
   ctx.srcXOffset_fp = geometry.srcXOffset_fp;
   ctx.srcYOffset_fp = geometry.srcYOffset_fp;
-  ctx.smoothUpscale = smoothUpscale;
-  ctx.smoothNextOutY = 0;
-  ctx.smoothPrevY = -1;
   ctx.error = false;
 
-  const size_t mcuBufBytes = static_cast<size_t>(MAX_MCU_HEIGHT) * effectiveSrcW;
-  size_t scratchBytes = mcuBufBytes + static_cast<size_t>(bytesPerRow);
-  if (smoothUpscale) {
-    scratchBytes += static_cast<size_t>(outWidth) * 3;
-  } else if (needsScaling) {
-    scratchBytes += static_cast<size_t>(outWidth) * sizeof(uint32_t) * 2;
-  }
-  // Keep the conversion in one arena slab. Growing would request another full slab,
-  // which can fail on a fragmented heap even when the next buffer is tiny.
-  scratchBytes += 128;
-
-  Arena scratchArena;
-  if (!scratchArena.init(std::max<size_t>(4096, scratchBytes))) {
-    LOG_ERR("JPG", "OOM: JPEG BMP scratch arena (%u bytes)", static_cast<unsigned>(scratchBytes));
-    return false;
-  }
-
   // MCU row buffer: MAX_MCU_HEIGHT rows × ctx.srcWidth columns of grayscale.
-  ctx.mcuBuf = arenaNewArray<uint8_t>(scratchArena, mcuBufBytes);
+  ctx.mcuBuf = makeUniqueNoThrow<uint8_t[]>(MAX_MCU_HEIGHT * effectiveSrcW);
   if (!ctx.mcuBuf) {
-    LOG_ERR("JPG", "OOM: MCU buffer (%u bytes)", static_cast<unsigned>(mcuBufBytes));
+    LOG_ERR("JPG", "OOM: MCU buffer (%d bytes)", MAX_MCU_HEIGHT * effectiveSrcW);
     return false;
   }
-  memset(ctx.mcuBuf, 0, mcuBufBytes);
+  memset(ctx.mcuBuf.get(), 0, MAX_MCU_HEIGHT * effectiveSrcW);
 
-  ctx.bmpRow = arenaNewArray<uint8_t>(scratchArena, bytesPerRow);
+  ctx.bmpRow = makeUniqueNoThrow<uint8_t[]>(bytesPerRow);
   if (!ctx.bmpRow) {
     LOG_ERR("JPG", "OOM: BMP row buffer");
     return false;
   }
 
-  if (smoothUpscale) {
-    const size_t smoothRowsBytes = static_cast<size_t>(outWidth) * 3;
-    ctx.smoothRows = arenaNewArray<uint8_t>(scratchArena, smoothRowsBytes);
-    if (!ctx.smoothRows) {
-      LOG_ERR("JPG", "OOM: progressive smoothing buffers");
-      return false;
-    }
-    ctx.smoothPrevRow = ctx.smoothRows;
-    ctx.smoothCurrRow = ctx.smoothPrevRow + outWidth;
-    ctx.smoothOutRow = ctx.smoothCurrRow + outWidth;
-    LOG_DBG("JPG", "Progressive smoothing: %dx%d -> %dx%d, buffers=%u bytes", ctx.srcWidth, ctx.srcHeight, outWidth,
-            outHeight, static_cast<unsigned>(smoothRowsBytes));
-  } else if (needsScaling) {
-    ctx.rowAccum = arenaNewArray<uint32_t>(scratchArena, outWidth);
-    ctx.rowCount = arenaNewArray<uint32_t>(scratchArena, outWidth);
+  if (needsScaling) {
+    ctx.rowAccum = makeUniqueNoThrow<uint32_t[]>(outWidth);
+    ctx.rowCount = makeUniqueNoThrow<uint32_t[]>(outWidth);
     if (!ctx.rowAccum || !ctx.rowCount) {
       LOG_ERR("JPG", "OOM: scaling buffers");
       return false;
@@ -768,17 +651,8 @@ bool JpegToBmpConverter::jpegFileToBmpStreamInternal(FsFile& jpegFile, Print& bm
 
   rc = jpeg->decode(0, 0, decodeFlags);
 
-  if (rc == 1 && ctx.smoothUpscale && !ctx.error) {
-    finishSmoothUpscale(&ctx);
-  }
-
   if (rc != 1 || ctx.error) {
-    // Include the image shape so a one-off decode failure can be triaged from
-    // serial without pulling the file: progressive vs baseline distinguishes a
-    // 1/8-scale progressive-path failure from a baseline/MCU-skip one, and the
-    // dimensions flag oversized/odd-subsampling sources.
-    LOG_ERR("JPG", "JPEG decode failed (rc=%d, err=%d, %dx%d, %s)", rc, jpeg->getLastError(), srcWidth, srcHeight,
-            progressive ? "progressive" : "baseline");
+    LOG_ERR("JPG", "JPEG decode failed (rc=%d, err=%d)", rc, jpeg->getLastError());
     return false;
   }
 

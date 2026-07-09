@@ -9,7 +9,7 @@
 #include <cstdio>
 
 #include "MappedInputManager.h"
-#include "components/CompactHeader.h"
+#include "components/HeaderDate.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -182,11 +182,6 @@ bool fallbackEstimatedTimeLeft(const BookReadingStats& stats, const float progre
   return seconds > 0;
 }
 
-bool cachedEstimatedTimeLeft(const BookReadingStats& stats, uint32_t& seconds) {
-  seconds = stats.estimatedTimeLeftSeconds;
-  return seconds > 0;
-}
-
 bool estimateFinishDateFromDailyPace(const BookReadingStats& stats, const ReadingStatsDateTime& today,
                                      const uint32_t estimatedReadingSeconds, ReadingStatsDate& outDate) {
   outDate = {};
@@ -219,6 +214,30 @@ float pagesPerMinute(const uint32_t totalPagesTurned, const uint32_t totalReadin
     return 0.0f;
   }
   return static_cast<float>(totalPagesTurned) * 60.0f / static_cast<float>(totalReadingSeconds);
+}
+
+void drawHeaderTitle(const GfxRenderer& renderer, const char* title, const int headerDrawHeight = 67,
+                     const bool showDate = false) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int screenWidth = renderer.getScreenWidth();
+  constexpr int titleLiftPx = 5;
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, screenWidth, std::min(metrics.headerHeight, headerDrawHeight)},
+                 "");
+
+  const int visibleHeaderHeight = std::min(metrics.headerHeight, headerDrawHeight);
+  const int availableH = visibleHeaderHeight - metrics.batteryBarHeight;
+  const int titleX = metrics.contentSidePadding;
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int titleY = metrics.topPadding + metrics.batteryBarHeight + (availableH - lineHeight) / 2 - titleLiftPx;
+  const int batteryStartX = screenWidth - metrics.contentSidePadding - metrics.batteryWidth;
+  const int dateStartX = showDate ? screenWidth - headerDateReservedWidth(renderer) : screenWidth;
+  const int titleRightX = std::min(batteryStartX, dateStartX) - metrics.contentSidePadding;
+  const int maxTitleWidth = std::max(1, titleRightX - titleX);
+  const std::string truncTitle = renderer.truncatedText(UI_12_FONT_ID, title, maxTitleWidth, EpdFontFamily::BOLD);
+  renderer.drawText(UI_12_FONT_ID, titleX, titleY, truncTitle.c_str(), true, EpdFontFamily::BOLD);
+  if (showDate) {
+    drawHeaderDateAtLineBottom(renderer, screenWidth, titleY + lineHeight);
+  }
 }
 
 void drawCenteredLabel(const GfxRenderer& renderer, const int fontId, const int x, const int w, const int y,
@@ -322,14 +341,9 @@ void drawPerBookStatsCard(GfxRenderer& renderer, const int x, const int y, const
   drawStatCell(renderer, x, thirdW, y + layout.topCardTitleH + rowH, rowH, buf, tr(STR_STATS_AVG_SESSION_LBL));
 
   uint32_t fallbackEstimateSeconds = 0;
-  uint32_t cachedEstimateSeconds = 0;
-  const bool hasCachedEstimate = cachedEstimatedTimeLeft(stats, cachedEstimateSeconds);
   const bool hasFallbackEstimate = fallbackEstimatedTimeLeft(stats, progressPercent, fallbackEstimateSeconds);
-  if (!stats.isCompleted && (hasEstimatedTimeLeft || hasCachedEstimate || hasFallbackEstimate)) {
-    formatCompactEstimate(hasEstimatedTimeLeft ? estimatedTimeLeftSeconds
-                          : hasCachedEstimate  ? cachedEstimateSeconds
-                                               : fallbackEstimateSeconds,
-                          buf, sizeof(buf));
+  if (!stats.isCompleted && (hasEstimatedTimeLeft || hasFallbackEstimate)) {
+    formatCompactEstimate(hasEstimatedTimeLeft ? estimatedTimeLeftSeconds : fallbackEstimateSeconds, buf, sizeof(buf));
   } else {
     snprintf(buf, sizeof(buf), "-");
   }
@@ -365,10 +379,8 @@ void drawPerBookStatsCard(GfxRenderer& renderer, const int x, const int y, const
   bool finished = stats.isCompleted;
   if (finished) {
     finishDisplayDate = stats.finishedDate;
-  } else if (hasToday && (hasEstimatedTimeLeft || hasCachedEstimate || hasFallbackEstimate)) {
-    const uint32_t remainingReadingSeconds = hasEstimatedTimeLeft ? estimatedTimeLeftSeconds
-                                             : hasCachedEstimate  ? cachedEstimateSeconds
-                                                                  : fallbackEstimateSeconds;
+  } else if (hasToday && (hasEstimatedTimeLeft || hasFallbackEstimate)) {
+    const uint32_t remainingReadingSeconds = hasEstimatedTimeLeft ? estimatedTimeLeftSeconds : fallbackEstimateSeconds;
     if (!estimateFinishDateFromDailyPace(stats, today, remainingReadingSeconds, finishDisplayDate)) {
       ReadingStatsDateTime estimatedFinish = today;
       addSecondsToReadingStatsDateTime(estimatedFinish, remainingReadingSeconds);
@@ -452,7 +464,7 @@ void renderPerBookStatsPage(GfxRenderer& renderer, const MappedInputManager* map
   const bool showRtcStats = shouldShowRtcBasedStats();
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto& layout = getStatsLayout(renderer, false, showButtonHints, showRtcStats);
-  CompactHeader::drawTitle(renderer, tr(STR_READING_STATS), true);
+  drawHeaderTitle(renderer, tr(STR_READING_STATS), layout.headerDrawHeight, true);
   const int screenW = renderer.getScreenWidth();
   const int cardX = metrics.contentSidePadding;
   const int cardW = screenW - metrics.contentSidePadding * 2;
@@ -518,7 +530,7 @@ void renderGlobalStatsPage(GfxRenderer& renderer, const MappedInputManager* mapp
   const bool showRtcStats = shouldShowRtcBasedStats();
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto& layout = getStatsLayout(renderer, true, showButtonHints, showRtcStats);
-  CompactHeader::drawTitle(renderer, screenTitle);
+  drawHeaderTitle(renderer, screenTitle, layout.headerDrawHeight);
   const int screenW = renderer.getScreenWidth();
   const int cardX = metrics.contentSidePadding;
   const int cardW = screenW - metrics.contentSidePadding * 2;
@@ -575,7 +587,7 @@ void renderNoRtcCombinedStatsPage(GfxRenderer& renderer, const MappedInputManage
   renderer.clearScreen();
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto& layout = getNoRtcCombinedLayout(renderer, showButtonHints, allDevicesStats != nullptr);
-  CompactHeader::drawTitle(renderer, tr(STR_READING_STATS));
+  drawHeaderTitle(renderer, tr(STR_READING_STATS), layout.headerDrawHeight);
   const int screenW = renderer.getScreenWidth();
   const int cardX = metrics.contentSidePadding;
   const int cardW = screenW - metrics.contentSidePadding * 2;
@@ -616,7 +628,7 @@ void renderNoRtcCombinedStatsPage(GfxRenderer& renderer, const MappedInputManage
 void renderEditBookDatesPage(GfxRenderer& renderer, const MappedInputManager* mappedInput, const std::string& bookTitle,
                              const BookReadingStats& stats, const int selectedField, const bool showButtonHints) {
   renderer.clearScreen();
-  CompactHeader::drawTitle(renderer, tr(STR_READING_STATS));
+  drawHeaderTitle(renderer, tr(STR_READING_STATS));
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   const int pageWidth = renderer.getScreenWidth();

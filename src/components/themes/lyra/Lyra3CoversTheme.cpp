@@ -21,9 +21,7 @@ constexpr int cornerRadius = 6;
 void Lyra3CoversTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                                            int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                            bool& bufferRestored, const std::function<bool()>& storeCoverBuffer,
-                                           const BookReadingStats* /*stats*/, float /*progressPercent*/,
-                                           const GlobalReadingStats* /*globalStats*/,
-                                           const char* /*currentChapterTitle*/) const {
+                                           const BookReadingStats* /*stats*/, float /*progressPercent*/) const {
   const int tileWidth = (rect.width - 2 * Lyra3CoversMetrics::values.contentSidePadding) / 3;
   const int tileY = rect.y;
   const bool hasContinueReading = !recentBooks.empty();
@@ -75,7 +73,7 @@ void Lyra3CoversTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
                             tileY + hPaddingInSelection + (Lyra3CoversMetrics::values.homeCoverHeight / 3),
                             tileWidth - 2 * hPaddingInSelection, 2 * Lyra3CoversMetrics::values.homeCoverHeight / 3,
                             true);
-          renderer.drawIcon(CoverIcon, tileX + hPaddingInSelection + 24, tileY + hPaddingInSelection + 24, 32);
+          renderer.drawIcon(CoverIcon, tileX + hPaddingInSelection + 24, tileY + hPaddingInSelection + 24, 32, 32);
         }
       }
 

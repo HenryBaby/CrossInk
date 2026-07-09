@@ -22,7 +22,7 @@ void NearbyStatsSyncActivity::onEnter() {
 void NearbyStatsSyncActivity::onExit() { Activity::onExit(); }
 
 void NearbyStatsSyncActivity::loop() {
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) exitViaBack();
+  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) finish();
 }
 
 void NearbyStatsSyncActivity::render(RenderLock&&) {
@@ -40,11 +40,6 @@ void NearbyStatsSyncActivity::render(RenderLock&&) {
 }
 
 void NearbyStatsSyncActivity::enqueueEspNowPacket(const uint8_t*, const uint8_t*, int) {}
-
-void NearbyStatsSyncActivity::exitViaBack() {
-  mappedInput.suppressNextBackRelease();
-  finish();
-}
 
 void NearbyStatsSyncActivity::setState(const State state) {
   state_ = state;
@@ -224,7 +219,7 @@ void NearbyStatsSyncActivity::loop() {
   processEvents();
 
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
-    exitViaBack();
+    finish();
     return;
   }
 
@@ -519,11 +514,6 @@ bool NearbyStatsSyncActivity::sendLocalStats() {
 }
 
 bool NearbyStatsSyncActivity::sendAck(const uint8_t* peerMac) { return sendPacket(PacketType::ACK, peerMac); }
-
-void NearbyStatsSyncActivity::exitViaBack() {
-  mappedInput.suppressNextBackRelease();
-  finish();
-}
 
 void NearbyStatsSyncActivity::updateSyncProgress() {
   if (state_ != State::DISCOVERING && state_ != State::SYNCING) return;
