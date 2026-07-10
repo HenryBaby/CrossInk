@@ -17,7 +17,7 @@ namespace {
 bool hasActiveWifiConnection() { return WiFi.status() == WL_CONNECTED && WiFi.localIP() != IPAddress(0, 0, 0, 0); }
 
 StrId failureMessageFor(const OtaUpdater::OtaUpdaterError error) {
-  if (error == OtaUpdater::HASH_MISMATCH_ERROR) return StrId::STR_UPDATE_HASH_MISMATCH;
+  (void)error;
   return StrId::STR_UPDATE_FAILED;
 }
 }  // namespace
