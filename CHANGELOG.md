@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v1.4.3] - 2026-07-11
+
+### Added
+- OPDS servers can disable TLS certificate verification per server for self-hosted catalogs that the ESP32 certificate bundle cannot validate.
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.2] - 2026-07-11
 
 ### Changed

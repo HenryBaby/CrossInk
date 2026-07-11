@@ -207,7 +207,7 @@ void logTlsError(esp_http_client_handle_t client, const char* phase) {
 }
 
 HttpDownloader::DownloadError runGet(const std::string& url, const std::string& username, const std::string& password,
-                                     Sink& sink, const size_t bufferSize) {
+                                     Sink& sink, const size_t bufferSize, const bool verifyTls) {
   std::string currentUrl = url;
 
   ParsedUrl credentialOrigin;
@@ -226,10 +226,15 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
     config.buffer_size = HTTP_RX_BUF;
     config.buffer_size_tx = HTTP_TX_BUF;
     config.timeout_ms = HTTP_TIMEOUT_MS;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
     config.keep_alive_enable = false;
     config.event_handler = captureResponseHeaders;
     config.user_data = &responseHeaders;
+    if (verifyTls) {
+      config.crt_bundle_attach = esp_crt_bundle_attach;
+    } else {
+      config.skip_cert_common_name_check = true;
+      LOG_DBG("HTTP", "TLS verification disabled for this request");
+    }
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
@@ -400,14 +405,14 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
 }  // namespace
 
 bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent, const std::string& username,
-                              const std::string& password) {
+                              const std::string& password, RequestOptions options) {
   return fetchUrl(
       url, [&outContent](const uint8_t* data, size_t len) { return outContent.write(data, len) == len; }, username,
-      password);
+      password, options);
 }
 
 bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, const std::string& username,
-                              const std::string& password) {
+                              const std::string& password, RequestOptions options) {
   outContent.clear();
   return fetchUrl(
       url,
@@ -415,11 +420,11 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, c
         outContent.append(reinterpret_cast<const char*>(data), len);
         return true;
       },
-      username, password);
+      username, password, options);
 }
 
 bool HttpDownloader::fetchUrl(const std::string& url, const DataCallback& onData, const std::string& username,
-                              const std::string& password) {
+                              const std::string& password, RequestOptions options) {
   WifiPowerSaveGuard wifiPowerSaveGuard;
   (void)wifiPowerSaveGuard;
 
@@ -432,7 +437,7 @@ bool HttpDownloader::fetchUrl(const std::string& url, const DataCallback& onData
 
   Sink sink;
   sink.write = onData;
-  return runGet(url, username, password, sink, DEFAULT_DOWNLOAD_BUFFER_SIZE) == OK;
+  return runGet(url, username, password, sink, DEFAULT_DOWNLOAD_BUFFER_SIZE, options.verifyTls) == OK;
 }
 
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
@@ -489,7 +494,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
 
   sink.write = [&](const uint8_t* data, size_t len) { return openOutputFile() && file.write(data, len) == len; };
 
-  DownloadError result = runGet(url, username, password, sink, bufferSize);
+  DownloadError result = runGet(url, username, password, sink, bufferSize, options.verifyTls);
   if (sink.rangeIgnored) {
     if (fileOpen) {
       file.close();
@@ -501,7 +506,7 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
     sink.downloaded = 0;
     sink.total = 0;
     sink.write = [&](const uint8_t* data, size_t len) { return openOutputFile() && file.write(data, len) == len; };
-    result = runGet(url, username, password, sink, bufferSize);
+    result = runGet(url, username, password, sink, bufferSize, options.verifyTls);
   }
 
   if (fileOpen) {

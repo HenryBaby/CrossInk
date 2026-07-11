@@ -1346,6 +1346,7 @@ void CrossPointWebServer::handleGetOpdsServers() const {
     doc["downloadFolder"] = normalizeOpdsDownloadFolder(servers[i].downloadFolder);
     doc["folderOrganization"] = opdsFolderOrganizationToJson(servers[i].folderOrganization);
     doc["filenameFormat"] = opdsFilenameFormatToJson(servers[i].filenameFormat);
+    doc["verifyTls"] = servers[i].verifyTls;
     // Never expose passwords over the API — only indicate whether one is set
     doc["hasPassword"] = !servers[i].password.empty();
 
@@ -1382,6 +1383,7 @@ void CrossPointWebServer::handlePostOpdsServer() {
   opdsServer.downloadFolder = normalizeOpdsDownloadFolder(doc["downloadFolder"] | std::string("/"));
   opdsServer.folderOrganization = opdsFolderOrganizationFromJson(doc["folderOrganization"] | "");
   opdsServer.filenameFormat = opdsFilenameFormatFromJson(doc["filenameFormat"] | "");
+  opdsServer.verifyTls = doc["verifyTls"] | true;
 
   // The password field is optional in the JSON payload. When absent (vs. present but empty),
   // we preserve the existing password — the web UI omits it when the user hasn't changed it.
@@ -1393,6 +1395,7 @@ void CrossPointWebServer::handlePostOpdsServer() {
       doc["downloadFolder"].is<const char*>() || doc["downloadFolder"].is<std::string>();
   const bool hasFolderOrganizationField =
       doc["folderOrganization"].is<const char*>() || doc["folderOrganization"].is<std::string>();
+  const bool hasVerifyTlsField = doc["verifyTls"].is<bool>();
 
   if (doc["index"].is<int>()) {
     int idx = doc["index"].as<int>();
@@ -1413,6 +1416,9 @@ void CrossPointWebServer::handlePostOpdsServer() {
     }
     if (existing && !hasFolderOrganizationField) {
       opdsServer.folderOrganization = existing->folderOrganization;
+    }
+    if (existing && !hasVerifyTlsField) {
+      opdsServer.verifyTls = existing->verifyTls;
     }
     opdsServer.password = password;
     OPDS_STORE.updateServer(static_cast<size_t>(idx), opdsServer);

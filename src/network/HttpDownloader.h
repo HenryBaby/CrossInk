@@ -26,15 +26,22 @@ class HttpDownloader {
     ABORTED,
   };
 
+  struct RequestOptions {
+    explicit RequestOptions(bool verifyTls = true) : verifyTls(verifyTls) {}
+
+    bool verifyTls;
+  };
+
   struct DownloadOptions {
     explicit DownloadOptions(bool preservePartial = false, bool resumePartial = false,
                              CancelCallback shouldCancel = nullptr, size_t bufferSize = 0,
-                             std::string* responseFilename = nullptr)
+                             std::string* responseFilename = nullptr, bool verifyTls = true)
         : preservePartial(preservePartial),
           resumePartial(resumePartial),
           shouldCancel(std::move(shouldCancel)),
           bufferSize(bufferSize),
-          responseFilename(responseFilename) {}
+          responseFilename(responseFilename),
+          verifyTls(verifyTls) {}
 
     bool preservePartial;
     bool resumePartial;
@@ -42,22 +49,23 @@ class HttpDownloader {
     size_t bufferSize;
     // Optional output populated from the final response's Content-Disposition header.
     std::string* responseFilename;
+    bool verifyTls;
   };
 
   /**
    * Fetch text content from a URL with optional credentials.
    */
   static bool fetchUrl(const std::string& url, std::string& outContent, const std::string& username = "",
-                       const std::string& password = "");
+                       const std::string& password = "", RequestOptions options = RequestOptions());
 
   static bool fetchUrl(const std::string& url, Stream& stream, const std::string& username = "",
-                       const std::string& password = "");
+                       const std::string& password = "", RequestOptions options = RequestOptions());
 
   /**
    * Stream the response body to onData as it arrives, without buffering it.
    */
   static bool fetchUrl(const std::string& url, const DataCallback& onData, const std::string& username = "",
-                       const std::string& password = "");
+                       const std::string& password = "", RequestOptions options = RequestOptions());
 
   /**
    * Download a file to the SD card with optional credentials.

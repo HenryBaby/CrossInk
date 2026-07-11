@@ -13,9 +13,9 @@
 #include "fontIds.h"
 
 namespace {
-// Editable fields: Name, URL, Username, Password, Folder, Folder layout, Filename.
+// Editable fields: Name, URL, Username, Password, Folder, Folder layout, Filename, TLS verification.
 // Existing servers also show a Delete option (BASE_ITEMS + 1).
-constexpr int BASE_ITEMS = 7;
+constexpr int BASE_ITEMS = 8;
 
 OpdsFilenameFormat nextFilenameFormat(const OpdsFilenameFormat format) {
   switch (format) {
@@ -206,7 +206,11 @@ void OpdsSettingsActivity::handleSelection() {
     editServer.filenameFormat = nextFilenameFormat(editServer.filenameFormat);
     saveServer();
     requestUpdate();
-  } else if (selectedIndex == 7 && !isNewServer) {
+  } else if (selectedIndex == 7) {
+    editServer.verifyTls = !editServer.verifyTls;
+    saveServer();
+    requestUpdate();
+  } else if (selectedIndex == 8 && !isNewServer) {
     // Delete flow is only available for existing servers.
     if (!OPDS_STORE.removeServer(static_cast<size_t>(serverIndex))) {
       LOG_ERR("OPS", "Failed to remove OPDS server at index %d", serverIndex);
@@ -237,7 +241,7 @@ void OpdsSettingsActivity::render(RenderLock&&) {
 
   const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
                               StrId::STR_PASSWORD, StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
-                              StrId::STR_FILENAME};
+                              StrId::STR_FILENAME, StrId::STR_VERIFY_TLS};
 
   GUI.drawList(
       renderer, Rect{0, contentTop, pageWidth, contentHeight}, menuItems, static_cast<int>(selectedIndex),
@@ -266,6 +270,8 @@ void OpdsSettingsActivity::render(RenderLock&&) {
                      : std::string(tr(STR_SINGLE_FOLDER));
         } else if (index == 6) {
           return std::string(filenameFormatLabel(editServer.filenameFormat));
+        } else if (index == 7) {
+          return editServer.verifyTls ? std::string(tr(STR_STATE_ON)) : std::string(tr(STR_STATE_OFF));
         }
         return std::string("");
       },

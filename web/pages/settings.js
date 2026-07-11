@@ -452,6 +452,11 @@ let allSettings = [];
           '<option value="author"' + (srv.folderOrganization === 'author' ? ' selected' : '') + '>Author Folders</option>' +
         '</select></span>' +
       '</div>' +
+      '<div class="setting-row">' +
+        '<span class="setting-name">Verify TLS</span>' +
+        '<span class="setting-control"><label class="toggle"><input type="checkbox" id="opds-verify-tls-' + id + '"' +
+          (srv.verifyTls !== false ? ' checked' : '') + '><span></span></label></span>' +
+      '</div>' +
       '<div class="opds-actions">' +
         '<button class="btn-small btn-save-server" onclick="saveOpdsServer(' + idx + ')">Save</button>' +
         (isNew ? '' : '<button class="btn-small btn-delete" onclick="deleteOpdsServer(' + idx + ')">Delete</button>') +
@@ -503,7 +508,8 @@ let allSettings = [];
         hasPassword: false,
         downloadFolder: '/',
         folderOrganization: 'flat',
-        filenameFormat: 'author_title'
+        filenameFormat: 'author_title',
+        verifyTls: true
       }, -1)
     );
   }
@@ -517,6 +523,7 @@ let allSettings = [];
       downloadFolder: document.getElementById('opds-folder-' + id).value,
       folderOrganization: document.getElementById('opds-folder-layout-' + id).value,
       filenameFormat: document.getElementById('opds-filename-' + id).value,
+      verifyTls: document.getElementById('opds-verify-tls-' + id).checked,
     };
     // Only include password in payload when the user actually typed something;
     // omitting it tells the server to keep the existing password.

@@ -341,7 +341,8 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   OpdsParser parser(entries.get(), MAX_OPDS_FEED_ENTRIES);
   {
     OpdsParserStream stream{parser};
-    if (!HttpDownloader::fetchUrl(url, stream, server.username, server.password)) {
+    if (!HttpDownloader::fetchUrl(url, stream, server.username, server.password,
+                                  HttpDownloader::RequestOptions(server.verifyTls))) {
       state = BrowserState::ERROR;
       errorMessage = tr(STR_FETCH_FEED_FAILED);
       requestUpdate();
@@ -461,6 +462,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
+  downloadOptions.verifyTls = server.verifyTls;
   std::string responseFilename;
   if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
     downloadOptions.responseFilename = &responseFilename;
