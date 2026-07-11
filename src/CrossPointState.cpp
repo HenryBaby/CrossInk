@@ -6,7 +6,6 @@
 #include <Serialization.h>
 
 #include <algorithm>
-#include <mutex>
 
 namespace {
 constexpr uint8_t STATE_FILE_VERSION = 5;
@@ -39,7 +38,6 @@ void CrossPointState::clearRecentSleepHistory() {
 }
 
 bool CrossPointState::saveToFile() const {
-  std::lock_guard<std::mutex> lock(_mutex);
   Storage.mkdir("/.crosspoint");
   return JsonSettingsIO::saveState(*this, STATE_FILE_JSON);
 }
@@ -49,7 +47,6 @@ bool CrossPointState::loadFromFile() {
   if (Storage.exists(STATE_FILE_JSON)) {
     String json = Storage.readFile(STATE_FILE_JSON);
     if (!json.isEmpty()) {
-      std::lock_guard<std::mutex> lock(_mutex);
       return JsonSettingsIO::loadState(*this, json.c_str());
     }
   }
@@ -76,7 +73,6 @@ bool CrossPointState::loadFromBinaryFile() {
   if (!Storage.openFileForRead("CPS", STATE_FILE_BIN, inputFile)) {
     return false;
   }
-  std::lock_guard<std::mutex> lock(_mutex);
 
   uint8_t version;
   serialization::readPod(inputFile, version);
@@ -108,12 +104,10 @@ bool CrossPointState::loadFromBinaryFile() {
     serialization::readPod(inputFile, pendingBookmarkSpine);
     serialization::readPod(inputFile, pendingBookmarkProgress);
     pendingBookmarkParagraphIndex = UINT16_MAX;
-    pendingClippingIndex = UINT16_MAX;
   } else {
     pendingBookmarkSpine = UINT16_MAX;
     pendingBookmarkProgress = -1.0f;
     pendingBookmarkParagraphIndex = UINT16_MAX;
-    pendingClippingIndex = UINT16_MAX;
   }
 
   return true;

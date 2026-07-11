@@ -1,7 +1,4 @@
 #pragma once
-#include <ArduinoJson.h>
-#include <PersistableStore.h>
-
 #include <string>
 #include <vector>
 
@@ -14,23 +11,24 @@ struct RecentBook {
   bool operator==(const RecentBook& other) const { return path == other.path; }
 };
 
-class RecentBooksStore : public PersistableStore<RecentBooksStore> {
- private:
+class RecentBooksStore;
+namespace JsonSettingsIO {
+bool loadRecentBooks(RecentBooksStore& store, const char* json);
+}  // namespace JsonSettingsIO
+
+class RecentBooksStore {
+  // Static instance
+  static RecentBooksStore instance;
+
   std::vector<RecentBook> recentBooks;
 
-  static constexpr int MAX_RECENT_BOOKS = 18;
-
-  RecentBooksStore() = default;
-  ~RecentBooksStore() = default;
-  bool loadFromBinaryFile();
-
-  friend class PersistableStore<RecentBooksStore>;
+  friend bool JsonSettingsIO::loadRecentBooks(RecentBooksStore&, const char*);
 
  public:
-  static const char* getFilePath() { return "/.crosspoint/recent.json"; }
-  void toJson(JsonDocument& doc) const;
-  bool fromJson(JsonVariantConst doc);
-  bool loadFromFile();
+  ~RecentBooksStore() = default;
+
+  // Get singleton instance
+  static RecentBooksStore& getInstance() { return instance; }
 
   // Deprecated compatibility wrapper. Use addOrUpdateBook so the promote-or-update behavior is explicit.
   [[deprecated("use addOrUpdateBook")]]
@@ -72,7 +70,13 @@ class RecentBooksStore : public PersistableStore<RecentBooksStore> {
   // Get the count of recent books
   int getCount() const { return static_cast<int>(recentBooks.size()); }
 
+  bool saveToFile() const;
+
+  bool loadFromFile();
   RecentBook getDataFromBook(std::string path) const;
+
+ private:
+  bool loadFromBinaryFile();
 };
 
 // Helper macro to access recent books store

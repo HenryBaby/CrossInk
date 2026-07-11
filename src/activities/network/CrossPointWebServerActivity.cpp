@@ -16,7 +16,6 @@
 #include "WifiSelectionActivity.h"
 #include "activities/ActivityManager.h"
 #include "activities/network/CalibreConnectActivity.h"
-#include "components/CompactHeader.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/QrUtils.h"
@@ -417,10 +416,11 @@ void CrossPointWebServerActivity::render(RenderLock&&) {
     const auto pageWidth = renderer.getScreenWidth();
     const auto pageHeight = renderer.getScreenHeight();
 
-    CompactHeader::drawTitle(renderer, isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER));
+    GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
+                   isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER), nullptr);
 
     if (state == WebServerActivityState::SERVER_RUNNING) {
-      GUI.drawSubHeader(renderer, Rect{0, CompactHeader::contentTop(metrics), pageWidth, metrics.tabBarHeight},
+      GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
                         connectedSSID.c_str());
       renderServerRunning();
     } else {
@@ -436,15 +436,16 @@ void CrossPointWebServerActivity::renderServerRunning() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
 
-  CompactHeader::drawTitle(renderer, isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER));
-  const int subHeaderTop = CompactHeader::contentTop(metrics);
-  GUI.drawSubHeader(renderer, Rect{0, subHeaderTop, pageWidth, metrics.tabBarHeight}, connectedSSID.c_str());
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight},
+                 isApMode ? tr(STR_HOTSPOT_MODE) : tr(STR_FILE_TRANSFER), nullptr);
+  GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
+                    connectedSSID.c_str());
 
   if (!isApMode) {
-    renderWifiIndicator(subHeaderTop);
+    renderWifiIndicator(metrics.topPadding + metrics.headerHeight);
   }
 
-  int startY = subHeaderTop + metrics.tabBarHeight + metrics.verticalSpacing * 2;
+  int startY = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing * 2;
   int height10 = renderer.getLineHeight(UI_10_FONT_ID);
   if (isApMode) {
     // AP mode display
@@ -453,8 +454,7 @@ void CrossPointWebServerActivity::renderServerRunning() const {
     startY += height10 + metrics.verticalSpacing * 2;
 
     // Show QR code for Wifi
-    // follows spec at https://github.com/zxing/zxing/wiki/Barcode-Contents#wi-fi-network-config-android-ios-11
-    const std::string wifiConfig = std::string("WIFI:T:nopass;S:") + connectedSSID + ";;";
+    const std::string wifiConfig = std::string("WIFI:S:") + connectedSSID + ";;";
     const Rect qrBoundsWifi(metrics.contentSidePadding, startY, QR_CODE_WIDTH, QR_CODE_HEIGHT);
     QrUtils::drawQrCode(renderer, qrBoundsWifi, wifiConfig);
 

@@ -52,19 +52,8 @@ enum class CssFontStyle : uint8_t { Normal = 0, Italic = 1 };
 // Font weight options - CSS supports 100-900, we simplify to normal/bold
 enum class CssFontWeight : uint8_t { Normal = 0, Bold = 1 };
 
-// Text decoration options. Values are bit flags so CSS can combine multiple line decorations.
+// Text decoration options
 enum class CssTextDecoration : uint8_t { None = 0, Underline = 1, LineThrough = 2 };
-
-constexpr CssTextDecoration operator|(const CssTextDecoration a, const CssTextDecoration b) {
-  return static_cast<CssTextDecoration>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
-}
-
-constexpr CssTextDecoration operator&(const CssTextDecoration a, const CssTextDecoration b) {
-  return static_cast<CssTextDecoration>(static_cast<uint8_t>(a) & static_cast<uint8_t>(b));
-}
-
-constexpr uint8_t CSS_TEXT_DECORATION_MASK =
-    static_cast<uint8_t>(CssTextDecoration::Underline) | static_cast<uint8_t>(CssTextDecoration::LineThrough);
 
 // Display options - only None and Block are relevant for e-ink rendering
 enum class CssDisplay : uint8_t { Block = 0, None = 1 };
@@ -93,8 +82,6 @@ struct CssPropertyFlags {
   uint32_t backgroundBlack : 1;
   uint32_t verticalAlign : 1;
   uint32_t direction : 1;
-  uint32_t pageBreakBefore : 1;
-  uint32_t pageBreakAfter : 1;
 
   CssPropertyFlags()
       : textAlign(0),
@@ -115,14 +102,12 @@ struct CssPropertyFlags {
         display(0),
         backgroundBlack(0),
         verticalAlign(0),
-        direction(0),
-        pageBreakBefore(0),
-        pageBreakAfter(0) {}
+        direction(0) {}
 
   [[nodiscard]] bool anySet() const {
     return textAlign || fontStyle || fontWeight || textDecoration || textIndent || marginTop || marginBottom ||
            marginLeft || marginRight || paddingTop || paddingBottom || paddingLeft || paddingRight || imageHeight ||
-           imageWidth || display || backgroundBlack || verticalAlign || direction || pageBreakBefore || pageBreakAfter;
+           imageWidth || display || backgroundBlack || verticalAlign || direction;
   }
 
   void clearAll() {
@@ -130,7 +115,6 @@ struct CssPropertyFlags {
     marginTop = marginBottom = marginLeft = marginRight = 0;
     paddingTop = paddingBottom = paddingLeft = paddingRight = 0;
     imageHeight = imageWidth = display = backgroundBlack = verticalAlign = direction = 0;
-    pageBreakBefore = pageBreakAfter = 0;
   }
 };
 
@@ -161,8 +145,6 @@ struct CssStyle {
   CssDisplay display = CssDisplay::Block;                       // display property (Block or None)
   bool backgroundBlack = false;                                 // Simple black inline/block background support
   CssVerticalAlign verticalAlign = CssVerticalAlign::Baseline;  // vertical-align (super/sub positioning)
-  bool pageBreakBefore = false;
-  bool pageBreakAfter = false;
 
   CssPropertyFlags defined;  // Tracks which properties were explicitly set
 
@@ -245,14 +227,6 @@ struct CssStyle {
       verticalAlign = base.verticalAlign;
       defined.verticalAlign = 1;
     }
-    if (base.hasPageBreakBefore()) {
-      pageBreakBefore = base.pageBreakBefore;
-      defined.pageBreakBefore = 1;
-    }
-    if (base.hasPageBreakAfter()) {
-      pageBreakAfter = base.pageBreakAfter;
-      defined.pageBreakAfter = 1;
-    }
   }
 
   [[nodiscard]] bool hasTextAlign() const { return defined.textAlign; }
@@ -274,8 +248,6 @@ struct CssStyle {
   [[nodiscard]] bool hasBackgroundBlack() const { return defined.backgroundBlack; }
   [[nodiscard]] bool hasVerticalAlign() const { return defined.verticalAlign; }
   [[nodiscard]] bool hasDirection() const { return defined.direction; }
-  [[nodiscard]] bool hasPageBreakBefore() const { return defined.pageBreakBefore; }
-  [[nodiscard]] bool hasPageBreakAfter() const { return defined.pageBreakAfter; }
 
   void reset() {
     textAlign = CssTextAlign::Left;
@@ -290,8 +262,6 @@ struct CssStyle {
     display = CssDisplay::Block;
     backgroundBlack = false;
     verticalAlign = CssVerticalAlign::Baseline;
-    pageBreakBefore = false;
-    pageBreakAfter = false;
     defined.clearAll();
   }
 };

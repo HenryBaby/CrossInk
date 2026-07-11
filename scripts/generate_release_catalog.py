@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate public firmware manifests consumed by external apps and OTA.
+Generate the public firmware catalog consumed by external apps.
 
 The catalog follows the simple schema requested by downstream clients and now
 emits one entry per firmware build variant.
@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-VARIANT_ORDER = ('tiny', 'xlarge')
+VARIANT_ORDER = ('teensy', 'tiny', 'xlarge', 'no_emoji')
 FIRMWARE_NAME_PATTERN = re.compile(r'^firmware-(?P<variant>.+?)-v[^/]+\.bin$')
 
 
@@ -47,11 +47,6 @@ def parse_args():
     parser.add_argument('--output', required=True, type=Path, help='Output catalog path. Use "catalog" for /catalog.')
     parser.add_argument('--repo', required=True, help='GitHub repository in owner/name form.')
     parser.add_argument('--version', required=True, help='Release version, with or without a leading v.')
-    parser.add_argument(
-        '--firmware-base-url',
-        default=None,
-        help='Base URL for firmware artifacts. Defaults to the versioned GitHub Release download URL.',
-    )
     parser.add_argument('--released-at', default=utc_now_iso(), help='Release timestamp in ISO-8601 format.')
     parser.add_argument('--channel', default='stable', help='Release channel.')
     parser.add_argument('--notes', default=None, help='Free-text changelog shown to users.')
@@ -84,8 +79,6 @@ def main():
     version = normalize_version(args.version)
     supported_devices = args.supported_devices or ['x4', 'x3']
     notes = args.notes or f'CrossInk {version} {args.channel} firmware'
-    firmware_base_url = args.firmware_base_url or f'https://github.com/{args.repo}/releases/download/v{version}/'
-    firmware_base_url = firmware_base_url.rstrip('/') + '/'
 
     releases = []
     seen_variants = set()
@@ -97,9 +90,6 @@ def main():
 
         filename = firmware_path.name
         variant = parse_variant(firmware_path)
-        firmware_url = f'{firmware_base_url}{filename}'
-        firmware_sha256 = sha256_file(firmware_path)
-        firmware_size = firmware_path.stat().st_size
         if variant in seen_variants:
             raise SystemExit(f'Duplicate firmware variant supplied: {variant}')
         seen_variants.add(variant)
@@ -113,9 +103,9 @@ def main():
                 'variant': variant,
                 'released_at': args.released_at,
                 'notes': notes,
-                'firmware_url': firmware_url,
-                'firmware_sha256': firmware_sha256,
-                'size': firmware_size,
+                'firmware_url': f'https://github.com/{args.repo}/releases/latest/download/{filename}',
+                'firmware_sha256': sha256_file(firmware_path),
+                'size': firmware_path.stat().st_size,
                 'supported_devices': supported_devices,
             }
         )

@@ -1,8 +1,6 @@
 #include "ImageDecoderFactory.h"
 
-#include <Arduino.h>
 #include <Logging.h>
-#include <Memory.h>
 
 #include <memory>
 #include <string>
@@ -27,22 +25,12 @@ ImageToFramebufferDecoder* ImageDecoderFactory::getDecoder(const std::string& im
 
   if (JpegToFramebufferConverter::supportsFormat(ext)) {
     if (!jpegDecoder) {
-      jpegDecoder = makeUniqueNoThrow<JpegToFramebufferConverter>();
-      if (!jpegDecoder) {
-        LOG_ERR("DEC", "OOM: JPEG framebuffer decoder (%u free, %u max alloc)", ESP.getFreeHeap(),
-                ESP.getMaxAllocHeap());
-        return nullptr;
-      }
+      jpegDecoder.reset(new JpegToFramebufferConverter());
     }
     return jpegDecoder.get();
   } else if (PngToFramebufferConverter::supportsFormat(ext)) {
     if (!pngDecoder) {
-      pngDecoder = makeUniqueNoThrow<PngToFramebufferConverter>();
-      if (!pngDecoder) {
-        LOG_ERR("DEC", "OOM: PNG framebuffer decoder (%u free, %u max alloc)", ESP.getFreeHeap(),
-                ESP.getMaxAllocHeap());
-        return nullptr;
-      }
+      pngDecoder.reset(new PngToFramebufferConverter());
     }
     return pngDecoder.get();
   }

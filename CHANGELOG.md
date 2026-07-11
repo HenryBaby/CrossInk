@@ -2,60 +2,6 @@
 
 ## [Unreleased]
 
-## [v1.4.6] - 2026-07-11
-
-### Fixed
-- OPDS feed parsing now bounds entry text and link buffers so large catalogs are truncated instead of failing with buffer memory errors.
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-
-## [v1.4.5] - 2026-07-11
-
-### Fixed
-- OPDS servers with TLS verification disabled now use an Arduino insecure TLS client instead of ESP-TLS certificate verification.
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-
-## [v1.4.4] - 2026-07-11
-
-### Fixed
-- OPDS TLS verification can now actually be disabled by enabling the required ESP-TLS insecure verification build settings.
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-
-## [v1.4.3] - 2026-07-11
-
-### Added
-- OPDS servers can disable TLS certificate verification per server for self-hosted catalogs that the ESP32 certificate bundle cannot validate.
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-
-## [v1.4.2] - 2026-07-11
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-- This fork continues to publish only the tiny firmware artifact as `firmware-v<version>.bin`.
-
-## [v1.4.1] - 2026-07-09
-
-### Changed
-- Synced this fork with upstream CrossInk release/v1.4.0.
-- Kept this fork's OTA updater on the working `esp_https_ota` path.
-- Release automation continues to build only the tiny firmware variant and publish it as `firmware-v<version>.bin`.
-
-### Added
-- Fork-specific OPDS organization remains available: per-server download folders, optional author subfolders, title-only filenames, OPDS server filename preservation, and matching author-folder organization when finished books move to `/Read`.
-- Docker-based firmware builds remain available for building firmware without a full local PlatformIO setup.
-
-## [v1.4.0] - 2026-07-09
-
-### Changed
-- Test release for verifying OTA updates from the corrected v1.3.9 firmware path.
-
 ## [v1.3.9] - 2026-07-09
 
 ### Changed

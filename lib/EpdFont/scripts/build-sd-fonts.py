@@ -33,7 +33,6 @@ import sys
 import tempfile
 import threading
 import time
-import socket
 import urllib.request
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -48,9 +47,6 @@ DEFAULT_OUTPUT = SCRIPT_DIR / "output"
 DOWNLOAD_DIR = SCRIPT_DIR / "downloaded_fonts"
 INSTANCE_DIR = SCRIPT_DIR / "instanced_fonts"
 DEFAULT_FALLBACK_FONT = EPDFONTS_DIR / "builtinFonts/source/NotoSans/NotoSans-Regular.ttf"
-# Every generated SD-card reader font should cover the same core glyph ranges
-# as the built-in reader fonts. Families can still add extra script presets.
-PATCHED_INTERVAL_PRESETS = ("builtin",)
 
 
 def is_url(value: str) -> bool:
@@ -79,57 +75,17 @@ def validate_config(families: list[dict]) -> list[str]:
     return errors
 
 
-def patched_intervals(intervals: str) -> str:
-    """Append required fallback-backed intervals to a family interval list."""
-    requested = [part.strip() for part in intervals.split(",") if part.strip()]
-    normalized = {part.lower() for part in requested}
-    patched = list(requested)
-
-    for preset in PATCHED_INTERVAL_PRESETS:
-        if preset not in normalized:
-            patched.append(preset)
-
-    return ",".join(patched)
-
-
-_orig_getaddrinfo = socket.getaddrinfo
-
-
-def _ipv4_only_getaddrinfo(*args, **kwargs):
-    """getaddrinfo variant that drops AAAA records (IPv4 only)."""
-    return [ai for ai in _orig_getaddrinfo(*args, **kwargs) if ai[0] == socket.AF_INET]
-
-
-def download_font(url: str, dest: Path, retries: int = 3) -> Path:
-    """Download a font file if not already cached. Returns the local path.
-
-    Some sources (e.g. mirrors.ctan.org) are round-robin redirectors that land
-    on a different mirror each request; a mirror may advertise an IPv6 address a
-    host without an IPv6 route cannot reach ([Errno 101] Network is unreachable).
-    Retry on failure, forcing IPv4 resolution after the first attempt.
-    """
+def download_font(url: str, dest: Path) -> Path:
+    """Download a font file if not already cached. Returns the local path."""
     if dest.exists():
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
     print(f"  Downloading {dest.name}...")
-    last_err = None
-    for attempt in range(1, retries + 1):
-        force_ipv4 = attempt > 1
-        if force_ipv4:
-            socket.getaddrinfo = _ipv4_only_getaddrinfo
-        try:
-            urllib.request.urlretrieve(url, dest)
-            break
-        except Exception as e:  # noqa: BLE001 - reported via RuntimeError below
-            last_err = e
-            dest.unlink(missing_ok=True)
-            if attempt < retries:
-                print(f"  Attempt {attempt} failed ({e}); retrying (IPv4-only)...")
-        finally:
-            if force_ipv4:
-                socket.getaddrinfo = _orig_getaddrinfo
-    else:
-        raise RuntimeError(f"Failed to download {url}: {last_err}") from last_err
+    try:
+        urllib.request.urlretrieve(url, dest)
+    except Exception as e:
+        dest.unlink(missing_ok=True)
+        raise RuntimeError(f"Failed to download {url}: {e}") from e
     size_kb = dest.stat().st_size / 1024
     print(f"  Downloaded {dest.name} ({size_kb:.0f} KB)")
     return dest
@@ -236,7 +192,7 @@ def build_family(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     styles = family.get("styles", {})
-    intervals = patched_intervals(str(family["intervals"]))
+    intervals = family["intervals"]
     sizes = ",".join(str(s) for s in family["sizes"])
 
     # Resolve all font file paths (downloads as needed)

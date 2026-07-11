@@ -52,6 +52,24 @@ jobs:
           echo "RC_TAG=$rc_tag" >> "$GITHUB_ENV"
           echo "VERSION=${branch_safe}-RC" >> "$GITHUB_ENV"
 
+      - name: Resolve default PlatformIO envs
+        shell: bash
+        run: |
+          envs=$(python3 - <<'PY'
+          import configparser
+          config = configparser.ConfigParser()
+          config.read('platformio.ini')
+          default_envs = config.get('platformio', 'default_envs', fallback='')
+          envs = [part.strip() for part in default_envs.split(',') if part.strip()]
+          print(' '.join(envs))
+          PY
+          )
+          if [ -z "$envs" ]; then
+            echo "No default_envs found in platformio.ini" >&2
+            exit 1
+          fi
+          echo "RC_ENVS=$envs" >> "$GITHUB_ENV"
+
       - name: Set version from branch
         shell: bash
         run: |
@@ -65,7 +83,12 @@ jobs:
           CROSSPOINT_RC_ARTIFACTS: "1"
           CROSSPOINT_RC_BRANCH: ${{ env.RC_BRANCH_RAW }}
           CROSSPOINT_RC_HASH: ${{ env.RC_HASH_SHORT }}
-        run: pio run -e tiny
+        run: |
+          build_args=()
+          for env_name in $RC_ENVS; do
+            build_args+=(-e "$env_name")
+          done
+          pio run "${build_args[@]}"
 
       - name: Create GitHub RC Prerelease
         uses: softprops/action-gh-release@v3

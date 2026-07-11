@@ -177,7 +177,6 @@ void testRealisticPrettyPrinted() {
   ASSERT_STREQ(p.getFirmwareUrl(),
                "https://github.com/crosspoint-reader/crosspoint-reader/releases/download/v2.4.1/firmware.bin");
   ASSERT_EQ(p.getFirmwareSize(), 1572864u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "");
 
   printf("  passed\n");
   PASS();
@@ -308,81 +307,6 @@ void testFieldOrderNameFirst() {
   ASSERT_TRUE(p.foundFirmware());
   ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/fw3.bin");
   ASSERT_EQ(p.getFirmwareSize(), 4444u);
-
-  printf("  passed\n");
-  PASS();
-}
-
-void testFirmwareSha256() {
-  printf("testFirmwareSha256...\n");
-
-  const char* json = R"({
-      "tag_name": "v3.3",
-      "assets": [{
-        "name": "firmware.bin",
-        "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-        "size": 5555,
-        "browser_download_url": "https://example.com/fw4.bin"
-      }]
-    })";
-
-  ReleaseJsonParser p;
-  p.feed(json, strlen(json));
-
-  ASSERT_TRUE(p.foundFirmware());
-  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/fw4.bin");
-  ASSERT_EQ(p.getFirmwareSize(), 5555u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-
-  printf("  passed\n");
-  PASS();
-}
-
-void testFirmwareGithubDigestSha256() {
-  printf("testFirmwareGithubDigestSha256...\n");
-
-  const char* json = R"({
-      "tag_name": "v3.4",
-      "assets": [{
-        "name": "firmware.bin",
-        "digest": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
-        "size": 6666,
-        "browser_download_url": "https://example.com/fw5.bin"
-      }]
-    })";
-
-  ReleaseJsonParser p;
-  p.feed(json, strlen(json));
-
-  ASSERT_TRUE(p.foundFirmware());
-  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/fw5.bin");
-  ASSERT_EQ(p.getFirmwareSize(), 6666u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210");
-
-  printf("  passed\n");
-  PASS();
-}
-
-void testFirmwareNonSha256DigestIgnored() {
-  printf("testFirmwareNonSha256DigestIgnored...\n");
-
-  const char* json = R"({
-      "tag_name": "v3.5",
-      "assets": [{
-        "name": "firmware.bin",
-        "digest": "sha512:fedcba9876543210",
-        "size": 7777,
-        "browser_download_url": "https://example.com/fw6.bin"
-      }]
-    })";
-
-  ReleaseJsonParser p;
-  p.feed(json, strlen(json));
-
-  ASSERT_TRUE(p.foundFirmware());
-  ASSERT_STREQ(p.getFirmwareUrl(), "https://example.com/fw6.bin");
-  ASSERT_EQ(p.getFirmwareSize(), 7777u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "");
 
   printf("  passed\n");
   PASS();
@@ -734,7 +658,6 @@ void testResetAndReuse() {
   ASSERT_STREQ(p.getTagName(), "v1.0");
   ASSERT_STREQ(p.getFirmwareUrl(), "https://a");
   ASSERT_EQ(p.getFirmwareSize(), 1u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "");
 
   p.reset();
 
@@ -746,7 +669,6 @@ void testResetAndReuse() {
   ASSERT_STREQ(p.getTagName(), "v2.0");
   ASSERT_STREQ(p.getFirmwareUrl(), "https://b");
   ASSERT_EQ(p.getFirmwareSize(), 2u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "");
 
   printf("  passed\n");
   PASS();
@@ -770,7 +692,6 @@ void testResetClearsState() {
   ASSERT_STREQ(p.getTagName(), "");
   ASSERT_STREQ(p.getFirmwareUrl(), "");
   ASSERT_EQ(p.getFirmwareSize(), 0u);
-  ASSERT_STREQ(p.getFirmwareSha256(), "");
 
   printf("  passed\n");
   PASS();
@@ -908,9 +829,6 @@ int main() {
   testFieldOrderUrlBeforeName();
   testFieldOrderSizeBeforeUrl();
   testFieldOrderNameFirst();
-  testFirmwareSha256();
-  testFirmwareGithubDigestSha256();
-  testFirmwareNonSha256DigestIgnored();
   testCustomAssetMatcher();
   testAssetsBeforeTagName();
   testChunkedFeedingRealisticSmallChunks();

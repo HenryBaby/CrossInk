@@ -5,7 +5,6 @@
 
 #include "../Activity.h"
 #include "../settings/SettingsActivity.h"
-#include "components/OptionPopup.h"
 #include "util/ButtonNavigator.h"
 
 class ControlsOptionsActivity final : public Activity {
@@ -18,7 +17,6 @@ class ControlsOptionsActivity final : public Activity {
   std::vector<SettingInfo> sideButtonSettings;
   const std::vector<SettingInfo>* currentSettings = nullptr;
   SettingAction activeSubmenu = SettingAction::None;
-  OptionPopup optionPopup;
 
   void rebuildSettingsList();
   void setCurrentSettings();

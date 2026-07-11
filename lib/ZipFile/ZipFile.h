@@ -1,6 +1,7 @@
 #pragma once
 #include <HalStorage.h>
 
+#include <deque>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -64,7 +65,7 @@ class ZipFile {
   // Batch lookup: scan ZIP central dir once and fill sizes for matching targets.
   // targets must be sorted by (hash, len). sizes[target.index] receives uncompressedSize.
   // Returns number of targets matched.
-  int fillUncompressedSizes(const SizeTarget* targets, size_t targetCount, uint32_t* sizes, size_t sizeCount);
+  int fillUncompressedSizes(std::deque<SizeTarget>& targets, std::deque<uint32_t>& sizes);
   // Due to the memory required to run each of these, it is recommended to not preopen the zip file for multiple
   // These functions will open and close the zip as needed
   uint8_t* readFileToMemory(const char* filename, size_t* size = nullptr, bool trailingNullByte = false);

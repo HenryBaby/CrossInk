@@ -12,7 +12,6 @@
 #include "MappedInputManager.h"
 #include "RecentBooksStore.h"
 #include "components/themes/BaseTheme.h"
-#include "components/themes/dashboard/DashboardTheme.h"
 #include "components/themes/lyra/Lyra3CoversTheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
 #include "components/themes/lyra/LyraTheme.h"
@@ -79,11 +78,6 @@ void UITheme::setTheme(CrossPointSettings::UI_THEME type) {
       LOG_DBG("UI", "Using Minimal theme");
       currentTheme = std::make_unique<MinimalTheme>();
       currentMetrics = &MinimalMetrics::values;
-      break;
-    case CrossPointSettings::UI_THEME::DASHBOARD:
-      LOG_DBG("UI", "Using Dashboard theme");
-      currentTheme = std::make_unique<DashboardTheme>();
-      currentMetrics = &DashboardMetrics::values;
       break;
     default:
       LOG_ERR("UI", "Unknown theme %d, falling back to Classic", static_cast<int>(type));
@@ -152,7 +146,7 @@ std::string UITheme::getCoverThumbPath(const std::string& coverBmpPath, int cove
     return "";
   }
   // Use int64_t so large heights cannot overflow before division.
-  const int coverWidth = static_cast<int>((static_cast<int64_t>(coverHeight) * 2 + 1) / 3);
+  const int coverWidth = static_cast<int>((static_cast<int64_t>(coverHeight) * 3 + 2) / 5);
   return getCoverThumbPath(coverBmpPath, coverWidth, coverHeight);
 }
 
@@ -219,8 +213,7 @@ int UITheme::getStatusBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
 
   // Add status bar margin
-  const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.stablePageNumbers ||
-                             SETTINGS.statusBarBookProgressPercentage ||
+  const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.statusBarBookProgressPercentage ||
                              SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE ||
                              SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE ||
                              SETTINGS.statusBarBattery;

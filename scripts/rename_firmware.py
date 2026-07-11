@@ -3,14 +3,18 @@ PlatformIO post-build script: copy firmware.bin to convenient artifact names
 in the same build directory.
 
 Default outputs:
+  .pio/build/teensy/firmware-teensy.bin
   .pio/build/tiny/firmware-tiny.bin
   .pio/build/xlarge/firmware-xlarge.bin
+  .pio/build/no_emoji/firmware-no_emoji.bin
 
 Release-candidate outputs when CROSSPOINT_RC_ARTIFACTS=1:
+  .pio/build/teensy/firmware-teensy-<branch>-<hash>-RC.bin
   .pio/build/tiny/firmware-tiny-<branch>-<hash>-RC.bin
   .pio/build/tiny/firmware-<branch>-<hash>-RC.bin (when custom_rc_artifact_stem = firmware)
 
 Release outputs when CROSSPOINT_RELEASE_VERSION is set:
+  .pio/build/teensy/firmware-teensy-v<version>.bin
   .pio/build/tiny/firmware-tiny-v<version>.bin
   .pio/build/tiny/firmware-v<version>.bin (when custom_release_artifact_stem = firmware)
 """

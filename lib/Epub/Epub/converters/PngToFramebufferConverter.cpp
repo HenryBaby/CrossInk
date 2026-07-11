@@ -4,7 +4,6 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <Logging.h>
-#include <Memory.h>
 #include <MemoryBudget.h>
 #include <PNGdec.h>
 
@@ -43,16 +42,13 @@ struct PngContext {
 // File I/O callbacks use pFile->fHandle to access the FsFile*,
 // avoiding the need for global file state.
 void* pngOpenWithHandle(const char* filename, int32_t* size) {
-  auto f = makeUniqueNoThrow<FsFile>();
-  if (!f) {
-    LOG_ERR("PNG", "OOM: PNG file handle (%u free, %u max alloc)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
-    return nullptr;
-  }
+  FsFile* f = new FsFile();
   if (!Storage.openFileForRead("PNG", std::string(filename), *f)) {
+    delete f;
     return nullptr;
   }
   *size = f->size();
-  return f.release();  // PNGdec owns this handle until pngCloseWithHandle deletes it.
+  return f;
 }
 
 void pngCloseWithHandle(void* handle) {

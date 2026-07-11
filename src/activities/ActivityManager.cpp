@@ -1,6 +1,5 @@
 #include "ActivityManager.h"
 
-#include <FontCacheManager.h>
 #include <HalPowerManager.h>
 
 #include <algorithm>
@@ -24,13 +23,12 @@
 #include "util/FullScreenMessageActivity.h"
 
 void ActivityManager::begin() {
-  xTaskCreatePinnedToCore(&renderTaskTrampoline, "ActivityManagerRender",
-                          16384,  // Stack size - createSectionFile() puts ChapterHtmlSlimParser on stack during
-                                  // silentIndexNextChapterIfNeeded
-                          this,   // Parameters
-                          1,      // Priority
-                          &renderTaskHandle,  // Task handle
-                          0                   // Pin to core 0 (PRO_CPU)
+  xTaskCreate(&renderTaskTrampoline, "ActivityManagerRender",
+              16384,  // Stack size — increased from 8192; createSectionFile() puts ChapterHtmlSlimParser (~700 bytes)
+                      // on stack during silentIndexNextChapterIfNeeded
+              this,   // Parameters
+              1,      // Priority
+              &renderTaskHandle  // Task handle
   );
   assert(renderTaskHandle != nullptr && "Failed to create render task");
 }
@@ -155,7 +153,8 @@ void ActivityManager::loop() {
     pushActivity(std::make_unique<AlertActivity>(renderer, mappedInput));
   }
 
-  if (requestedUpdate.exchange(false)) {
+  if (requestedUpdate) {
+    requestedUpdate = false;
     // Using direct notification to signal the render task to update
     // Increment counter so multiple rapid calls won't be lost
     if (renderTaskHandle) {
@@ -291,8 +290,6 @@ void ActivityManager::popActivity() {
 }
 
 bool ActivityManager::preventAutoSleep() const { return currentActivity && currentActivity->preventAutoSleep(); }
-
-bool ActivityManager::isHomeActivity() const { return currentActivity && currentActivity->name == "Home"; }
 
 bool ActivityManager::isReaderActivity() const {
   if (currentActivity && currentActivity->isReaderActivity()) {
