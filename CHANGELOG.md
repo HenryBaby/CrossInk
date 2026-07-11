@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v1.4.4] - 2026-07-11
+
+### Fixed
+- OPDS TLS verification can now actually be disabled by enabling the required ESP-TLS insecure verification build settings.
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.3] - 2026-07-11
 
 ### Added
