@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [v1.4.2] - 2026-07-11
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+- This fork continues to publish only the tiny firmware artifact as `firmware-v<version>.bin`.
+
 ## [v1.4.1] - 2026-07-09
 
 ### Changed
