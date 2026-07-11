@@ -390,7 +390,9 @@ bool OpdsBookBrowserActivity::ensureEntryBuffer() {
 }
 
 void OpdsBookBrowserActivity::clearEntries() {
-  // Slots past entryCount are ignored and overwritten by the next feed parse.
+  for (size_t i = 0; entries && i < entryCount; ++i) {
+    entries[i] = OpdsEntry{};
+  }
   entryCount = 0;
 }
 

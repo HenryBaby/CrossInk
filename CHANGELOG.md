@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v1.4.6] - 2026-07-11
+
+### Fixed
+- OPDS feed parsing now bounds entry text and link buffers so large catalogs are truncated instead of failing with buffer memory errors.
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.5] - 2026-07-11
 
 ### Fixed

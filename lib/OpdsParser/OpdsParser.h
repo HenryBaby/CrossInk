@@ -176,6 +176,8 @@ class OpdsParser final : public Print {
   std::string prevPageUrl;
   // Helper to find attribute value
   static const char* findAttribute(const XML_Char** atts, const char* name);
+  static void assignBounded(std::string& target, const char* value, size_t maxLen);
+  static void appendBounded(std::string& target, const char* value, size_t len, size_t maxLen);
 
   XML_Parser parser = nullptr;
   OpdsEntry* entries = nullptr;
@@ -190,6 +192,7 @@ class OpdsParser final : public Print {
   bool inAuthor = false;
   bool inAuthorName = false;
   bool inId = false;
+  bool collectCurrentEntry = false;
 
   bool errorOccured = false;
   OpdsParserError errorReason = OpdsParserError::NONE;
