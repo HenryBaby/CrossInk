@@ -5,14 +5,11 @@
 
 #include <algorithm>
 #include <cstring>
-#include <memory>
 #include <string>
-#include <variant>
 #include <vector>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
-#include "activities/util/OptionSelectionActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -215,6 +212,8 @@ void StatusBarSettingsActivity::onEnter() {
 void StatusBarSettingsActivity::onExit() { Activity::onExit(); }
 
 void StatusBarSettingsActivity::loop() {
+  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
     return;
@@ -286,25 +285,15 @@ void StatusBarSettingsActivity::openOptionPicker() {
   uint8_t currentIndex = currentOptionIndexForItem(item);
   if (currentIndex >= optionCount) currentIndex = 0;
 
-  startActivityForResult(
-      std::make_unique<OptionSelectionActivity>(renderer, mappedInput, "StatusBarOptionSelect", menuNames[item],
-                                                std::move(options), currentIndex, readerContext),
-      [this, item](const ActivityResult& result) {
-        if (result.isCancelled) {
-          requestUpdate();
-          return;
-        }
-
-        const auto* selection = std::get_if<OptionSelectionResult>(&result.data);
-        if (selection != nullptr) {
-          setOptionIndexForItem(item, selection->index);
-          SETTINGS.saveToFile();
-        }
-        requestUpdate();
-      });
+  optionPopup.show(menuNames[item], options, currentIndex, [item](int index) {
+    setOptionIndexForItem(item, static_cast<uint8_t>(index));
+    SETTINGS.saveToFile();
+  });
 }
 
 void StatusBarSettingsActivity::render(RenderLock&&) {
+  if (optionPopup.processRender(renderer, mappedInput)) return;
+
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();

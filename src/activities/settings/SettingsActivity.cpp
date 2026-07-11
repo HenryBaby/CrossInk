@@ -374,34 +374,22 @@ void SettingsActivity::openEnumOptionPicker(const SettingInfo& setting) {
   if (currentIndex >= optionCount) currentIndex = 0;
 
   const SettingInfo selectedSetting = setting;
-  startActivityForResult(
-      std::make_unique<OptionSelectionActivity>(renderer, mappedInput, "SettingsOptionSelect", setting.nameId,
-                                                std::move(options), currentIndex),
-      [this, selectedSetting](const ActivityResult& result) {
-        if (result.isCancelled) {
-          requestUpdate();
-          return;
-        }
+  optionPopup.show(setting.nameId, options, currentIndex, [this, selectedSetting](int index) {
+    if (selectedSetting.valuePtr != nullptr) {
+      SETTINGS.*(selectedSetting.valuePtr) =
+          settingEnumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(index));
+    } else if (selectedSetting.valueSetter) {
+      selectedSetting.valueSetter(static_cast<uint8_t>(index));
+    }
 
-        const auto* selection = std::get_if<OptionSelectionResult>(&result.data);
-        if (selection == nullptr) {
-          requestUpdate();
-          return;
-        }
-
-        if (selectedSetting.valuePtr != nullptr) {
-          SETTINGS.*(selectedSetting.valuePtr) = enumRawValueForDisplayIndex(selectedSetting, selection->index);
-        } else if (selectedSetting.valueSetter) {
-          selectedSetting.valueSetter(selection->index);
-        }
-
-        const bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
-        const bool quickResumeTimeoutChanged = selectedSetting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
-        syncQuickResumeTimeoutForSleepScreen(sleepScreenChanged, quickResumeTimeoutChanged);
-        SETTINGS.saveToFile();
-        rebuildSettingsLists();
-        requestUpdate();
-      });
+    const bool sleepScreenChanged = selectedSetting.valuePtr == &CrossPointSettings::sleepScreen;
+    const bool quickResumeTimeoutChanged = selectedSetting.valuePtr == &CrossPointSettings::quickResumeSleepScreen;
+    syncQuickResumeTimeoutForSleepScreen(sleepScreenChanged, quickResumeTimeoutChanged);
+    SETTINGS.saveToFile();
+    rebuildSettingsLists();
+    requestUpdate();
+  });
+  requestUpdate();
 }
 
 void SettingsActivity::openScreenMarginPicker(const SettingInfo& setting) {
@@ -510,6 +498,8 @@ void SettingsActivity::onExit() {
 }
 
 void SettingsActivity::loop() {
+  if (optionPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+
   bool hasChangedCategory = false;
 
   // Handle actions with early return
@@ -664,6 +654,23 @@ void SettingsActivity::toggleCurrentSetting() {
     if (optionCount == 0) return;
     const uint8_t totalValues = static_cast<uint8_t>(optionCount);
     const uint8_t cur = setting.valueGetter();
+    if (totalValues > 2) {
+      const auto valueSetter = setting.valueSetter;
+      auto onSelect = [this, valueSetter, sleepScreenChanged, quickResumeTimeoutChanged](int idx) {
+        valueSetter(idx);
+        syncQuickResumeTimeoutForSleepScreen(sleepScreenChanged, quickResumeTimeoutChanged);
+        SETTINGS.saveToFile();
+        rebuildSettingsLists();
+      };
+      if (!setting.enumStringValues.empty()) {
+        optionPopup.show(setting.nameId, setting.enumStringValues, cur, std::move(onSelect));
+      } else {
+        optionPopup.show(setting.nameId, setting.enumValues.data(), static_cast<int>(setting.enumValues.size()), cur,
+                         std::move(onSelect));
+      }
+      requestUpdate();
+      return;
+    }
     setting.valueSetter((cur + 1) % totalValues);
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     const int8_t currentValue = SETTINGS.*(setting.valuePtr);
@@ -834,6 +841,8 @@ void SettingsActivity::openIdleTimeThresholdPicker() {
 }
 
 void SettingsActivity::render(RenderLock&&) {
+  if (optionPopup.processRender(renderer, mappedInput)) return;
+
   renderer.clearScreen();
 
   const auto pageWidth = renderer.getScreenWidth();
@@ -931,6 +940,7 @@ void SettingsActivity::render(RenderLock&&) {
                       (*currentSettings)[selectedSettingIndex - 1].valuePtr == &CrossPointSettings::screenMargin)
                  ? tr(STR_SELECT)
                  : tr(STR_TOGGLE));
+
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 

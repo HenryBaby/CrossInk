@@ -24,6 +24,7 @@
 #include "SleepCoverAssets.h"
 #include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
+#include "components/themes/dashboard/DashboardTheme.h"
 #include "components/themes/minimal/MinimalTheme.h"
 #include "fontIds.h"
 #include "images/Logo120.h"
@@ -431,6 +432,8 @@ void SleepActivity::onEnter() {
       return renderMinimalSleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::MINIMAL_STATS_SLEEP):
       return renderMinimalStatsSleepScreen();
+    case (CrossPointSettings::SLEEP_SCREEN_MODE::DASHBOARD_SLEEP):
+      return renderDashboardSleepScreen();
     default:
       return renderDefaultSleepScreen();
   }
@@ -492,7 +495,7 @@ void SleepActivity::renderDefaultSleepScreen() const {
   renderer.drawCenteredText(SMALL_FONT_ID, pageHeight / 2 + 118, visibleBuildInfo.c_str(), lightSleepScreen);
 #endif
 
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
 void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
@@ -547,7 +550,13 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
     renderer.invertScreen();
   }
 
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  if (hasGreyscale) {
+    // OEM grayscale pipeline base: use a full sleep-screen paint so the panel
+    // enters deep sleep from a clean B/W baseline before the gray nudge refresh.
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  } else {
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  }
 
   if (hasGreyscale) {
     bitmap.rewindToData();
@@ -666,6 +675,30 @@ void SleepActivity::renderMinimalStatsSleepScreen() const {
   renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
+void SleepActivity::renderDashboardSleepScreen() const {
+  const std::string& path = currentBookPath.empty() ? APP_STATE.openEpubPath : currentBookPath;
+  if (path.empty()) {
+    return renderDefaultSleepScreen();
+  }
+
+  RecentBook book = recentBookForPath(path);
+  const std::string fallbackCoverPath = book.coverBmpPath;
+  book.coverBmpPath = SleepCoverAssets::cachedDashboardCoverPathFor(path);
+  if (book.coverBmpPath.empty() && SleepCoverAssets::prepareDashboardCoverForPath(path)) {
+    book.coverBmpPath = SleepCoverAssets::cachedDashboardCoverPathFor(path);
+  }
+  if (book.coverBmpPath.empty()) {
+    book.coverBmpPath = fallbackCoverPath;
+  }
+
+  const BookReadingStats bookStats = loadBookStatsForPath(path);
+  const GlobalReadingStats globalStats = GlobalReadingStats::load();
+  const float progressPercent = RecentBookProgress::loadPercent(book);
+  DashboardTheme theme;
+  theme.drawSleepScreen(renderer, book, &bookStats, &globalStats, progressPercent);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+}
+
 void SleepActivity::renderLastScreenSleepScreen() const {
   const auto pageHeight = renderer.getScreenHeight();
   if (ReaderUtils::readerDarkModeEnabled()) {
@@ -678,7 +711,7 @@ void SleepActivity::renderLastScreenSleepScreen() const {
 
 void SleepActivity::renderBlankSleepScreen() const {
   renderer.clearScreen();
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
 void SleepActivity::renderOverlaySleepScreen() const {
@@ -891,7 +924,7 @@ void SleepActivity::renderOverlaySleepScreen() const {
   // over the sleep image.
   const bool shouldRunGrayscalePass = shouldUseReaderPageBackground && backgroundSupportsGrayscale && !overlayDrawn &&
                                       (backgroundWasRebuilt || (overlayBackgroundBufferStored && !path.empty()));
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, !shouldRunGrayscalePass && TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, !shouldRunGrayscalePass && TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 
   if (!shouldRunGrayscalePass) {
     return;

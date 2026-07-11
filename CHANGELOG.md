@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- Dashboard home and sleep screen theme, showing the current book cover with reading stats.
+- Multi-choice settings now open a selection popup instead of cycling through every option.
+
+### Fixed
+- Sleep screen refreshes now use a full refresh for the selected sleep-screen paths to reduce X4 ghosting after sleep.
+- Pages-per-minute reading stats are preserved after opening reading stats from inside a book.
+- Lyra Carousel no longer reuses stale cover cache frames after home navigation changes.
+
 ## [v1.3.9] - 2026-07-09
 
 ### Changed

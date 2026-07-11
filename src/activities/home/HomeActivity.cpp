@@ -21,6 +21,7 @@
 
 #include "../reader/BookReadingStats.h"
 #include "../reader/BookStatsActivity.h"
+#include "../reader/EpubReaderUtils.h"
 #include "BookmarkStore.h"
 #include "BookmarksHomeActivity.h"
 #include "CrossPointSettings.h"
@@ -30,6 +31,7 @@
 #include "RecentBookProgress.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "components/themes/dashboard/DashboardTheme.h"
 #include "components/themes/lyra/LyraCarouselTheme.h"
 #include "components/themes/minimal/MinimalTheme.h"
 #include "fontIds.h"
@@ -282,6 +284,12 @@ bool isMinimalTheme() {
   return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::MINIMAL;
 }
 
+bool isDashboardTheme() {
+  return static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::DASHBOARD;
+}
+
+bool usesMinimalHomeInteraction() { return isMinimalTheme() || isDashboardTheme(); }
+
 bool isAnyFrontButtonPressed(const MappedInputManager& mappedInput) {
   return mappedInput.isFrontButtonPressed(HalGPIO::BTN_BACK) ||
          mappedInput.isFrontButtonPressed(HalGPIO::BTN_CONFIRM) ||
@@ -310,6 +318,51 @@ std::string minimalHomeCoverPath(const RecentBook& book, int coverHeight) {
   }
   return UITheme::getCoverThumbPath(book.coverBmpPath, minimalHomeCoverWidth(coverHeight),
                                     minimalHomeCoverHeight(coverHeight));
+}
+
+int dashboardHomeCoverWidth(int coverHeight) {
+  (void)coverHeight;
+  return DashboardMetrics::homeCoverImageWidth;
+}
+
+int dashboardHomeCoverHeight(int coverHeight) {
+  (void)coverHeight;
+  return DashboardMetrics::homeCoverImageHeight;
+}
+
+std::string dashboardHomeCoverPath(const RecentBook& book, int coverHeight) {
+  if (book.coverBmpPath.empty()) {
+    return {};
+  }
+  if (FsHelpers::hasEpubExtension(book.path)) {
+    return Epub(book.path, "/.crosspoint")
+        .getAdaptiveThumbBmpPath(dashboardHomeCoverWidth(coverHeight), dashboardHomeCoverHeight(coverHeight));
+  }
+  return UITheme::getCoverThumbPath(book.coverBmpPath, dashboardHomeCoverWidth(coverHeight),
+                                    dashboardHomeCoverHeight(coverHeight));
+}
+
+std::string loadRecentBookChapterTitle(const RecentBook& book) {
+  if (!FsHelpers::hasEpubExtension(book.path)) {
+    return {};
+  }
+
+  Epub epub(book.path, "/.crosspoint");
+  if (!epub.load(false, true)) {
+    return {};
+  }
+
+  EpubReaderUtils::Progress progress;
+  if (!EpubReaderUtils::loadProgress(epub, progress, "HOME")) {
+    return {};
+  }
+
+  const auto spineItem = epub.getSpineItem(progress.spineIndex);
+  if (spineItem.tocIndex < 0) {
+    return {};
+  }
+
+  return epub.getTocItem(spineItem.tocIndex).title;
 }
 
 void appendCarouselCoverStateToKey(std::string& key, const RecentBook& book) {
@@ -554,6 +607,7 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
   const bool isCarouselTheme =
       static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
   const bool isMinimal = isMinimalTheme();
+  const bool isDashboard = isDashboardTheme();
   const size_t recentBookCount = recentBooks.size();
   // Tracks which book indices had a thumbnail generated this pass.
   std::vector<char> bookUpdated(recentBookCount, false);
@@ -639,8 +693,16 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
         // Non-carousel: generate the active theme's thumbnail size.
         const bool useMinimalThumb =
             isMinimal && (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path));
-        const std::string coverPath = useMinimalThumb ? minimalHomeCoverPath(book, coverHeight)
-                                                      : UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight);
+        const bool useDashboardThumb =
+            isDashboard && (FsHelpers::hasEpubExtension(book.path) || FsHelpers::hasXtcExtension(book.path));
+        std::string coverPath;
+        if (useMinimalThumb) {
+          coverPath = minimalHomeCoverPath(book, coverHeight);
+        } else if (useDashboardThumb) {
+          coverPath = dashboardHomeCoverPath(book, coverHeight);
+        } else {
+          coverPath = UITheme::getCoverThumbPath(book.coverBmpPath, coverHeight);
+        }
         if (coverPath.empty() || !Storage.exists(coverPath.c_str())) {
           if (FsHelpers::hasEpubExtension(book.path)) {
             Epub epub(book.path, "/.crosspoint");
@@ -658,9 +720,16 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
               progress++;
               continue;
             }
-            const bool success = useMinimalThumb ? epub.generateAdaptiveThumbBmp(minimalHomeCoverWidth(coverHeight),
-                                                                                 minimalHomeCoverHeight(coverHeight))
-                                                 : epub.generateThumbBmp(0, coverHeight);
+            bool success = false;
+            if (useMinimalThumb) {
+              success = epub.generateAdaptiveThumbBmp(minimalHomeCoverWidth(coverHeight),
+                                                      minimalHomeCoverHeight(coverHeight));
+            } else if (useDashboardThumb) {
+              success = epub.generateAdaptiveThumbBmp(dashboardHomeCoverWidth(coverHeight),
+                                                      dashboardHomeCoverHeight(coverHeight));
+            } else {
+              success = epub.generateThumbBmp(0, coverHeight);
+            }
             if (!success) {
               updateRecentBookCoverPath(book, "");
               book.coverBmpPath = "";
@@ -677,10 +746,16 @@ void HomeActivity::loadRecentCovers(int coverHeight) {
                 popupRect = GUI.drawPopup(renderer, tr(STR_LOADING_POPUP));
               }
               GUI.fillPopupProgress(renderer, popupRect, 10 + progress * progressIncrement);
-              const bool success =
-                  useMinimalThumb ? xtc.generateThumbBmp(static_cast<uint16_t>(minimalHomeCoverWidth(coverHeight)),
-                                                         static_cast<uint16_t>(minimalHomeCoverHeight(coverHeight)))
-                                  : xtc.generateThumbBmp(coverHeight);
+              bool success = false;
+              if (useMinimalThumb) {
+                success = xtc.generateThumbBmp(static_cast<uint16_t>(minimalHomeCoverWidth(coverHeight)),
+                                               static_cast<uint16_t>(minimalHomeCoverHeight(coverHeight)));
+              } else if (useDashboardThumb) {
+                success = xtc.generateThumbBmp(static_cast<uint16_t>(dashboardHomeCoverWidth(coverHeight)),
+                                               static_cast<uint16_t>(dashboardHomeCoverHeight(coverHeight)));
+              } else {
+                success = xtc.generateThumbBmp(coverHeight);
+              }
               if (!success) {
                 updateRecentBookCoverPath(book, "");
                 book.coverBmpPath = "";
@@ -755,7 +830,7 @@ void HomeActivity::onEnter() {
   selectorIndex = 0;
   lastCarouselBookIndex = 0;
   minimalMenuOpen = false;
-  minimalSuppressInitialFrontRelease = isMinimalTheme();
+  minimalSuppressInitialFrontRelease = usesMinimalHomeInteraction();
   minimalMenuIndex = 0;
   minimalHomeNavIndex = -1;
   carouselFramesReady = false;
@@ -835,8 +910,7 @@ void HomeActivity::showNextRecentBookOnHome() {
   lastCarouselBookIndex = 0;
   bookStatsCached = false;
   updateHighlightedBookContext();
-  coverRendered = false;
-  freeCoverBuffer();
+  invalidateCoverCache();
   requestUpdate();
 }
 
@@ -849,6 +923,7 @@ void HomeActivity::updateHighlightedBookContext() {
   const auto start = millis();
   currentBookStats = BookReadingStats{};
   currentBookProgressPercent = -1.0f;
+  currentBookChapterTitle.clear();
 
   const int idx = getHighlightedBookIndex();
   const bool useCachedStats = idx >= 0 && bookStatsCached && idx < kMaxCachedBooks;
@@ -859,6 +934,9 @@ void HomeActivity::updateHighlightedBookContext() {
     } else {
       currentBookStats = loadRecentBookStats(recentBooks[idx]);
       currentBookProgressPercent = RecentBookProgress::loadPercent(recentBooks[idx]);
+    }
+    if (isDashboardTheme()) {
+      currentBookChapterTitle = loadRecentBookChapterTitle(recentBooks[idx]);
     }
   }
 
@@ -911,6 +989,11 @@ void HomeActivity::freeCoverBuffer() {
   }
   coverBufferSize = 0;
   coverBufferStored = false;
+}
+
+void HomeActivity::invalidateCoverCache() {
+  coverRendered = false;
+  freeCoverBuffer();
 }
 
 void HomeActivity::freeCarouselFrames() {
@@ -1263,7 +1346,7 @@ bool HomeActivity::preRenderCarouselFrames(bool showProgressPopup) {
 }
 
 void HomeActivity::loop() {
-  if (isMinimalTheme()) {
+  if (usesMinimalHomeInteraction()) {
     const int pressedFrontButton = mappedInput.getPressedFrontButton();
     const int releasedFrontButton = mappedInput.getReleasedFrontButton();
 
@@ -1458,8 +1541,10 @@ void HomeActivity::loop() {
       if (inCarouselRow) {
         lastCarouselBookIndex = selectorIndex;
         selectorIndex = bookCount;
+        invalidateCoverCache();
       } else {
         selectorIndex = lastCarouselBookIndex;
+        invalidateCoverCache();
       }
       requestUpdate();
     }
@@ -1467,8 +1552,10 @@ void HomeActivity::loop() {
       if (inCarouselRow) {
         lastCarouselBookIndex = selectorIndex;
         selectorIndex = bookCount;
+        invalidateCoverCache();
       } else {
         selectorIndex = lastCarouselBookIndex;
+        invalidateCoverCache();
       }
       requestUpdate();
     }
@@ -1536,7 +1623,7 @@ void HomeActivity::render(RenderLock&&) {
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
 
-  if (isMinimalTheme()) {
+  if (usesMinimalHomeInteraction()) {
     renderer.clearScreen();
 
     if (minimalMenuOpen) {
@@ -1559,7 +1646,8 @@ void HomeActivity::render(RenderLock&&) {
     GUI.drawRecentBookCover(
         renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight}, recentBooks, selectorIndex,
         coverRendered, coverBufferStored, bufferRestored, std::bind(&HomeActivity::storeCoverBuffer, this),
-        hasAnyBookStats(currentBookStats) ? &currentBookStats : nullptr, currentBookProgressPercent);
+        hasAnyBookStats(currentBookStats) ? &currentBookStats : nullptr, currentBookProgressPercent, &globalStats,
+        currentBookChapterTitle.c_str());
 
     const int homeNavCount = minimalHomeNavCount(!recentBooks.empty());
     if (minimalHomeNavIndex >= homeNavCount) {
@@ -1649,7 +1737,8 @@ void HomeActivity::render(RenderLock&&) {
   GUI.drawRecentBookCover(renderer, Rect{0, metrics.homeTopPadding, pageWidth, metrics.homeCoverTileHeight},
                           recentBooks, selectorIndex, coverRendered, coverBufferStored, bufferRestored,
                           std::bind(&HomeActivity::storeCoverBuffer, this),
-                          hasAnyBookStats(currentBookStats) ? &currentBookStats : nullptr, currentBookProgressPercent);
+                          hasAnyBookStats(currentBookStats) ? &currentBookStats : nullptr, currentBookProgressPercent,
+                          &globalStats, nullptr);
 
   auto menuItems = buildSelectableHomeMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks,
                                                 metrics.homeContinueReadingInMenu && !recentBooks.empty());

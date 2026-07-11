@@ -65,6 +65,18 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .popupProgressClampPercent = false,
                                  .popupProgressFillInverted = false,
                                  .popupProgressOutlineInverted = false,
+                                 .optionPopupItemSpacing = 8,
+                                 .optionPopupInnerPadding = 20,
+                                 .optionPopupSelectionHPadding = 16,
+                                 .optionPopupSelectionVPadding = 12,
+                                 .optionPopupTitleGap = 16,
+                                 .optionPopupUseSmallFont = true,
+                                 .optionPopupOptionFontBold = false,
+                                 .optionPopupSelectionRadius = 6,
+                                 .optionPopupSelectionLight = true,
+                                 .optionPopupDrawAllRows = false,
+                                 .optionPopupDialogSideMargin = 20,
+                                 .optionPopupTitleSeparator = true,
                                  .textFieldHorizontalPadding = 6,
                                  .textFieldNormalThickness = 1,
                                  .textFieldCursorThickness = 3,
@@ -97,7 +109,8 @@ class LyraTheme : public BaseTheme {
   void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                            int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,
                            const std::function<bool()>& storeCoverBuffer, const BookReadingStats* stats = nullptr,
-                           float progressPercent = -1.0f) const override;
+                           float progressPercent = -1.0f, const GlobalReadingStats* globalStats = nullptr,
+                           const char* currentChapterTitle = nullptr) const override;
   void drawEmptyRecents(const GfxRenderer& renderer, const Rect rect) const;
   bool showsFileIcons() const override { return true; }
 
