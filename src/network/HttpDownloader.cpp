@@ -1,14 +1,18 @@
 #include "HttpDownloader.h"
 
 #include <Arduino.h>
+#include <HTTPClient.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <base64.h>
 #include <esp_crt_bundle.h>
 #include <esp_http_client.h>
 #include <strings.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
 #include <string>
@@ -28,6 +32,8 @@ constexpr int HTTP_READ_POLL_TIMEOUT_MS = 5000;
 constexpr uint32_t DOWNLOAD_IDLE_TIMEOUT_MS = 30000;
 constexpr size_t DEFAULT_DOWNLOAD_BUFFER_SIZE = 2048;
 constexpr uint8_t MAX_REDIRECTS = 5;
+constexpr const char* HTTP_HEADER_LOCATION = "Location";
+constexpr const char* HTTP_HEADER_CONTENT_DISPOSITION = "Content-Disposition";
 
 void logNetworkState(const char* phase) {
   LOG_DBG("HTTP", "%s: heap free=%u maxAlloc=%u wifi=%d rssi=%d", phase, ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
@@ -196,6 +202,23 @@ void setRequestHeaders(esp_http_client_handle_t client, const std::string& usern
   }
 }
 
+void setRequestHeaders(HTTPClient& http, const std::string& username, const std::string& password, size_t resumeOffset,
+                       bool sendAuthorization) {
+  http.addHeader("User-Agent", "CrossInk-ESP32-" CROSSINK_VERSION);
+  http.addHeader("Connection", "close");
+  if (resumeOffset > 0) {
+    char rangeHeader[40];
+    snprintf(rangeHeader, sizeof(rangeHeader), "bytes=%zu-", resumeOffset);
+    http.addHeader("Range", rangeHeader);
+    LOG_DBG("HTTP", "Resuming download at byte %zu", resumeOffset);
+  }
+  if (sendAuthorization) {
+    const std::string credentials = username + ":" + password;
+    const String header = "Basic " + base64::encode(credentials.c_str());
+    http.addHeader("Authorization", header);
+  }
+}
+
 void logTlsError(esp_http_client_handle_t client, const char* phase) {
   int tlsError = 0;
   int tlsFlags = 0;
@@ -206,8 +229,217 @@ void logTlsError(esp_http_client_handle_t client, const char* phase) {
   }
 }
 
+HttpDownloader::DownloadError readArduinoResponseBody(HTTPClient& http, Sink& sink, const size_t bufferSize,
+                                                      const int responseLength) {
+  const size_t bodyLength = responseLength > 0 ? static_cast<size_t>(responseLength) : 0;
+  sink.total = bodyLength > 0 ? sink.resumeOffset + bodyLength : 0;
+  sink.downloaded = sink.resumeOffset;
+  if (sink.total > 0) {
+    LOG_DBG("HTTP", "Content-Length: %zu", sink.total);
+  } else {
+    LOG_DBG("HTTP", "Content-Length: unknown");
+  }
+
+  auto buffer = makeUniqueNoThrow<uint8_t[]>(bufferSize);
+  if (!buffer) {
+    LOG_ERR("HTTP", "Failed to allocate %zu byte download buffer", bufferSize);
+    logNetworkState("Download buffer allocation failure");
+    return HttpDownloader::HTTP_ERROR;
+  }
+
+  Stream* stream = http.getStreamPtr();
+  if (stream == nullptr) {
+    LOG_ERR("HTTP", "Missing response stream");
+    return HttpDownloader::HTTP_ERROR;
+  }
+
+  ProgressNotifier progressNotifier(sink.total, std::move(sink.progress));
+  LOG_DBG("HTTP", "Reading body: buffer=%zu bytes", bufferSize);
+  uint32_t lastReadMs = millis();
+  int remaining = responseLength;
+  while (http.connected() && (remaining > 0 || remaining < 0)) {
+    if (isCancelRequested(sink.cancelFlag, sink.shouldCancel)) {
+      return HttpDownloader::ABORTED;
+    }
+
+    const size_t available = stream->available();
+    if (available == 0) {
+      const uint32_t idleMs = millis() - lastReadMs;
+      if (idleMs >= DOWNLOAD_IDLE_TIMEOUT_MS) {
+        logDownloadState("Read timed out", sink.downloaded, sink.total, idleMs);
+        return HttpDownloader::HTTP_ERROR;
+      }
+      delay(1);
+      continue;
+    }
+
+    size_t toRead = std::min(available, bufferSize);
+    if (remaining > 0) {
+      toRead = std::min(toRead, static_cast<size_t>(remaining));
+    }
+    const int bytesRead = stream->readBytes(buffer.get(), toRead);
+    if (bytesRead <= 0) {
+      const uint32_t idleMs = millis() - lastReadMs;
+      if (idleMs >= DOWNLOAD_IDLE_TIMEOUT_MS) {
+        logDownloadState("Read stalled", sink.downloaded, sink.total, idleMs);
+        return HttpDownloader::HTTP_ERROR;
+      }
+      delay(1);
+      continue;
+    }
+
+    if (!sink.write(buffer.get(), static_cast<size_t>(bytesRead))) {
+      LOG_ERR("HTTP", "Write failed after %zu/%zu bytes", sink.downloaded, sink.total);
+      logNetworkState("Write failure");
+      return HttpDownloader::FILE_ERROR;
+    }
+
+    sink.downloaded += static_cast<size_t>(bytesRead);
+    if (remaining > 0) {
+      remaining -= bytesRead;
+    }
+    lastReadMs = millis();
+    progressNotifier.notify(sink.downloaded, false);
+    if (sink.total > 0 && sink.downloaded >= sink.total) break;
+    delay(0);
+  }
+
+  progressNotifier.notify(sink.downloaded, true);
+  if (sink.total > 0 && sink.downloaded != sink.total) {
+    LOG_ERR("HTTP", "Incomplete: got %zu of %zu bytes", sink.downloaded, sink.total);
+    logNetworkState("Incomplete transfer");
+    return HttpDownloader::HTTP_ERROR;
+  }
+
+  return HttpDownloader::OK;
+}
+
+HttpDownloader::DownloadError runArduinoInsecureGet(const std::string& url, const std::string& username,
+                                                    const std::string& password, Sink& sink,
+                                                    const size_t bufferSize) {
+  std::string currentUrl = url;
+
+  ParsedUrl credentialOrigin;
+  const bool hasCredentials = !username.empty() && !password.empty() && parseUrl(url, credentialOrigin);
+
+  for (uint8_t hop = 0; hop < MAX_REDIRECTS; ++hop) {
+    ParsedUrl currentOrigin;
+    const bool currentParsed = parseUrl(currentUrl, currentOrigin);
+    const bool sendAuthorization = hasCredentials && currentParsed && sameOrigin(currentOrigin, credentialOrigin);
+    if (!currentParsed) {
+      LOG_ERR("HTTP", "Rejected URL with unsupported scheme");
+      return HttpDownloader::HTTP_ERROR;
+    }
+    if (sink.responseFilename != nullptr) sink.responseFilename->clear();
+
+    HTTPClient http;
+    http.setTimeout(HTTP_TIMEOUT_MS);
+    http.setReuse(false);
+    const char* capturedHeaders[] = {HTTP_HEADER_LOCATION, HTTP_HEADER_CONTENT_DISPOSITION};
+    http.collectHeaders(capturedHeaders, sizeof(capturedHeaders) / sizeof(capturedHeaders[0]));
+
+    WiFiClient plainClient;
+    std::unique_ptr<WiFiClientSecure> secureClient;
+    bool began = false;
+    if (currentOrigin.https) {
+      secureClient = makeUniqueNoThrow<WiFiClientSecure>();
+      if (!secureClient) {
+        LOG_ERR("HTTP", "Failed to allocate insecure TLS client");
+        return HttpDownloader::HTTP_ERROR;
+      }
+      secureClient->setInsecure();
+      began = http.begin(*secureClient, currentUrl.c_str());
+      LOG_DBG("HTTP", "TLS verification disabled for this request");
+    } else {
+      began = http.begin(plainClient, currentUrl.c_str());
+    }
+    if (!began) {
+      LOG_ERR("HTTP", "Client begin failed");
+      return HttpDownloader::HTTP_ERROR;
+    }
+
+    setRequestHeaders(http, username, password, sink.resumeOffset, sendAuthorization);
+
+    const int status = http.GET();
+    if (status < 0) {
+      LOG_ERR("HTTP", "GET failed: %d", status);
+      logNetworkState("GET failure");
+      http.end();
+      return HttpDownloader::HTTP_ERROR;
+    }
+
+    if (isRedirect(status)) {
+      const String locationHeader = http.header(HTTP_HEADER_LOCATION);
+      if (locationHeader.length() == 0) {
+        LOG_ERR("HTTP", "Redirect missing Location header");
+        logNetworkState("Redirect missing Location");
+        http.end();
+        return HttpDownloader::HTTP_ERROR;
+      }
+
+      const std::string redirectUrl = buildRedirectUrl(currentUrl, locationHeader.c_str());
+      ParsedUrl redirect;
+      if (!parseUrl(redirectUrl, redirect)) {
+        LOG_ERR("HTTP", "Rejected redirect with unsupported Location");
+        http.end();
+        return HttpDownloader::HTTP_ERROR;
+      }
+      if (currentOrigin.https && !redirect.https) {
+        LOG_ERR("HTTP", "Rejected HTTPS downgrade redirect to %s", redirect.host.c_str());
+        http.end();
+        return HttpDownloader::HTTP_ERROR;
+      }
+      if (hasCredentials && !sameOrigin(redirect, credentialOrigin)) {
+        LOG_ERR("HTTP", "Rejected credentialed redirect to different origin: %s://%s:%u", schemeName(redirect),
+                redirect.host.c_str(), redirect.port);
+        http.end();
+        return HttpDownloader::HTTP_ERROR;
+      }
+      currentUrl = redirectUrl;
+      LOG_DBG("HTTP", "Redirecting to: %s", redirect.host.c_str());
+      http.end();
+      continue;
+    }
+
+    const bool isResumeResponse = sink.resumeOffset > 0 && status == 206;
+    if (status != 200 && !isResumeResponse) {
+      LOG_ERR("HTTP", "Unexpected status: %d", status);
+      logNetworkState("Unexpected status");
+      http.end();
+      return HttpDownloader::HTTP_ERROR;
+    }
+    if (sink.resumeOffset > 0 && !isResumeResponse) {
+      LOG_DBG("HTTP", "Server ignored range request; restarting download");
+      sink.rangeIgnored = true;
+      sink.resumeOffset = 0;
+      http.end();
+      return HttpDownloader::HTTP_ERROR;
+    }
+
+    if (sink.responseFilename != nullptr) {
+      const String disposition = http.header(HTTP_HEADER_CONTENT_DISPOSITION);
+      if (disposition.length() > 0 &&
+          !HttpHeaderUtils::extractContentDispositionFilename(disposition.c_str(), *sink.responseFilename)) {
+        sink.responseFilename->clear();
+      }
+    }
+
+    const auto result = readArduinoResponseBody(http, sink, bufferSize, http.getSize());
+    http.end();
+    return result;
+  }
+
+  LOG_ERR("HTTP", "Redirect limit exceeded");
+  logNetworkState("Redirect limit exceeded");
+  return HttpDownloader::HTTP_ERROR;
+}
+
 HttpDownloader::DownloadError runGet(const std::string& url, const std::string& username, const std::string& password,
                                      Sink& sink, const size_t bufferSize, const bool verifyTls) {
+  if (!verifyTls) {
+    return runArduinoInsecureGet(url, username, password, sink, bufferSize);
+  }
+
   std::string currentUrl = url;
 
   ParsedUrl credentialOrigin;

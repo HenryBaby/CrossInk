@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v1.4.5] - 2026-07-11
+
+### Fixed
+- OPDS servers with TLS verification disabled now use an Arduino insecure TLS client instead of ESP-TLS certificate verification.
+
+### Changed
+- Synced this fork with upstream CrossInk release/v1.4.0.
+
 ## [v1.4.4] - 2026-07-11
 
 ### Fixed
