@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+## [v1.4.0] - 2026-07-15
+
 ### Added
 - Dashboard home and sleep screen theme, showing the current book cover with reading stats.
 - Multi-choice settings now open a selection popup instead of cycling through every option.
+
+### Changed
+- Release notes now use a neutral fork-specific intro instead of implying a full upstream sync.
 
 ### Fixed
 - Sleep screen refreshes now use a full refresh for the selected sleep-screen paths to reduce X4 ghosting after sleep.

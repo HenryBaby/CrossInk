@@ -81,10 +81,7 @@ def crossink_local_time():
 
 
 def default_intro():
-    now, timezone_name = crossink_local_time()
-    time_text = now.strftime('%I:%M%p').lower()
-    date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
-    return f'This release is up to date with the master branch of CrossInk as of {time_text} {timezone_name} {date_text}'
+    return 'This release contains the fork-specific changes listed below.'
 
 
 def parse_args():
