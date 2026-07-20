@@ -5,10 +5,9 @@
 
 ## Changes maintained by this downstream fork
 
-- Per-server OPDS download folders ([`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55)).
-- Optional author subfolders for OPDS downloads ([`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1)).
-- Finished OPDS books retain their author-folder organization when moved to `/Read` ([`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3)).
-- OPDS filename choices include title-only names ([`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063)) and filenames supplied by the server ([`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722)).
+- [`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55), [`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1) — Per-server OPDS download folders and optional author subfolders.
+- [`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3) — Finished OPDS books retain their author folder when moved to `/Read`.
+- [`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063), [`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), and [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722) — OPDS downloads support title-only filenames and server-supplied filenames.
 
 Everything below describes upstream CrossInk.
 
