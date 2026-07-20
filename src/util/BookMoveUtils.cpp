@@ -7,20 +7,56 @@
 #include "BookmarkStore.h"
 #include "ClippingStore.h"
 #include "CrossPointState.h"
+#include "OpdsServerStore.h"
 #include "RecentBooksStore.h"
+#include "util/StringUtils.h"
 
 namespace {
 constexpr char READ_FOLDER[] = "/Read";
+constexpr size_t READ_FOLDER_MAX_BYTES = 127;
+
+bool isPathUnderFolder(const std::string& path, const std::string& folder) {
+  if (folder == "/") return !path.empty() && path[0] == '/';
+  if (path.rfind(folder, 0) != 0) return false;
+  return path.size() == folder.size() || path[folder.size()] == '/';
+}
+
+std::string firstChildFolderUnder(const std::string& path, const std::string& folder) {
+  const size_t childStart = folder == "/" ? 1 : folder.size() + 1;
+  if (path.size() <= childStart) return "";
+  const size_t childEnd = path.find('/', childStart);
+  if (childEnd == std::string::npos) return "";
+  return path.substr(childStart, childEnd - childStart);
+}
+
+std::string readFolderForBook(const std::string& srcPath, const std::string& author) {
+  std::string matchedBaseFolder;
+  for (const auto& server : OPDS_STORE.getServers()) {
+    if (server.folderOrganization != OpdsFolderOrganization::AUTHOR) continue;
+    const std::string baseFolder = normalizeOpdsDownloadFolder(server.downloadFolder);
+    if (!isPathUnderFolder(srcPath, baseFolder) || baseFolder.size() <= matchedBaseFolder.size()) continue;
+    matchedBaseFolder = baseFolder;
+  }
+  if (matchedBaseFolder.empty()) return READ_FOLDER;
+
+  const std::string folderAuthor = author.empty() ? firstChildFolderUnder(srcPath, matchedBaseFolder) : author;
+  constexpr size_t readPrefixBytes = sizeof(READ_FOLDER);
+  if (folderAuthor.empty() || readPrefixBytes >= READ_FOLDER_MAX_BYTES) return READ_FOLDER;
+  const size_t authorBudget = READ_FOLDER_MAX_BYTES - readPrefixBytes;
+  const std::string authorFolder = StringUtils::sanitizeFilename(folderAuthor, authorBudget);
+  return authorFolder.empty() ? READ_FOLDER : std::string(READ_FOLDER) + "/" + authorFolder;
+}
 }
 
 namespace BookMoveUtils {
 
-std::string buildReadFolderDestination(const std::string& srcPath) {
+std::string buildReadFolderDestination(const std::string& srcPath, const std::string& author) {
   const size_t lastSlash = srcPath.rfind('/');
   const std::string filename = (lastSlash != std::string::npos) ? srcPath.substr(lastSlash + 1) : srcPath;
 
-  Storage.mkdir(READ_FOLDER);
-  std::string dstPath = std::string(READ_FOLDER) + "/" + filename;
+  const std::string readFolder = readFolderForBook(srcPath, author);
+  Storage.mkdir(readFolder.c_str());
+  std::string dstPath = readFolder + "/" + filename;
   if (!Storage.exists(dstPath.c_str())) {
     return dstPath;
   }
@@ -30,7 +66,7 @@ std::string buildReadFolderDestination(const std::string& srcPath) {
   const std::string ext = (dotPos != std::string::npos) ? filename.substr(dotPos) : "";
   int suffix = 2;
   do {
-    dstPath = std::string(READ_FOLDER) + "/" + base + " (" + std::to_string(suffix) + ")" + ext;
+    dstPath = readFolder + "/" + base + " (" + std::to_string(suffix) + ")" + ext;
     suffix++;
   } while (Storage.exists(dstPath.c_str()) && suffix < 100);
   return dstPath;

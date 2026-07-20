@@ -9,14 +9,24 @@
 #include <utility>
 
 #include "CrossPointSettings.h"
+#include "util/StringUtils.h"
 
 namespace {
 constexpr char FILENAME_FORMAT_AUTHOR_TITLE[] = "author_title";
 constexpr char FILENAME_FORMAT_TITLE_AUTHOR[] = "title_author";
+constexpr char FILENAME_FORMAT_TITLE[] = "title";
+constexpr char FILENAME_FORMAT_SERVER_FILENAME[] = "server_filename";
+constexpr char FOLDER_ORGANIZATION_FLAT[] = "flat";
+constexpr char FOLDER_ORGANIZATION_AUTHOR[] = "author";
+constexpr size_t MAX_OPDS_DOWNLOAD_FOLDER_BYTES = 127;
 }  // namespace
 
 const char* opdsFilenameFormatToJson(const OpdsFilenameFormat format) {
   switch (format) {
+    case OpdsFilenameFormat::SERVER_FILENAME:
+      return FILENAME_FORMAT_SERVER_FILENAME;
+    case OpdsFilenameFormat::TITLE:
+      return FILENAME_FORMAT_TITLE;
     case OpdsFilenameFormat::TITLE_AUTHOR:
       return FILENAME_FORMAT_TITLE_AUTHOR;
     case OpdsFilenameFormat::AUTHOR_TITLE:
@@ -29,7 +39,56 @@ OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value) {
   if (value && strcmp(value, FILENAME_FORMAT_TITLE_AUTHOR) == 0) {
     return OpdsFilenameFormat::TITLE_AUTHOR;
   }
+  if (value && strcmp(value, FILENAME_FORMAT_TITLE) == 0) {
+    return OpdsFilenameFormat::TITLE;
+  }
+  if (value && strcmp(value, FILENAME_FORMAT_SERVER_FILENAME) == 0) {
+    return OpdsFilenameFormat::SERVER_FILENAME;
+  }
   return OpdsFilenameFormat::AUTHOR_TITLE;
+}
+
+const char* opdsFolderOrganizationToJson(const OpdsFolderOrganization organization) {
+  switch (organization) {
+    case OpdsFolderOrganization::AUTHOR:
+      return FOLDER_ORGANIZATION_AUTHOR;
+    case OpdsFolderOrganization::FLAT:
+    default:
+      return FOLDER_ORGANIZATION_FLAT;
+  }
+}
+
+OpdsFolderOrganization opdsFolderOrganizationFromJson(const char* value) {
+  if (value && strcmp(value, FOLDER_ORGANIZATION_AUTHOR) == 0) {
+    return OpdsFolderOrganization::AUTHOR;
+  }
+  return OpdsFolderOrganization::FLAT;
+}
+
+std::string normalizeOpdsDownloadFolder(std::string folder) {
+  if (folder.empty()) return "/";
+
+  for (char& c : folder) {
+    if (c == '\\') c = '/';
+  }
+
+  std::string normalized = "/";
+  size_t pos = 0;
+  while (pos < folder.size()) {
+    while (pos < folder.size() && folder[pos] == '/') pos++;
+    const size_t start = pos;
+    while (pos < folder.size() && folder[pos] != '/') pos++;
+    if (start == pos) continue;
+
+    const std::string segment = folder.substr(start, pos - start);
+    if (segment == "." || segment == "..") continue;
+    const std::string cleanSegment = StringUtils::sanitizeFilename(segment);
+    if (cleanSegment.empty()) continue;
+    if (normalized.size() > 1) normalized += "/";
+    normalized += cleanSegment;
+  }
+
+  return normalized;
 }
 
 void OpdsServerStore::toJson(JsonDocument& doc) const {
@@ -40,6 +99,8 @@ void OpdsServerStore::toJson(JsonDocument& doc) const {
     obj["url"] = server.url;
     obj["username"] = server.username;
     obj["password_obf"] = obfuscation::obfuscateToBase64(server.password);
+    obj["downloadFolder"] = normalizeOpdsDownloadFolder(server.downloadFolder);
+    obj["folderOrganization"] = opdsFolderOrganizationToJson(server.folderOrganization);
     obj["filenameFormat"] = opdsFilenameFormatToJson(server.filenameFormat);
   }
 }
@@ -58,6 +119,8 @@ bool OpdsServerStore::fromJson(JsonVariantConst doc) {
     server.name = obj["name"] | "";
     server.url = obj["url"] | "";
     server.username = obj["username"] | "";
+    server.downloadFolder = normalizeOpdsDownloadFolder(obj["downloadFolder"] | std::string("/"));
+    server.folderOrganization = opdsFolderOrganizationFromJson(obj["folderOrganization"] | "");
     server.filenameFormat = opdsFilenameFormatFromJson(obj["filenameFormat"] | "");
     obfuscation::DecodeStatus status = obfuscation::DecodeStatus::INVALID;
     server.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &status);

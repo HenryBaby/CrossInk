@@ -9,16 +9,28 @@
 enum class OpdsFilenameFormat : uint8_t {
   AUTHOR_TITLE = 0,
   TITLE_AUTHOR = 1,
+  TITLE = 2,
+  SERVER_FILENAME = 3,
+};
+
+enum class OpdsFolderOrganization : uint8_t {
+  FLAT = 0,
+  AUTHOR = 1,
 };
 
 const char* opdsFilenameFormatToJson(OpdsFilenameFormat format);
 OpdsFilenameFormat opdsFilenameFormatFromJson(const char* value);
+const char* opdsFolderOrganizationToJson(OpdsFolderOrganization organization);
+OpdsFolderOrganization opdsFolderOrganizationFromJson(const char* value);
+std::string normalizeOpdsDownloadFolder(std::string folder);
 
 struct OpdsServer {
   std::string name;
   std::string url;
   std::string username;
   std::string password;  // Plaintext in memory; obfuscated with hardware key on disk
+  std::string downloadFolder = "/";
+  OpdsFolderOrganization folderOrganization = OpdsFolderOrganization::FLAT;
   OpdsFilenameFormat filenameFormat = OpdsFilenameFormat::AUTHOR_TITLE;
 };
 

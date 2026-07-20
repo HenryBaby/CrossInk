@@ -1,22 +1,36 @@
 ## [v1.4.0] - 2026-07-10
 
-### Added
+### Upstream CrossInk v1.4.0
 
-- Dashboard UI theme for the Home screen, showing the current book cover and reading stats.
-- Nearby Position Sync for sending or applying the current EPUB position between two CrossInk devices over ESP-NOW.
-- Web EPUB optimizer support for CrossInk location metadata, so optimized EPUBs can keep better progress and stable page numbers.
-- Reading Stats support for XTC and XTCH books, including reader menus, Home and sleep screen stats, mark finished, delete stats, and preserving stats when clearing book caches.
-- Web file manager image previews, so PNG, JPEG, BMP, GIF, and WebP files can be viewed inline before downloading.
+- Based on the complete [`uxjulia/CrossInk` v1.4.0 main tree at `b7f6708f`](https://github.com/uxjulia/CrossInk/commit/b7f6708f96d05e5851f8bcfaaf57bc0e91dc0567). The upstream feature and fix details belong to CrossInk and are documented in its [v1.4.0 release](https://github.com/uxjulia/CrossInk/releases/tag/v1.4.0).
 
-### Changed
+### Imported wolfSSL work
 
-- Large EPUBs, SD-card font-heavy books, and cover thumbnails now open, index, and generate more reliably under low-memory conditions.
-- Home and sleep screens now load more cover and thumbnail data only when needed, reducing reader startup work and reusing cached cover data where possible.
-- Built-in reader font choices have been reduced to Lexend Deca and Bitter, reducing firmware size while keeping fallback glyph coverage.
+- OPDS, KOSync, and supported OTA transfers now use the CrossPoint/CrossInk wolfSSL solution from [crosspoint-reader/crosspoint-reader#2475](https://github.com/crosspoint-reader/crosspoint-reader/pull/2475), adapted for CrossInk by [`c2048f00`](https://github.com/uxjulia/CrossInk/commit/c2048f00bff5e6bb0eef55835b0060d73221f9de) and [`5ea8b68b`](https://github.com/uxjulia/CrossInk/commit/5ea8b68b).
+- CrossPoint commits incorporated by that pull request:
+  - [`14fe01c3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/14fe01c344245ae9a3085e8f2f014077139f59de) — bound OPDS parser entries.
+  - [`de79969c`](https://github.com/crosspoint-reader/crosspoint-reader/commit/de79969c31d94ae22e899807b0e1fd258051f8e7) — add wolfSSL secure networking.
+  - [`c5db9877`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c5db98777c7189aace48346fcc46cf1613338fb6) — formatting follow-up.
+  - [`81b6777b`](https://github.com/crosspoint-reader/crosspoint-reader/commit/81b6777b04c9c946f6ac989dafac0cb405dc8b0d) — fix `tolower` undefined behavior.
+  - [`c5e75cc1`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c5e75cc110f153149951d7069e22dff7157b9f1a) — validate wolfSSL HTTP header lengths.
+  - [`2de77329`](https://github.com/crosspoint-reader/crosspoint-reader/commit/2de77329a2d77eeb74362b01aa582644c8ea618f) — fix ports and URL encoding.
+  - [`a50c61f4`](https://github.com/crosspoint-reader/crosspoint-reader/commit/a50c61f428722f438ea9416d1b93d12385643680) — replace the ESP-IDF client with the wolfSSL wrapper.
+  - [`3c4f3476`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3c4f3476b781cc04ea043c8dc6bde2a3ec745520), [`bc61717d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc61717d0977caeda7c9acb8e09f7da5831e817f), and [`dca7bc00`](https://github.com/crosspoint-reader/crosspoint-reader/commit/dca7bc00a350da9dce70dbabafa8a75db3341e2d) — update FreeInk SDK integration.
+  - [`2867e611`](https://github.com/crosspoint-reader/crosspoint-reader/commit/2867e611150bf3d0d108f4b65d3062eb2097fb07) — add wolfSSL DH and field-size configuration.
+  - [`ef8ece58`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ef8ece5862b25dc15b93182afcd8d40d366b2a80) — harden HTTP parsing and fragmentation checks.
+  - [`f36bffe9`](https://github.com/crosspoint-reader/crosspoint-reader/commit/f36bffe9892e19a8b335a66a898ea8c856ba29ea) — make ESP HTTP includes conditional.
+  - [`127e6217`](https://github.com/crosspoint-reader/crosspoint-reader/commit/127e6217974ce4ccb0536a4282f5070a4d5d2a13) — merge the then-current CrossPoint development branch.
+  - [`176a659c`](https://github.com/crosspoint-reader/crosspoint-reader/commit/176a659c591f8ca1a5ecb6ddd8a8ded65b489293) — route the downloader through `SecureHttpClient`.
+  - [`8f91b99f`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8f91b99f77788e9b2a2e7c1896a8831a2ddecbbb) — increase the streaming chunk size.
+  - [`a2af4195`](https://github.com/crosspoint-reader/crosspoint-reader/commit/a2af419535ec88e2aec347a6819438e74b9d7821) — resolve compiler warnings.
 
-### Removed
+### Changes maintained by this downstream fork
 
-- Teensy firmware builds are no longer produced for releases or release candidates.
+- Per-server OPDS download folders ([`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55)) and optional author subfolders ([`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1)).
+- Finished OPDS books retain their author folder when moved to `/Read` ([`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3)).
+- OPDS downloads support title-only filenames ([`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063)) and server-supplied filenames ([`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722)).
+
+## [v1.3.4] - 2026-06-13
 
 ### Fixed
 

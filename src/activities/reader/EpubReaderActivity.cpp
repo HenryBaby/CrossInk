@@ -1858,7 +1858,7 @@ void EpubReaderActivity::onExit() {
     const std::string oldCachePath = epub->getCachePath();
     const std::string title = epub->getTitle();
     const std::string author = epub->getAuthor();
-    const std::string dstPath = BookMoveUtils::buildReadFolderDestination(srcPath);
+    const std::string dstPath = BookMoveUtils::buildReadFolderDestination(srcPath, author);
     epub.reset();  // release the Epub (and any open handles) before renaming on the SD card
     moveFinishedBookToReadFolder(srcPath, dstPath, oldCachePath, title, author);
   } else {

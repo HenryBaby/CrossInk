@@ -203,7 +203,7 @@ bool toggleBookCompleted(const std::string& fullPath, const std::string& display
 
   if (isEpub && completed && SETTINGS.moveFinishedToReadFolder && fullPath.rfind("/Read/", 0) != 0) {
     const std::string oldCachePath = epub.getCachePath();
-    const std::string dstPath = BookMoveUtils::buildReadFolderDestination(fullPath);
+    const std::string dstPath = BookMoveUtils::buildReadFolderDestination(fullPath, author);
     LOG_INF("BookActions", "Moving completed epub: %s -> %s", fullPath.c_str(), dstPath.c_str());
     if (!Storage.rename(fullPath.c_str(), dstPath.c_str())) {
       LOG_ERR("BookActions", "Failed to move book to 'Read' folder");

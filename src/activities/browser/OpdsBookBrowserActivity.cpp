@@ -1,12 +1,19 @@
 #include "OpdsBookBrowserActivity.h"
 
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
+#include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <OpdsStream.h>
 #include <WiFi.h>
 
+#include <utility>
+#include <cctype>
+#include <string_view>
+
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
@@ -23,12 +30,97 @@ namespace {
 constexpr int PAGE_ITEMS = 23;
 constexpr size_t OPDS_BROWSER_ENTRY_CAPACITY = MAX_OPDS_FEED_ENTRIES + 2;
 constexpr size_t OPDS_DOWNLOAD_BUFFER_SIZE = 2048;
+constexpr size_t OPDS_DOWNLOAD_FOLDER_MAX_BYTES = 127;
 
 std::string buildBookFilenameBase(const OpdsEntry& book, const OpdsFilenameFormat format) {
   if (book.author.empty()) return book.title;
   if (book.title.empty()) return book.author;
-  if (format == OpdsFilenameFormat::TITLE_AUTHOR) return book.title + " - " + book.author;
+  if (format == OpdsFilenameFormat::TITLE) return book.title;
+  if (format == OpdsFilenameFormat::TITLE_AUTHOR || format == OpdsFilenameFormat::SERVER_FILENAME) {
+    return book.title + " - " + book.author;
+  }
   return book.author + " - " + book.title;
+}
+
+std::string buildDownloadPath(const std::string& folder, const OpdsServer& server, const OpdsEntry& book) {
+  const std::string filename =
+      StringUtils::sanitizeFilename(buildBookFilenameBase(book, server.filenameFormat)) + ".epub";
+  return folder == "/" ? "/" + filename : folder + "/" + filename;
+}
+
+std::string buildDownloadFolder(const OpdsServer& server, const OpdsEntry& book) {
+  const std::string baseFolder = normalizeOpdsDownloadFolder(server.downloadFolder);
+  if (server.folderOrganization != OpdsFolderOrganization::AUTHOR || book.author.empty()) {
+    return baseFolder;
+  }
+
+  const size_t separatorBytes = baseFolder == "/" ? 0 : 1;
+  if (baseFolder.size() + separatorBytes >= OPDS_DOWNLOAD_FOLDER_MAX_BYTES) {
+    return baseFolder;
+  }
+
+  const size_t authorBudget = OPDS_DOWNLOAD_FOLDER_MAX_BYTES - baseFolder.size() - separatorBytes;
+  std::string authorFolder = StringUtils::sanitizeFilename(book.author, authorBudget);
+  if (authorFolder.size() > authorBudget) {
+    authorFolder.resize(authorBudget);
+  }
+  if (authorFolder.empty()) {
+    return baseFolder;
+  }
+
+  return baseFolder == "/" ? "/" + authorFolder : baseFolder + "/" + authorFolder;
+}
+
+bool pathsEqualIgnoreCase(const std::string_view left, const std::string_view right) {
+  if (left.size() != right.size()) return false;
+  for (size_t i = 0; i < left.size(); ++i) {
+    const auto leftByte = static_cast<unsigned char>(left[i]);
+    const auto rightByte = static_cast<unsigned char>(right[i]);
+    if (std::tolower(leftByte) != std::tolower(rightByte)) return false;
+  }
+  return true;
+}
+
+bool applyResponseFilename(const std::string& folder, const std::string& responseFilename, std::string& path) {
+  if (responseFilename.empty()) return false;
+
+  const std::string cleanFilename = StringUtils::sanitizeFilename(responseFilename);
+  if (!FsHelpers::hasEpubExtension(cleanFilename)) {
+    LOG_ERR("OPDS", "Ignoring non-EPUB response filename: %s", cleanFilename.c_str());
+    return false;
+  }
+
+  const std::string responsePath = folder == "/" ? "/" + cleanFilename : folder + "/" + cleanFilename;
+  if (responsePath == path) return true;
+  if (pathsEqualIgnoreCase(responsePath, path)) return true;
+
+  std::string backupPath;
+  const bool replacingExisting = Storage.exists(responsePath.c_str());
+  if (replacingExisting) {
+    backupPath = responsePath + ".replace";
+    if (Storage.exists(backupPath.c_str()) && !Storage.remove(backupPath.c_str())) {
+      LOG_ERR("OPDS", "Failed to clear replacement backup: %s", backupPath.c_str());
+      return false;
+    }
+    if (!Storage.rename(responsePath.c_str(), backupPath.c_str())) {
+      LOG_ERR("OPDS", "Failed to back up existing response filename: %s", responsePath.c_str());
+      return false;
+    }
+  }
+  if (!Storage.rename(path.c_str(), responsePath.c_str())) {
+    LOG_ERR("OPDS", "Failed to apply response filename: %s -> %s", path.c_str(), responsePath.c_str());
+    if (replacingExisting && !Storage.rename(backupPath.c_str(), responsePath.c_str())) {
+      LOG_ERR("OPDS", "Failed to restore replaced file: %s", responsePath.c_str());
+    }
+    return false;
+  }
+  if (replacingExisting && !Storage.remove(backupPath.c_str())) {
+    LOG_ERR("OPDS", "Failed to remove replacement backup: %s", backupPath.c_str());
+  }
+
+  LOG_INF("OPDS", "Applied response filename: %s", cleanFilename.c_str());
+  path = responsePath;
+  return true;
 }
 }  // namespace
 
@@ -246,12 +338,17 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   }
 
   clearEntries();
-  std::string url = (path.find("http") == 0) ? path : UrlUtils::buildUrl(server.url, path);
+  const std::string url = UrlUtils::buildUrl(server.url, path);
   LOG_DBG("OPDS", "Fetching: %s", url.c_str());
   OpdsParser parser(entries.get(), MAX_OPDS_FEED_ENTRIES);
   {
     OpdsParserStream stream{parser};
-    if (!HttpDownloader::fetchUrl(url, stream, server.username, server.password)) {
+    HttpDownloader::DownloadOptions downloadOptions;
+    downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
+    const auto result = HttpDownloader::streamUrl(
+        url, [&stream](const uint8_t* data, const size_t len) { return stream.write(data, len) == len; }, nullptr,
+        server.username, server.password, std::move(downloadOptions));
+    if (result != HttpDownloader::OK) {
       state = BrowserState::ERROR;
       errorMessage = tr(STR_FETCH_FEED_FAILED);
       requestUpdate();
@@ -299,7 +396,9 @@ bool OpdsBookBrowserActivity::ensureEntryBuffer() {
 }
 
 void OpdsBookBrowserActivity::clearEntries() {
-  // Slots past entryCount are ignored and overwritten by the next feed parse.
+  for (size_t i = 0; entries && i < entryCount; ++i) {
+    entries[i] = OpdsEntry{};
+  }
   entryCount = 0;
 }
 
@@ -343,9 +442,17 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   // Build full download URL relative to the current feed, not the root server URL
   const std::string feedUrl = UrlUtils::buildUrl(server.url, currentPath);
   std::string downloadUrl = UrlUtils::buildUrl(feedUrl, book.href);
-  std::string filename =
-      "/" + StringUtils::sanitizeFilename(buildBookFilenameBase(book, server.filenameFormat)) + ".epub";
+  const std::string folder = buildDownloadFolder(server, book);
+  std::string filename = buildDownloadPath(folder, server, book);
   LOG_DBG("OPDS", "Downloading: %s -> %s", downloadUrl.c_str(), filename.c_str());
+
+  if (folder != "/" && !Storage.exists(folder.c_str()) && !Storage.mkdir(folder.c_str())) {
+    LOG_ERR("OPDS", "Failed to create download folder: %s", folder.c_str());
+    state = BrowserState::ERROR;
+    errorMessage = tr(STR_DOWNLOAD_FAILED);
+    requestUpdate();
+    return;
+  }
 
   bool cancelRequested = false;
   auto pollCancel = [this, &cancelRequested] {
@@ -363,6 +470,11 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
+  downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
+  std::string responseFilename;
+  if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
+    downloadOptions.responseFilename = &responseFilename;
+  }
 
   const auto result = HttpDownloader::downloadToFile(
       downloadUrl, filename,
@@ -374,6 +486,9 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
       &cancelRequested, server.username, server.password, downloadOptions);
 
   if (result == HttpDownloader::OK) {
+    if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
+      applyResponseFilename(folder, responseFilename, filename);
+    }
     clearBookCache(filename);
     state = BrowserState::BROWSING;
   } else if (result == HttpDownloader::ABORTED) {
@@ -430,9 +545,11 @@ void OpdsBookBrowserActivity::performSearch(const std::string& query) {
   const size_t pos = url.find(placeholder);
   if (pos != std::string::npos) url.replace(pos, placeholder.length(), urlEncode(query));
 
-  navigationHistory.push_back(currentPath);  // <-- add this
-  currentPath = url;                         // <-- add this
+  navigationHistory.push_back(currentPath);
+  currentPath = url;
 
+  clearEntries();
+  selectorIndex = 0;
   showLoadingBeforeFetch();
   fetchFeed(url);
 }

@@ -1,4 +1,16 @@
-> **This is a personal fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader)** with a focus on improved fonts and minimal reading stats.
+> [!CAUTION]
+> This is a personal downstream build. Use the official [CrossInk](https://github.com/uxjulia/CrossInk) releases unless you specifically want the OPDS additions below.
+>
+> This repository is a fork of [uxjulia/CrossInk](https://github.com/uxjulia/CrossInk), which is itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader).
+
+## Changes maintained by this downstream fork
+
+- Per-server OPDS download folders ([`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55)).
+- Optional author subfolders for OPDS downloads ([`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1)).
+- Finished OPDS books retain their author-folder organization when moved to `/Read` ([`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3)).
+- OPDS filename choices include title-only names ([`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063)) and filenames supplied by the server ([`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722)).
+
+Everything below describes upstream CrossInk.
 
 ## What's different in this fork
 
