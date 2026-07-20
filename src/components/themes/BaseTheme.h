@@ -34,6 +34,9 @@ struct ThemeMetrics {
   int headerHeight;
   int verticalSpacing;
 
+  int previewPadding;
+  int previewHeightPercent;
+
   int contentSidePadding;
   int listRowHeight;
   int listWithSubtitleRowHeight;
@@ -140,6 +143,8 @@ constexpr ThemeMetrics values = {.batteryWidth = 15,
                                  .batteryBarHeight = 20,
                                  .headerHeight = 45,
                                  .verticalSpacing = 10,
+                                 .previewPadding = 12,
+                                 .previewHeightPercent = 30,
                                  .contentSidePadding = 20,
                                  .listRowHeight = 30,
                                  .listWithSubtitleRowHeight = 50,
@@ -244,7 +249,7 @@ class BaseTheme {
                                    const GlobalReadingStats* globalStats = nullptr,
                                    const char* currentChapterTitle = nullptr) const;
   virtual void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                              const std::function<std::string(int index)>& buttonLabel,
+                              const std::function<const char*(int index)>& buttonLabel,
                               const std::function<UIIcon(int index)>& rowIcon) const;
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message) const;
   virtual void drawOptionPopup(const GfxRenderer& renderer, const char* title, const std::vector<std::string>& options,
@@ -253,7 +258,9 @@ class BaseTheme {
   virtual void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                              const int pageCount, std::string title, const int paddingBottom = 0,
                              const int textYOffset = 0, const bool isPageBookmarked = false,
-                             const char* timeLeftLabel = nullptr, bool darkMode = false) const;
+                             const char* timeLeftLabel = nullptr, bool darkMode = false,
+                             float chapterProgressPercent = -1.0f, int stableCurrentPage = 0, int stablePageCount = 0,
+                             bool showProgress = true) const;
   virtual void drawTopStatusBarClock(const GfxRenderer& renderer, int topY = -1, const char* previewTime = nullptr,
                                      bool readerContext = true, int textYOffset = 0, bool darkMode = false) const;
   virtual void drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label) const;

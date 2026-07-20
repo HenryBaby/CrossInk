@@ -152,7 +152,7 @@ std::string UITheme::getCoverThumbPath(const std::string& coverBmpPath, int cove
     return "";
   }
   // Use int64_t so large heights cannot overflow before division.
-  const int coverWidth = static_cast<int>((static_cast<int64_t>(coverHeight) * 3 + 2) / 5);
+  const int coverWidth = static_cast<int>((static_cast<int64_t>(coverHeight) * 2 + 1) / 3);
   return getCoverThumbPath(coverBmpPath, coverWidth, coverHeight);
 }
 
@@ -219,7 +219,8 @@ int UITheme::getStatusBarHeight() {
   const ThemeMetrics& metrics = UITheme::getInstance().getMetrics();
 
   // Add status bar margin
-  const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.statusBarBookProgressPercentage ||
+  const bool showStatusBar = SETTINGS.statusBarChapterPageCount || SETTINGS.stablePageNumbers ||
+                             SETTINGS.statusBarBookProgressPercentage ||
                              SETTINGS.statusBarTitle != CrossPointSettings::STATUS_BAR_TITLE::HIDE_TITLE ||
                              SETTINGS.statusBarTimeLeft != CrossPointSettings::STATUS_BAR_TIME_LEFT::TIME_LEFT_HIDE ||
                              SETTINGS.statusBarBattery;

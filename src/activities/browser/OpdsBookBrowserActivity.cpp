@@ -9,9 +9,11 @@
 #include <OpdsStream.h>
 #include <WiFi.h>
 
+#include <utility>
 #include <cctype>
 #include <string_view>
 
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
@@ -27,7 +29,7 @@
 namespace {
 constexpr int PAGE_ITEMS = 23;
 constexpr size_t OPDS_BROWSER_ENTRY_CAPACITY = MAX_OPDS_FEED_ENTRIES + 2;
-constexpr size_t OPDS_DOWNLOAD_BUFFER_SIZE = 4096;
+constexpr size_t OPDS_DOWNLOAD_BUFFER_SIZE = 2048;
 constexpr size_t OPDS_DOWNLOAD_FOLDER_MAX_BYTES = 127;
 
 std::string buildBookFilenameBase(const OpdsEntry& book, const OpdsFilenameFormat format) {
@@ -336,12 +338,17 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   }
 
   clearEntries();
-  std::string url = (path.find("http") == 0) ? path : UrlUtils::buildUrl(server.url, path);
+  const std::string url = UrlUtils::buildUrl(server.url, path);
   LOG_DBG("OPDS", "Fetching: %s", url.c_str());
   OpdsParser parser(entries.get(), MAX_OPDS_FEED_ENTRIES);
   {
     OpdsParserStream stream{parser};
-    if (!HttpDownloader::fetchUrl(url, stream, server.username, server.password)) {
+    HttpDownloader::DownloadOptions downloadOptions;
+    downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
+    const auto result = HttpDownloader::streamUrl(
+        url, [&stream](const uint8_t* data, const size_t len) { return stream.write(data, len) == len; }, nullptr,
+        server.username, server.password, std::move(downloadOptions));
+    if (result != HttpDownloader::OK) {
       state = BrowserState::ERROR;
       errorMessage = tr(STR_FETCH_FEED_FAILED);
       requestUpdate();
@@ -389,7 +396,9 @@ bool OpdsBookBrowserActivity::ensureEntryBuffer() {
 }
 
 void OpdsBookBrowserActivity::clearEntries() {
-  // Slots past entryCount are ignored and overwritten by the next feed parse.
+  for (size_t i = 0; entries && i < entryCount; ++i) {
+    entries[i] = OpdsEntry{};
+  }
   entryCount = 0;
 }
 
@@ -461,6 +470,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
+  downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
   std::string responseFilename;
   if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) {
     downloadOptions.responseFilename = &responseFilename;
@@ -535,9 +545,11 @@ void OpdsBookBrowserActivity::performSearch(const std::string& query) {
   const size_t pos = url.find(placeholder);
   if (pos != std::string::npos) url.replace(pos, placeholder.length(), urlEncode(query));
 
-  navigationHistory.push_back(currentPath);  // <-- add this
-  currentPath = url;                         // <-- add this
+  navigationHistory.push_back(currentPath);
+  currentPath = url;
 
+  clearEntries();
+  selectorIndex = 0;
   showLoadingBeforeFetch();
   fetchFeed(url);
 }

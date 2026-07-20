@@ -40,7 +40,8 @@ INTERVAL_PRESETS = {
     "ascii":       [(0x0020, 0x007E)],
     "latin1":      [(0x0080, 0x00FF)],
     "latin-ext":   [(0x0020, 0x007E), (0x0080, 0x00FF), (0x0100, 0x024F),
-                    (0x1E00, 0x1EFF), (0x2000, 0x206F), (0xFB00, 0xFB06)],
+                    (0x02B0, 0x02FF), (0x1E00, 0x1EFF), (0x2000, 0x206F),
+                    (0xFB00, 0xFB06)],
     "greek":       [(0x0370, 0x03FF), (0x1F00, 0x1FFF)],
     "cyrillic":    [(0x0400, 0x04FF), (0x0500, 0x052F)],
     "hebrew":      [(0x0590, 0x05FF), (0xFB1D, 0xFB4F)],
@@ -62,7 +63,7 @@ INTERVAL_PRESETS = {
     # Composite preset for English-language literary fiction including scifi/popsci.
     # Greek for physics terms, math operators, geometric shapes, uncommon
     # dialogue punctuation, CJK quote marks, miscellaneous symbols (♪♫♬), dingbats.
-    "reading":     [(0x0020, 0x024F), (0x0300, 0x036F), (0x0370, 0x03FF),
+    "reading":     [(0x0020, 0x024F), (0x02B0, 0x02FF), (0x0300, 0x036F), (0x0370, 0x03FF),
                     (0x0400, 0x04FF), (0x1E00, 0x1EFF), (0x2000, 0x206F),
                     (0x2070, 0x209F), (0x20A0, 0x20CF), (0x2150, 0x218F),
                     (0x2190, 0x21FF), (0x2200, 0x22FF), (0x2500, 0x257F),
@@ -77,6 +78,29 @@ INTERVAL_PRESETS = {
                     (0x2070, 0x209F), (0x2190, 0x21FF), (0x2200, 0x22FF),
                     (0xFB00, 0xFB06)],
 }
+
+# Keep common non-rendering controls/format marks present but invisible when a
+# requested interval includes them. Some source fonts expose cmap entries for
+# these, often with blank glyphs; generating our own zero-width glyph keeps the
+# output consistent and avoids showing U+FFFD for text cleanup artifacts.
+SYNTHETIC_BLANK_CODEPOINT_RANGES = (
+    (0x0000, 0x001F),  # C0 controls
+    (0x007F, 0x009F),  # DEL + C1 controls / mis-decoded Windows-1252 bytes
+    (0x00AD, 0x00AD),  # soft hyphen
+    (0x034F, 0x034F),  # combining grapheme joiner
+    (0x061C, 0x061C),  # Arabic letter mark
+    (0x180B, 0x180F),  # Mongolian variation selectors / separator
+    (0x200B, 0x200F),  # zero-width and bidi marks
+    (0x202A, 0x202E),  # bidi embedding/override marks
+    (0x2060, 0x2064),  # word joiner / invisible operators
+    (0x2066, 0x206F),  # bidi isolates / invisible controls
+    (0xFE00, 0xFE0F),  # variation selectors
+    (0xFEFF, 0xFEFF),  # zero-width no-break space / BOM
+)
+
+
+def is_synthetic_blank_codepoint(code_point: int) -> bool:
+    return any(start <= code_point <= end for start, end in SYNTHETIC_BLANK_CODEPOINT_RANGES)
 
 # Regex for parsing unnamed hex range intervals: (0xSTART-0xEND)
 _HEX_RANGE_PATTERN = re.compile(r'^\(0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)\)$')
@@ -564,7 +588,8 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=F
         for code_point in range(i_start, i_end + 1):
             has_primary = face.get_char_index(code_point) != 0
             has_fallback = fallback_face and fallback_face.get_char_index(code_point) != 0
-            if not has_primary and not has_fallback:
+            has_synthetic_blank = is_synthetic_blank_codepoint(code_point)
+            if not has_primary and not has_fallback and not has_synthetic_blank:
                 if start < code_point:
                     validated_intervals.append((start, code_point - 1))
                 start = code_point + 1
@@ -581,6 +606,11 @@ def rasterize_font_style(fontfile, size, intervals, style_id=0, force_autohint=F
 
     for i_start, i_end in intervals:
         for code_point in range(i_start, i_end + 1):
+            if is_synthetic_blank_codepoint(code_point):
+                glyph = GlyphProps(0, 0, 0, 0, 0, 0, total_bitmap_size, code_point)
+                all_glyphs.append((glyph, b''))
+                continue
+
             f = load_glyph(code_point)
             if f is None:
                 glyph = GlyphProps(0, 0, 0, 0, 0, 0, total_bitmap_size, code_point)

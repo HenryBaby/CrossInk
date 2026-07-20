@@ -19,6 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          token: ${{ github.token }}
           submodules: recursive
           fetch-depth: 0
 

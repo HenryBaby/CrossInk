@@ -18,6 +18,12 @@ enum class FileBrowserAction : int {
   ToggleCompleted = 6,
   RemoveFromRecents = 7,
   DeleteStats = 8,
+  ViewBookmarks = 9,
+  ViewClippings = 10,
+  DeleteBookmarks = 11,
+  DeleteClippings = 12,
+  EpubRenderMode = 13,
+  ResetReaderSettings = 14,
 };
 
 class FileBrowserActionActivity final : public Activity {

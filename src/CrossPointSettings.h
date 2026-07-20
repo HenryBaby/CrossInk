@@ -4,9 +4,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <iosfwd>
+#include <mutex>
 
 class CrossPointSettings {
  private:
+  mutable std::mutex _mutex;
+
   // Private constructor for singleton
   CrossPointSettings() = default;
 
@@ -17,6 +20,10 @@ class CrossPointSettings {
   // Delete copy constructor and assignment
   CrossPointSettings(const CrossPointSettings&) = delete;
   CrossPointSettings& operator=(const CrossPointSettings&) = delete;
+
+  // Access the settings mutex for protecting multi-field reads/writes from other cores.
+  // Callers must not re-enter SETTINGS methods that lock _mutex while holding it.
+  std::mutex& getMutex() const { return _mutex; }
 
   enum SLEEP_SCREEN_MODE {
     DARK = 0,
@@ -133,7 +140,7 @@ class CrossPointSettings {
   };
 
   // Font family options (built-in fonts only; SD card fonts use sdFontFamilyName)
-  enum FONT_FAMILY { LEXENDDECA = 0, BITTER = 1, CHAREINK = 2, FONT_FAMILY_COUNT };
+  enum FONT_FAMILY { LEXENDDECA = 0, BITTER = 1, FONT_FAMILY_COUNT };
   static constexpr uint8_t BUILTIN_FONT_COUNT = FONT_FAMILY_COUNT;
   // Font size options
   enum FONT_SIZE {
@@ -215,6 +222,7 @@ class CrossPointSettings {
     CALIBRE_WIRELESS = 18,
     JOIN_NETWORK = 19,
     CREATE_HOTSPOT = 20,
+    CREATE_CLIPPING = 21,
     SHORT_PWRBTN_COUNT
   };
 
@@ -277,6 +285,7 @@ class CrossPointSettings {
     LONG_MENU_CALIBRE_WIRELESS = 17,
     LONG_MENU_JOIN_NETWORK = 18,
     LONG_MENU_CREATE_HOTSPOT = 19,
+    LONG_MENU_CREATE_CLIPPING = 20,
     LONG_PRESS_MENU_ACTION_COUNT
   };
 
@@ -303,6 +312,7 @@ class CrossPointSettings {
   uint8_t statusBar = FULL;
   uint8_t statusBarChapterPageCount = 1;
   uint8_t statusBarBookProgressPercentage = 1;
+  uint8_t stablePageNumbers = 0;
   uint8_t statusBarProgressBar = HIDE_PROGRESS;
   uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
   uint8_t statusBarTitle = CHAPTER_TITLE;
@@ -402,6 +412,8 @@ class CrossPointSettings {
   uint8_t bionicReadingEnabled = 0;
   // Guide Dots - places a middle dot between words to guide the eye
   uint8_t guideReadingEnabled = 0;
+  // Per-book EPUB render mode runtime value. This is intentionally not saved as a global setting.
+  uint8_t epubRenderMode = 0;
   // SD card font family name, including optional range suffix (empty = use built-in fontFamily)
   char sdFontFamilyName[64] = "";
   // Show hidden files/directories (starting with '.') in the file browser (0 = hidden, 1 = show)

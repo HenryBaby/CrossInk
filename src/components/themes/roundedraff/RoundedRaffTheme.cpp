@@ -28,6 +28,11 @@ constexpr int kTabHorizontalInset = 2;
 constexpr int kTitleFontId = UI_12_FONT_ID;     // Requested main title size: 12px
 constexpr int kSubtitleFontId = SMALL_FONT_ID;  // Requested subtitle size: 8px
 constexpr int kGuideFontId = SMALL_FONT_ID;     // Closest available to requested 6px
+constexpr int kHeaderTitleYOffset = 14;
+constexpr int kHomeHeaderTitleYOffset = kHeaderTitleYOffset + 7;
+constexpr int kHeaderBatteryYOffset = 5;
+constexpr int kHomeHeaderBatteryYOffset = 23;
+constexpr int kHeaderClockYOffset = 3;
 
 void drawScrollBar(const GfxRenderer& renderer, Rect rect, int itemCount, int pageStartIndex, int pageItems) {
   if (itemCount <= 0 || pageItems <= 0 || itemCount <= pageItems) {
@@ -56,18 +61,20 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
   (void)subtitle;
   // Home screen header is custom-rendered in drawRecentBookCover.
   if (title == nullptr) {
-    drawTopStatusBarClock(renderer, rect.y, nullptr, readerContext,
-                          readerContext ? 0 : homeHeaderClockTextYOffset(renderer));
+    const int clockYOffset = readerContext ? 0 : homeHeaderClockTextYOffset(renderer) + kHeaderClockYOffset;
+    drawTopStatusBarClock(renderer, rect.y, nullptr, readerContext, clockYOffset);
     return;
   }
   const int sidePadding = RoundedRaffMetrics::values.contentSidePadding;
   const int titleX = rect.x + sidePadding;
-  const int titleY = rect.y + 14;
+  const bool isHomeHeader = rect.height == RoundedRaffMetrics::values.homeTopPadding;
+  const int titleY = rect.y + (isHomeHeader ? kHomeHeaderTitleYOffset : kHeaderTitleYOffset);
 
   const bool showBatteryPercentage =
       SETTINGS.hideBatteryPercentage != CrossPointSettings::HIDE_BATTERY_PERCENTAGE::HIDE_ALWAYS;
   const int batteryIconX = rect.x + rect.width - sidePadding - RoundedRaffMetrics::values.batteryWidth;
-  const int batteryY = rect.y + homeHeaderTopInset;
+  const int batteryYOffset = isHomeHeader ? kHomeHeaderBatteryYOffset : kHeaderBatteryYOffset;
+  const int batteryY = rect.y + homeHeaderTopInset + batteryYOffset;
 
   // Reserve space for the widest possible percentage text to avoid title/battery overlap
   int batteryGroupLeftX = batteryIconX;
@@ -88,7 +95,7 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
       renderer,
       Rect{batteryIconX, batteryY, RoundedRaffMetrics::values.batteryWidth, RoundedRaffMetrics::values.batteryHeight},
       showBatteryPercentage);
-  drawTopStatusBarClock(renderer, rect.y, nullptr, readerContext);
+  drawTopStatusBarClock(renderer, rect.y, nullptr, readerContext, readerContext ? 0 : kHeaderClockYOffset);
 }
 
 void RoundedRaffTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,
@@ -128,10 +135,12 @@ void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
                                            int selectorIndex, bool& coverRendered, bool& coverBufferStored,
                                            bool& bufferRestored, const std::function<bool()>& storeCoverBuffer,
                                            const BookReadingStats* stats, float progressPercent,
-                                           const GlobalReadingStats* /*globalStats*/,
-                                           const char* /*currentChapterTitle*/) const {
+                                           const GlobalReadingStats* globalStats,
+                                           const char* currentChapterTitle) const {
   (void)stats;
   (void)progressPercent;
+  (void)globalStats;
+  (void)currentChapterTitle;
   (void)selectorIndex;
   (void)bufferRestored;
   const int tileWidth = rect.width - 2 * RoundedRaffMetrics::values.contentSidePadding;
@@ -139,7 +148,7 @@ void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
   const int tileY = rect.y;
   const bool hasContinueReading = !recentBooks.empty();
   if (coverWidth == 0) {
-    coverWidth = RoundedRaffMetrics::values.homeCoverHeight * 0.6;
+    coverWidth = RoundedRaffMetrics::values.homeCoverHeight * 2 / 3;
   }
   const int imgY = tileY + (tileHeight - RoundedRaffMetrics::values.homeCoverHeight) / 2;
   const int tileX = RoundedRaffMetrics::values.contentSidePadding;
@@ -184,7 +193,7 @@ void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
         // Render empty cover
         renderer.fillRect(tileX + (tileWidth - coverWidth) / 2, imgY + (RoundedRaffMetrics::values.homeCoverHeight / 3),
                           coverWidth, 2 * RoundedRaffMetrics::values.homeCoverHeight / 3, true);
-        renderer.drawIcon(CoverIcon, tileX + (tileWidth - coverWidth) / 2 + 24, imgY + 24, 32, 32);
+        renderer.drawIcon(CoverIcon, tileX + (tileWidth - coverWidth) / 2 + 24, imgY + 24, 32);
         renderer.maskRoundedRectOutsideCorners(tileX + (tileWidth - coverWidth) / 2, imgY, coverWidth,
                                                RoundedRaffMetrics::values.homeCoverHeight, kCoverRadius,
                                                Color::LightGray);
@@ -211,7 +220,7 @@ void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, con
 }
 
 void RoundedRaffTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                                      const std::function<std::string(int index)>& buttonLabel,
+                                      const std::function<const char*(int index)>& buttonLabel,
                                       const std::function<UIIcon(int index)>& rowIcon) const {
   (void)rowIcon;
   const int sidePadding = kHomeMenuSidePadding;
@@ -227,12 +236,12 @@ void RoundedRaffTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int butt
   const int menuMaxWidth = std::max(0, rect.width - sidePadding * 2);
 
   for (int i = pageStartIndex; i < buttonCount && i < pageStartIndex + pageItems; ++i) {
-    const std::string label = buttonLabel(i);
+    const char* label = buttonLabel != nullptr ? buttonLabel(i) : "";
+    if (!label) label = "";
     const int rowY = menuTop + (i - pageStartIndex) * rowStep;
     constexpr int kRowPaddingX = 30;  // 20px L/R
     const int maxLabelWidth = std::max(0, menuMaxWidth - kRowPaddingX);
-    const std::string truncatedLabel =
-        renderer.truncatedText(kTitleFontId, label.c_str(), maxLabelWidth, EpdFontFamily::BOLD);
+    const std::string truncatedLabel = renderer.truncatedText(kTitleFontId, label, maxLabelWidth, EpdFontFamily::BOLD);
     const int rowWidth = std::min(
         menuMaxWidth, renderer.getTextWidth(kTitleFontId, truncatedLabel.c_str(), EpdFontFamily::BOLD) + kRowPaddingX);
     const bool isSelected = selectedIndex == i;

@@ -1,13 +1,19 @@
 #pragma once
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 
 class CrossPointState {
+  mutable std::mutex _mutex;
+
   // Static instance
   static CrossPointState instance;
 
  public:
+  // Access the state mutex for protecting multi-field reads/writes from other cores.
+  std::mutex& getMutex() const { return _mutex; }
+
   static constexpr uint8_t SLEEP_RECENT_COUNT = 16;
 
   std::string openEpubPath;
@@ -37,6 +43,7 @@ class CrossPointState {
   uint16_t pendingBookmarkSpine = UINT16_MAX;
   float pendingBookmarkProgress = -1.0f;
   uint16_t pendingBookmarkParagraphIndex = UINT16_MAX;
+  uint16_t pendingClippingIndex = UINT16_MAX;
 
   // Set by background move task on failure; read and cleared by ActivityManager to show AlertActivity.
   // Title/body are written before the flag is set to ensure they are visible when flag is read.

@@ -14,6 +14,8 @@ constexpr ThemeMetrics values = {.batteryWidth = 16,
                                  .batteryBarHeight = 40,
                                  .headerHeight = 84,
                                  .verticalSpacing = 16,
+                                 .previewPadding = 12,
+                                 .previewHeightPercent = 30,
                                  .contentSidePadding = 20,
                                  .listRowHeight = 36,
                                  .listWithSubtitleRowHeight = 60,
@@ -104,7 +106,7 @@ class LyraTheme : public BaseTheme {
                        bool allowInvertedText = false) const override;
   void drawSideButtonHints(const GfxRenderer& renderer, const char* topBtn, const char* bottomBtn) const override;
   void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                      const std::function<std::string(int index)>& buttonLabel,
+                      const std::function<const char*(int index)>& buttonLabel,
                       const std::function<UIIcon(int index)>& rowIcon) const override;
   void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
                            int selectorIndex, bool& coverRendered, bool& coverBufferStored, bool& bufferRestored,

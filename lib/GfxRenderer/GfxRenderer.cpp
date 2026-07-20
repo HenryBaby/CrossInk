@@ -21,6 +21,20 @@ namespace {
 uint8_t resolveSdCardStyle(const SdCardFont& font, const EpdFontFamily::Style style) {
   return font.resolveStyle(static_cast<uint8_t>(style));
 }
+
+int32_t resolveSdCardAdvanceFP(const SdCardFont& sdFont, const EpdFontFamily& font, const uint32_t cp,
+                               const EpdFontFamily::Style style, const uint8_t styleIdx) {
+  uint16_t advanceFP = sdFont.getAdvance(cp, styleIdx);
+  if (advanceFP != 0 || utf8IsCombiningMark(cp)) {
+    return advanceFP;
+  }
+  if (sdFont.readAdvance(cp, styleIdx, &advanceFP)) {
+    return advanceFP;
+  }
+
+  const EpdGlyph* glyph = font.getGlyph(cp, style);
+  return glyph ? glyph->advanceX : 0;
+}
 }  // namespace
 
 const uint8_t* GfxRenderer::getGlyphBitmap(const EpdFontData* fontData, const EpdGlyph* glyph) const {
@@ -97,11 +111,23 @@ void GfxRenderer::ensureSdCardFontReady(int fontId, const std::vector<std::strin
   }
 }
 
-bool GfxRenderer::releaseSdCardFontForLowMemory(int fontId) const {
+void GfxRenderer::ensureSdCardFontReady(int fontId, const uint32_t* codepoints, uint32_t cpCount, bool includeSpace,
+                                        bool includeHyphen, uint8_t styleMask) const {
+  auto it = sdCardFonts_.find(fontId);
+  if (it != sdCardFonts_.end()) {
+    int missed =
+        it->second->buildAdvanceTableForCodepoints(codepoints, cpCount, includeSpace, includeHyphen, styleMask);
+    if (missed > 0) {
+      LOG_DBG("GFX", "ensureSdCardFontReady: %d glyph(s) not found", missed);
+    }
+  }
+}
+
+bool GfxRenderer::releaseSdCardFontForLowMemory(int fontId, const bool preserveAdvanceTable) const {
   auto it = sdCardFonts_.find(fontId);
   if (it == sdCardFonts_.end()) return false;
 
-  it->second->releaseForLowMemory();
+  it->second->releaseForLowMemory(preserveAdvanceTable);
   return true;
 }
 
@@ -687,8 +713,14 @@ int GfxRenderer::getTextWidth(const int fontId, const char* text, const EpdFontF
   if (sdIt != sdCardFonts_.end() && sdIt->second->hasAdvanceTable()) {
     int32_t widthFP = 0;
     const uint8_t styleIdx = resolveSdCardStyle(*sdIt->second, style);
+    const auto fontIt = fontMap.find(fontId);
+    if (fontIt == fontMap.end()) {
+      LOG_ERR("GFX", "Font %d not found", fontId);
+      return 0;
+    }
+    const auto& font = fontIt->second;
     while (uint32_t cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&textCursor))) {
-      widthFP += sdIt->second->getAdvance(cp, styleIdx);
+      widthFP += resolveSdCardAdvanceFP(*sdIt->second, font, cp, style, styleIdx);
     }
     return fp4::toPixel(widthFP);
   }
@@ -1012,8 +1044,10 @@ void GfxRenderer::drawRoundedRect(const int x, const int y, const int width, con
 }
 
 void GfxRenderer::fillRect(const int x, const int y, const int width, const int height, const bool state) const {
-  for (int fillY = y; fillY < y + height; fillY++) {
-    drawLine(x, fillY, x + width - 1, fillY, state);
+  if (state) {
+    fillRectImpl<Color::Black>(x, y, width, height);
+  } else {
+    fillRectImpl<Color::White>(x, y, width, height);
   }
 }
 
@@ -1045,32 +1079,193 @@ void GfxRenderer::drawPixelDither<Color::DarkGray>(const int x, const int y) con
 }
 
 void GfxRenderer::fillRectDither(const int x, const int y, const int width, const int height, Color color) const {
-  if (color == Color::Clear) {
-  } else if (color == Color::Black) {
-    fillRect(x, y, width, height, true);
-  } else if (color == Color::White) {
-    fillRect(x, y, width, height, false);
-  } else if (color == Color::LightGray || color == Color::DarkGray) {
-    const int x0 = std::max(x, 0);
-    const int y0 = std::max(y, 0);
-    const int x1 = std::min(x + width, getScreenWidth());
-    const int y1 = std::min(y + height, getScreenHeight());
-    if (x0 >= x1 || y0 >= y1) return;
-    if (color == Color::LightGray) {
-      for (int fillY = y0; fillY < y1; fillY++) {
-        for (int fillX = x0; fillX < x1; fillX++) {
-          drawPixelDither<Color::LightGray>(fillX, fillY);
+  switch (color) {
+    case Color::Clear:
+      break;
+    case Color::Black:
+      fillRectImpl<Color::Black>(x, y, width, height);
+      break;
+    case Color::White:
+      fillRectImpl<Color::White>(x, y, width, height);
+      break;
+    case Color::LightGray:
+      fillRectImpl<Color::LightGray>(x, y, width, height);
+      break;
+    case Color::DarkGray:
+      fillRectImpl<Color::DarkGray>(x, y, width, height);
+      break;
+  }
+}
+
+template <Color C>
+void GfxRenderer::fillRectImpl(const int x, const int y, const int width, const int height) const {
+  if constexpr (C == Color::Clear) return;
+  if (width <= 0 || height <= 0) return;
+  if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
+
+  // Clip in logical space.
+  const int screenW = getScreenWidth();
+  const int screenH = getScreenHeight();
+  const int lx0 = std::max(0, x);
+  const int ly0 = std::max(0, y);
+  const int lx1 = std::min(screenW, x + width);
+  const int ly1 = std::min(screenH, y + height);
+  if (lx0 >= lx1 || ly0 >= ly1) return;
+
+  // Rotate the two opposing logical corners into physical-framebuffer space.
+  // The bounding rect in physical space is the rect we need to fill — rotation
+  // is rigid (no shear/stretch) so the bbox of the two corners IS the rect.
+  int paX, paY, pbX, pbY;
+  rotateCoordinates(orientation, lx0, ly0, &paX, &paY, panelWidth, panelHeight);
+  rotateCoordinates(orientation, lx1 - 1, ly1 - 1, &pbX, &pbY, panelWidth, panelHeight);
+
+  const int phyX0 = std::min(paX, pbX);
+  const int phyX1 = std::max(paX, pbX);  // inclusive
+  int phyY0 = std::min(paY, pbY);
+  int phyY1 = std::max(paY, pbY);
+
+  // Strip mode: clip Y range to the active band and redirect writes.
+  uint8_t* target = getWriteTarget();
+  const int originY = getWriteOriginY();
+  const int writeRows = getWriteRows();
+  phyY0 = std::max(phyY0, originY);
+  phyY1 = std::min(phyY1, originY + writeRows - 1);
+  if (phyY0 > phyY1) return;
+
+  // Bit/byte layout: MSB-first within a byte, so phyX → bit (7 - (phyX & 7)).
+  // Head and tail masks cover only the in-rect bits of the first/last byte.
+  const int byteStart = phyX0 >> 3;
+  const int byteEnd = phyX1 >> 3;  // inclusive
+  const uint8_t headMask = static_cast<uint8_t>(0xFFu >> (phyX0 & 7));
+  const uint8_t tailMask = static_cast<uint8_t>(0xFFu << (7 - (phyX1 & 7)));
+  const int32_t panelStride = static_cast<int32_t>(panelWidthBytes);
+
+  if constexpr (C == Color::Black || C == Color::White) {
+    // Solid fill. Framebuffer: 0 = black, 1 = white.
+    const uint8_t fillByte = (C == Color::Black) ? 0x00u : 0xFFu;
+    for (int py = phyY0; py <= phyY1; ++py) {
+      uint8_t* row = target + static_cast<int32_t>(py - originY) * panelStride;
+      if (byteStart == byteEnd) {
+        const uint8_t mask = headMask & tailMask;
+        if constexpr (C == Color::Black) {
+          row[byteStart] &= static_cast<uint8_t>(~mask);
+        } else {
+          row[byteStart] |= mask;
+        }
+      } else {
+        if constexpr (C == Color::Black) {
+          row[byteStart] &= static_cast<uint8_t>(~headMask);
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] &= static_cast<uint8_t>(~tailMask);
+        } else {
+          row[byteStart] |= headMask;
+          if (byteEnd > byteStart + 1) {
+            memset(row + byteStart + 1, fillByte, byteEnd - byteStart - 1);
+          }
+          row[byteEnd] |= tailMask;
         }
       }
-    } else {
-      for (int fillY = y0; fillY < y1; fillY++) {
-        for (int fillX = x0; fillX < x1; fillX++) {
-          drawPixelDither<Color::DarkGray>(fillX, fillY);
+    }
+  } else {
+    // Dither (LightGray / DarkGray). Both patterns have period 2 in logical
+    // (x, y), so per physical row we precompute one byte that represents the
+    // pattern across an 8-pixel stretch — every full byte in the row uses
+    // that same value.
+    //
+    // dlxPerPhyX / dlyPerPhyX: how logical (x, y) change as phyX increments
+    // along a physical row. Derived from inverting rotateCoordinates.
+    int dlxPerPhyX = 0, dlyPerPhyX = 0;
+    switch (orientation) {
+      case Portrait:
+        dlxPerPhyX = 0;
+        dlyPerPhyX = 1;
+        break;
+      case PortraitInverted:
+        dlxPerPhyX = 0;
+        dlyPerPhyX = -1;
+        break;
+      case LandscapeClockwise:
+        dlxPerPhyX = -1;
+        dlyPerPhyX = 0;
+        break;
+      case LandscapeCounterClockwise:
+        dlxPerPhyX = 1;
+        dlyPerPhyX = 0;
+        break;
+    }
+
+    // The dither pattern has period 2 in logical space, and each orientation
+    // maps py to logical coords with a fixed parity relationship. The
+    // blackMask byte therefore repeats with period 2 in py. Precompute both
+    // variants outside the row loop to eliminate the per-row switch + 8-bit
+    // construction loop.
+    uint8_t blackMasks[2];
+    for (int parityIdx = 0; parityIdx < 2; ++parityIdx) {
+      const int samplePy = phyY0 + parityIdx;
+      int lxBase = 0, lyBase = 0;
+      switch (orientation) {
+        case Portrait:
+          lxBase = panelHeight - 1 - samplePy;
+          lyBase = byteStart * 8;
+          break;
+        case PortraitInverted:
+          lxBase = samplePy;
+          lyBase = panelWidth - 1 - byteStart * 8;
+          break;
+        case LandscapeClockwise:
+          lxBase = panelWidth - 1 - byteStart * 8;
+          lyBase = panelHeight - 1 - samplePy;
+          break;
+        case LandscapeCounterClockwise:
+          lxBase = byteStart * 8;
+          lyBase = samplePy;
+          break;
+      }
+      uint8_t mask = 0;
+      for (int b = 0; b < 8; ++b) {
+        const int lx = lxBase + b * dlxPerPhyX;
+        const int ly = lyBase + b * dlyPerPhyX;
+        bool isBlack;
+        if constexpr (C == Color::LightGray) {
+          isBlack = ((lx & 1) == 0) && ((ly & 1) == 0);
+        } else {  // DarkGray
+          isBlack = (((lx + ly) & 1) == 0);
         }
+        if (isBlack) mask |= static_cast<uint8_t>(1u << (7 - b));
+      }
+      blackMasks[samplePy & 1] = mask;
+    }
+
+    for (int py = phyY0; py <= phyY1; ++py) {
+      const uint8_t blackMask = blackMasks[py & 1];
+      const uint8_t whiteMask = static_cast<uint8_t>(~blackMask);
+
+      // Dither writes BOTH inks (the slow path called drawPixel for every
+      // pixel — setting or clearing — so we must do the same). Inside the
+      // rect mask: write whiteMask (1s where white, 0s where black). Outside
+      // the rect mask: leave the framebuffer untouched.
+      uint8_t* row = target + static_cast<int32_t>(py - originY) * panelStride;
+      if (byteStart == byteEnd) {
+        const uint8_t rectMask = headMask & tailMask;
+        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~rectMask) | (rectMask & whiteMask));
+      } else {
+        row[byteStart] = static_cast<uint8_t>((row[byteStart] & ~headMask) | (headMask & whiteMask));
+        if (byteEnd > byteStart + 1) {
+          // Period 2, so every full byte in this row is exactly whiteMask.
+          memset(row + byteStart + 1, whiteMask, byteEnd - byteStart - 1);
+        }
+        row[byteEnd] = static_cast<uint8_t>((row[byteEnd] & ~tailMask) | (tailMask & whiteMask));
       }
     }
   }
 }
+
+template void GfxRenderer::fillRectImpl<Color::Black>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::White>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::LightGray>(int, int, int, int) const;
+template void GfxRenderer::fillRectImpl<Color::DarkGray>(int, int, int, int) const;
 
 void GfxRenderer::maskRoundedRectOutsideCorners(const int x, const int y, const int width, const int height,
                                                 const int radius, const Color color) const {
@@ -1279,6 +1474,10 @@ void GfxRenderer::drawImageInverted(const uint8_t bitmap[], const int x, const i
   }
 }
 
+void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int size) const {
+  drawIcon(bitmap, x, y, size, size);
+}
+
 void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int width, const int height) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
 
@@ -1334,31 +1533,28 @@ void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, con
   }
 }
 
+void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const int y, const int size) const {
+  drawIconInverted(bitmap, x, y, size, size);
+}
+
 void GfxRenderer::drawIconInverted(const uint8_t bitmap[], const int x, const int y, const int width,
                                    const int height) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
 
-  // Portrait-mode coordinate transform (x↔y swap), matching drawIcon.
+  // Portrait-mode coordinate transform (x<->y swap), matching drawIcon.
   // OR with ~srcByte sets framebuffer bits to 1 (white) wherever the icon
-  // bitmap is 0 (black) — produces a white icon on a black background.
+  // bitmap is 0 (black), producing a white icon on a black background.
   const int physX = y;
   const int physY = getScreenWidth() - width - x;
-  const int imgW = height;  // dimensions swapped by portrait transform
+  const int imgW = height;
   const int imgH = width;
-  const int srcStride = (imgW + 7) / 8;  // round up so non-byte-aligned widths copy fully
+  const int srcStride = (imgW + 7) / 8;
 
-  // Trivial off-screen rejection.
   if (physX + imgW <= 0 || physX >= panelWidth) return;
   if (physY + imgH <= 0 || physY >= panelHeight) return;
 
-  // Floor-divide so a negative physX produces the correct (negative) base byte;
-  // C++ integer division truncates toward zero, which would round up for negatives.
   const int baseByte = (physX >= 0) ? (physX >> 3) : -(((-physX) + 7) >> 3);
-  const int bitShift = ((physX % 8) + 8) % 8;  // 0..7
-
-  // Strip spurious low bits in the trailing source byte when imgW is not a
-  // multiple of 8 — without this, ~bitmap would set them to 1 and bleed extra
-  // white pixels past the icon's right edge.
+  const int bitShift = ((physX % 8) + 8) % 8;
   const int trail = srcStride * 8 - imgW;
   const uint8_t trailMask = static_cast<uint8_t>(0xFF << trail);
   const int lastCol = srcStride - 1;
@@ -1940,7 +2136,11 @@ int GfxRenderer::getSpaceWidth(const int fontId, const EpdFontFamily::Style styl
   auto sdIt = sdCardFonts_.find(fontId);
   if (sdIt != sdCardFonts_.end() && sdIt->second->hasAdvanceTable()) {
     const uint8_t resolvedStyle = resolveSdCardStyle(*sdIt->second, style);
-    return fp4::toPixel(sdIt->second->getAdvance(' ', resolvedStyle));
+    uint16_t advanceFP = sdIt->second->getAdvance(' ', resolvedStyle);
+    if (advanceFP == 0) {
+      sdIt->second->readAdvance(' ', resolvedStyle, &advanceFP);
+    }
+    return fp4::toPixel(advanceFP);
   }
 
   const auto fontIt = fontMap.find(fontId);
@@ -1961,7 +2161,11 @@ int GfxRenderer::getSpaceAdvance(const int fontId, const uint32_t leftCp, const 
   auto sdIt = sdCardFonts_.find(fontId);
   if (sdIt != sdCardFonts_.end() && sdIt->second->hasAdvanceTable()) {
     const uint8_t resolvedStyle = resolveSdCardStyle(*sdIt->second, style);
-    return fp4::toPixel(sdIt->second->getAdvance(' ', resolvedStyle));
+    uint16_t advanceFP = sdIt->second->getAdvance(' ', resolvedStyle);
+    if (advanceFP == 0) {
+      sdIt->second->readAdvance(' ', resolvedStyle, &advanceFP);
+    }
+    return fp4::toPixel(advanceFP);
   }
 
   const auto fontIt = fontMap.find(fontId);
@@ -1993,8 +2197,14 @@ int GfxRenderer::getTextAdvanceX(const int fontId, const char* text, EpdFontFami
     int32_t widthFP = 0;
     const bool isSupSub = (style & (EpdFontFamily::SUP | EpdFontFamily::SUB)) != 0;
     const uint8_t styleIdx = resolveSdCardStyle(*sdIt->second, style);
+    const auto fontIt = fontMap.find(fontId);
+    if (fontIt == fontMap.end()) {
+      LOG_ERR("GFX", "Font %d not found", fontId);
+      return 0;
+    }
+    const auto& font = fontIt->second;
     while (uint32_t cp = utf8NextCodepoint(reinterpret_cast<const uint8_t**>(&text))) {
-      int32_t advFP = sdIt->second->getAdvance(cp, styleIdx);
+      const int32_t advFP = resolveSdCardAdvanceFP(*sdIt->second, font, cp, style, styleIdx);
       widthFP += isSupSub ? (advFP + 1) / 2 : advFP;
     }
     return fp4::toPixel(widthFP);
@@ -2207,6 +2417,30 @@ size_t GfxRenderer::getBufferSize() const { return frameBufferSize; }
 
 // unused
 // void GfxRenderer::grayscaleRevert() const { display.grayscaleRevert(); }
+
+void GfxRenderer::displayGrayscaleBase(HalDisplay::RefreshMode fallback, const bool turnOffScreen) const {
+  display.displayGrayscaleBase(fallback, fadingFix || turnOffScreen);
+}
+
+void GfxRenderer::preconditionGrayscale() const { display.preconditionGrayscale(); }
+
+void GfxRenderer::preconditionGrayscale(int x, int y, int w, int h) const {
+  if (w <= 0 || h <= 0) return;
+  // Rotate the logical rect's opposite corners to physical panel coords; the
+  // physical bbox stays axis-aligned for all four orientations.
+  int ax, ay, bx, by;
+  rotateCoordinates(orientation, x, y, &ax, &ay, panelWidth, panelHeight);
+  rotateCoordinates(orientation, x + w - 1, y + h - 1, &bx, &by, panelWidth, panelHeight);
+  int x0 = ax < bx ? ax : bx, x1 = ax > bx ? ax : bx;
+  int y0 = ay < by ? ay : by, y1 = ay > by ? ay : by;
+  if (x0 < 0) x0 = 0;
+  if (y0 < 0) y0 = 0;
+  if (x1 >= panelWidth) x1 = panelWidth - 1;
+  if (y1 >= panelHeight) y1 = panelHeight - 1;
+  if (x1 < x0 || y1 < y0) return;
+  display.preconditionGrayscale(static_cast<uint16_t>(x0), static_cast<uint16_t>(y0),
+                                static_cast<uint16_t>(x1 - x0 + 1), static_cast<uint16_t>(y1 - y0 + 1));
+}
 
 void GfxRenderer::copyGrayscaleLsbBuffers() const { display.copyGrayscaleLsbBuffers(frameBuffer); }
 

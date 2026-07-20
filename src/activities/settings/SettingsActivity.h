@@ -260,6 +260,7 @@ class SettingsActivity final : public Activity {
   bool currentSettingUsesOptionMenu(const SettingInfo& setting) const;
   void openEnumOptionPicker(const SettingInfo& setting);
   void openScreenMarginPicker(const SettingInfo& setting);
+  void openLanguagePicker();
   void openIdleTimeThresholdPicker();
   void toggleCurrentSetting();
   void openSleepTimeoutPicker();

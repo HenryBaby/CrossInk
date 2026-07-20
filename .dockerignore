@@ -1,8 +1,0 @@
-.pio/
-output/
-dist/
-fs_/
-.cache/
-compile_commands.json
-platformio.local.ini
-*.log

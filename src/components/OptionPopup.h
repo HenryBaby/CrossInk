@@ -18,9 +18,8 @@ class OptionPopup {
     for (int i = 0; i < optionCount; i++) {
       ownedStrings[i] = I18N.get(optionIds[i]);
     }
-    selectedIndex = currentIndex;
     onSelectCallback = std::move(onSelect);
-    active = true;
+    activate(currentIndex);
   }
 
   void show(const char* titleStr, const char* const* options, int optionCount, int currentIndex,
@@ -30,24 +29,26 @@ class OptionPopup {
     for (int i = 0; i < optionCount; i++) {
       ownedStrings[i] = options[i];
     }
-    selectedIndex = currentIndex;
     onSelectCallback = std::move(onSelect);
-    active = true;
+    activate(currentIndex);
   }
 
   void show(StrId titleId, const std::vector<std::string>& options, int currentIndex,
             std::function<void(int)> onSelect) {
     title = I18N.get(titleId);
     ownedStrings = options;
-    selectedIndex = currentIndex;
     onSelectCallback = std::move(onSelect);
-    active = true;
+    activate(currentIndex);
   }
 
   bool handleInput(MappedInputManager& input, const std::function<void()>& requestUpdate) {
     if (!active) return false;
 
     const int count = static_cast<int>(ownedStrings.size());
+    if (count <= 0) {
+      active = false;
+      return true;
+    }
     if (input.wasPressed(MappedInputManager::Button::Up) || input.wasPressed(MappedInputManager::Button::Left)) {
       selectedIndex = (selectedIndex - 1 + count) % count;
       requestUpdate();
@@ -57,13 +58,15 @@ class OptionPopup {
       selectedIndex = (selectedIndex + 1) % count;
       requestUpdate();
       return true;
-    } else if (input.wasReleased(MappedInputManager::Button::Confirm)) {
+    } else if (input.wasPressed(MappedInputManager::Button::Confirm)) {
       active = false;
+      input.suppressNextConfirmRelease();
       if (onSelectCallback) onSelectCallback(selectedIndex);
       requestUpdate();
       return true;
-    } else if (input.wasReleased(MappedInputManager::Button::Back)) {
+    } else if (input.wasPressed(MappedInputManager::Button::Back)) {
       active = false;
+      input.suppressNextBackRelease();
       requestUpdate();
       return true;
     }
@@ -92,4 +95,23 @@ class OptionPopup {
   std::vector<std::string> ownedStrings;
   int selectedIndex = 0;
   std::function<void(int)> onSelectCallback;
+
+  void activate(int currentIndex) {
+    if (ownedStrings.empty()) {
+      active = false;
+      onSelectCallback = nullptr;
+      selectedIndex = 0;
+      return;
+    }
+
+    const int count = static_cast<int>(ownedStrings.size());
+    if (currentIndex < 0) {
+      selectedIndex = 0;
+    } else if (currentIndex >= count) {
+      selectedIndex = count - 1;
+    } else {
+      selectedIndex = currentIndex;
+    }
+    active = true;
+  }
 };

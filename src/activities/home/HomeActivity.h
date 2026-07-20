@@ -2,7 +2,6 @@
 #include <array>
 #include <functional>
 #include <optional>
-#include <string>
 #include <vector>
 
 #include "./FileBrowserActivity.h"
@@ -31,6 +30,7 @@ class HomeActivity final : public Activity {
   bool firstRenderDone = false;
   bool hasReadingStats = false;
   bool hasBookmarks = false;
+  bool hasClippings = false;
   bool hasOpdsServers = false;
   bool minimalMenuOpen = false;
   bool minimalSuppressInitialFrontRelease = false;
@@ -75,7 +75,7 @@ class HomeActivity final : public Activity {
   void onFileTransferOpen();
   void onOpdsBrowserOpen();
   void onReadingStatsOpen();
-  void onBookmarksOpen();
+  void onSavedItemsOpen();
 
   int getMenuItemCount() const;
   bool storeCoverBuffer();    // Store frame buffer for cover image

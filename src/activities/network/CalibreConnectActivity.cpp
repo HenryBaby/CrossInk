@@ -10,6 +10,7 @@
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
 #include "WifiSelectionActivity.h"
+#include "components/CompactHeader.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 
@@ -177,7 +178,7 @@ void CalibreConnectActivity::render(RenderLock&&) {
 
   renderer.clearScreen();
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_CALIBRE_WIRELESS));
+  CompactHeader::drawTitle(renderer, tr(STR_CALIBRE_WIRELESS));
   const auto height = renderer.getLineHeight(UI_10_FONT_ID);
   const auto top = (pageHeight - height) / 2;
 
@@ -186,10 +187,11 @@ void CalibreConnectActivity::render(RenderLock&&) {
   } else if (state == CalibreConnectState::ERROR) {
     renderer.drawCenteredText(UI_12_FONT_ID, top, tr(STR_CONNECTION_FAILED), true, EpdFontFamily::BOLD);
   } else if (state == CalibreConnectState::SERVER_RUNNING) {
-    GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
-                      connectedSSID.c_str(), (std::string(tr(STR_IP_ADDRESS_PREFIX)) + connectedIP).c_str());
+    const int subHeaderTop = CompactHeader::contentTop(metrics);
+    GUI.drawSubHeader(renderer, Rect{0, subHeaderTop, pageWidth, metrics.tabBarHeight}, connectedSSID.c_str(),
+                      (std::string(tr(STR_IP_ADDRESS_PREFIX)) + connectedIP).c_str());
 
-    int y = metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing * 4;
+    int y = subHeaderTop + metrics.tabBarHeight + metrics.verticalSpacing * 4;
     const auto heightText12 = renderer.getTextHeight(UI_12_FONT_ID);
     renderer.drawText(UI_12_FONT_ID, metrics.contentSidePadding, y, tr(STR_CALIBRE_SETUP), true, EpdFontFamily::BOLD);
     y += heightText12 + metrics.verticalSpacing * 2;
@@ -203,7 +205,8 @@ void CalibreConnectActivity::render(RenderLock&&) {
     renderer.drawText(UI_12_FONT_ID, metrics.contentSidePadding, y, tr(STR_CALIBRE_STATUS), true, EpdFontFamily::BOLD);
     y += heightText12 + metrics.verticalSpacing * 2;
 
-    if (lastProgressTotal > 0 && lastProgressReceived <= lastProgressTotal) {
+    const bool showUploadProgress = lastProgressTotal > 0 && lastProgressReceived <= lastProgressTotal;
+    if (showUploadProgress) {
       std::string label = tr(STR_CALIBRE_RECEIVING);
       if (!currentUploadName.empty()) {
         label += ": " + currentUploadName;
@@ -218,7 +221,7 @@ void CalibreConnectActivity::render(RenderLock&&) {
       y += height + metrics.verticalSpacing * 2 + metrics.progressBarHeight;
     }
 
-    if (lastCompleteAt > 0 && (millis() - lastCompleteAt) < 6000) {
+    if (!showUploadProgress && lastCompleteAt > 0 && (millis() - lastCompleteAt) < 6000) {
       std::string msg = std::string(tr(STR_CALIBRE_RECEIVED)) + lastCompleteName;
       msg = renderer.truncatedText(SMALL_FONT_ID, msg.c_str(), pageWidth - metrics.contentSidePadding * 2,
                                    EpdFontFamily::REGULAR);

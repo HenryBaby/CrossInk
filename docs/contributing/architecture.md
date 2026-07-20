@@ -8,7 +8,7 @@ At a high level, it is firmware that uses an activity-driven application archite
 
 ```mermaid
 graph TD
-    A[Hardware: ESP32-C3 + SD + E-ink + Buttons] --> B[open-x4-sdk]
+    A[Hardware: ESP32-C3 + SD + E-ink + Buttons] --> B[freeink-sdk]
     B --> C[lib/hal wrappers]
     C --> D[src/main.cpp runtime loop]
     D --> E[Activities layer]
@@ -183,15 +183,36 @@ Some sources are generated and should not be edited manually.
 
 When editing related source assets, regenerate via normal build steps/scripts.
 
+### Web portal preview
+
+When editing the web portal under `web/`, use the local preview server to see
+the composed pages without flashing a device:
+
+```sh
+python3 scripts/preview_web.py
+```
+
+The preview is available at `http://localhost:8000`. Pass a port number to use a
+different port:
+
+```sh
+python3 scripts/preview_web.py 9000
+```
+
+The preview server re-renders `web/templates/base.html`, `web/pages/*`, and
+shared assets on refresh, and it serves mock API responses for Files, Settings,
+Fonts, Wi-Fi, and OPDS data. It is for browser iteration only; firmware builds
+still use `scripts/build_web.py` to generate the flash-served headers.
+
 ## Key directories
 
 - `src/`: app orchestration, settings/state, and activity implementations
 - `src/network/`: web server and OTA/update networking
 - `src/components/`: theming and shared UI components
-- `lib/hal/`: hardware abstraction wrappers around open-x4-sdk
+- `lib/hal/`: hardware abstraction wrappers around freeink-sdk
 - `lib/Epub/`: EPUB parser, layout, CSS handling, and hyphenation
 - `lib/`: supporting libraries (fonts, text, filesystem helpers, etc.)
-- `open-x4-sdk/`: hardware SDK submodule (display, input, storage, battery)
+- `freeink-sdk/`: hardware SDK submodule (display, input, storage, battery). Docs: https://freeink.org/docs
 - `docs/`: user and technical documentation
 
 ## Embedded constraints that shape design

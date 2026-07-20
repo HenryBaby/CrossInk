@@ -615,13 +615,13 @@ void BaseTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std:
     // No book to continue reading
     const int y =
         bookY + (bookHeight - renderer.getLineHeight(UI_12_FONT_ID) - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
-    renderer.drawCenteredText(UI_12_FONT_ID, y, "No open book");
-    renderer.drawCenteredText(UI_10_FONT_ID, y + renderer.getLineHeight(UI_12_FONT_ID), "Start reading below");
+    renderer.drawCenteredText(UI_12_FONT_ID, y, tr(STR_NO_OPEN_BOOK));
+    renderer.drawCenteredText(UI_10_FONT_ID, y + renderer.getLineHeight(UI_12_FONT_ID), tr(STR_START_READING));
   }
 }
 
 void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
-                               const std::function<std::string(int index)>& buttonLabel,
+                               const std::function<const char*(int index)>& buttonLabel,
                                const std::function<UIIcon(int index)>& rowIcon) const {
   (void)rowIcon;
   constexpr int maxVisibleItems = 7;
@@ -681,8 +681,8 @@ void BaseTheme::drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount
                         BaseMetrics::values.menuRowHeight);
     }
 
-    std::string labelStr = buttonLabel(i);
-    const char* label = labelStr.c_str();
+    const char* label = buttonLabel != nullptr ? buttonLabel(i) : "";
+    if (!label) label = "";
     const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, label);
     const int textX = rect.x + BaseMetrics::values.contentSidePadding + (tileWidth - textWidth) / 2;
     const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
@@ -751,7 +751,9 @@ void BaseTheme::fillPopupProgress(const GfxRenderer& renderer, const Rect& layou
 
 void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                               const int pageCount, std::string title, const int paddingBottom, const int textYOffset,
-                              const bool isPageBookmarked, const char* timeLeftLabel, const bool darkMode) const {
+                              const bool isPageBookmarked, const char* timeLeftLabel, const bool darkMode,
+                              const float chapterProgressPercent, const int stableCurrentPage,
+                              const int stablePageCount, const bool showProgress) const {
   const bool foregroundBlack = !darkMode;
   auto metrics = UITheme::getInstance().getMetrics();
   int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
@@ -763,14 +765,26 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   auto textY = screenHeight - UITheme::getInstance().getStatusBarHeight() - orientedMarginBottom - paddingBottom - 4;
   int progressTextWidth = 0;
 
-  if (SETTINGS.statusBarBookProgressPercentage || SETTINGS.statusBarChapterPageCount) {
+  const bool showStablePageNumbers = SETTINGS.stablePageNumbers && stableCurrentPage > 0 && stablePageCount > 0;
+  if (showProgress &&
+      (SETTINGS.statusBarBookProgressPercentage || SETTINGS.statusBarChapterPageCount || showStablePageNumbers)) {
     // Right aligned text for progress counter
-    char progressStr[32];
+    char progressStr[48];
 
-    if (SETTINGS.statusBarBookProgressPercentage && SETTINGS.statusBarChapterPageCount) {
+    if (SETTINGS.statusBarChapterPageCount && showStablePageNumbers && SETTINGS.statusBarBookProgressPercentage) {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d  %d/%d  %.0f%%", currentPage, pageCount, stableCurrentPage,
+               stablePageCount, bookProgress);
+    } else if (SETTINGS.statusBarChapterPageCount && showStablePageNumbers) {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d  %d/%d", currentPage, pageCount, stableCurrentPage,
+               stablePageCount);
+    } else if (SETTINGS.statusBarChapterPageCount && SETTINGS.statusBarBookProgressPercentage) {
       snprintf(progressStr, sizeof(progressStr), "%d/%d  %.0f%%", currentPage, pageCount, bookProgress);
+    } else if (showStablePageNumbers && SETTINGS.statusBarBookProgressPercentage) {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d  %.0f%%", stableCurrentPage, stablePageCount, bookProgress);
     } else if (SETTINGS.statusBarBookProgressPercentage) {
       snprintf(progressStr, sizeof(progressStr), "%.0f%%", bookProgress);
+    } else if (showStablePageNumbers) {
+      snprintf(progressStr, sizeof(progressStr), "%d/%d", stableCurrentPage, stablePageCount);
     } else {
       snprintf(progressStr, sizeof(progressStr), "%d/%d", currentPage, pageCount);
     }
@@ -783,13 +797,15 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
   }
 
   // Draw Progress Bar
-  if (SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS) {
+  if (showProgress && SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS) {
     const int progressBarMaxWidth = renderer.getScreenWidth() - orientedMarginLeft - orientedMarginRight;
     const int progressBarY = renderer.getScreenHeight() - orientedMarginBottom -
                              ((SETTINGS.statusBarProgressBarThickness + 1) * 2) - paddingBottom;
     size_t progress;
     if (SETTINGS.statusBarProgressBar == CrossPointSettings::STATUS_BAR_PROGRESS_BAR::BOOK_PROGRESS) {
       progress = static_cast<size_t>(bookProgress);
+    } else if (chapterProgressPercent >= 0.0f) {
+      progress = static_cast<size_t>(std::clamp(chapterProgressPercent, 0.0f, 100.0f));
     } else {
       // Chapter progress
       progress = (pageCount > 0) ? (static_cast<float>(currentPage) / pageCount) * 100 : 0;
@@ -1068,7 +1084,21 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
   }
 
   const int optionCount = static_cast<int>(options.size());
-  const int listHeight = rowHeight * optionCount + itemSpacing * (optionCount - 1);
+  if (optionCount <= 0) {
+    return;
+  }
+
+  const int maxDialogH = std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + innerPadding * 2,
+                                  pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
+  const int maxListHeight =
+      std::max(rowHeight, maxDialogH - innerPadding * 2 - titleLineHeight - metrics.optionPopupTitleGap);
+  const int rowStep = rowHeight + itemSpacing;
+  const int maxVisibleOptions = std::max(1, std::min(optionCount, (maxListHeight + itemSpacing) / rowStep));
+  const int safeSelectedIndex = std::clamp(selectedIndex, 0, optionCount - 1);
+  const int visibleStart = std::clamp(safeSelectedIndex - maxVisibleOptions / 2, 0, optionCount - maxVisibleOptions);
+  const int visibleEnd = visibleStart + maxVisibleOptions;
+  const int visibleCount = visibleEnd - visibleStart;
+  const int listHeight = rowHeight * visibleCount + itemSpacing * (visibleCount - 1);
   const int dialogW = std::min((maxTextWidth + innerPadding * 2 + selectionHPadding * 2) * 12 / 10,
                                pageWidth - metrics.optionPopupDialogSideMargin * 2);
   const int contentHeight = titleLineHeight + metrics.optionPopupTitleGap + listHeight;
@@ -1108,10 +1138,11 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
   const int itemRectW = dialogW - innerPadding * 2;
   const int selectionRadius = metrics.optionPopupSelectionRadius;
 
-  for (int i = 0; i < optionCount; i++) {
-    const int itemY = y + i * (rowHeight + itemSpacing);
-    const bool selected = (i == selectedIndex);
-    const char* labelText = options[i].c_str();
+  for (int visibleIndex = 0; visibleIndex < visibleCount; visibleIndex++) {
+    const int optionIndex = visibleStart + visibleIndex;
+    const int itemY = y + visibleIndex * (rowHeight + itemSpacing);
+    const bool selected = (optionIndex == safeSelectedIndex);
+    const char* labelText = options[optionIndex].c_str();
 
     if (metrics.optionPopupDrawAllRows || selected) {
       Color rowColor;

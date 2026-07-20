@@ -7,6 +7,7 @@
 #include <HalStorage.h>
 #include <I18n.h>
 #include <PNGdec.h>
+#include <Xtc.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -15,6 +16,7 @@
 #include "../home/RecentBookProgress.h"
 #include "../reader/BookStatsView.h"
 #include "../reader/EpubReaderActivity.h"
+#include "../reader/EpubReaderUtils.h"
 #include "../reader/TxtReaderActivity.h"
 #include "../reader/XtcReaderActivity.h"
 #include "AppVersion.h"
@@ -34,6 +36,10 @@ namespace {
 
 constexpr bool TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH = true;
 constexpr int sleepBuildInfoSideMargin = 20;
+
+bool sleepCoverFilterInvertsGeneratedScreen() {
+  return SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::INVERTED_BLACK_AND_WHITE;
+}
 
 void hideOverlayBatteryStrip(const GfxRenderer& renderer) {
   if (!SETTINGS.statusBarBattery) {
@@ -229,13 +235,46 @@ RecentBook recentBookForPath(const std::string& path) {
   return loadedBook;
 }
 
-std::string epubCachePathFor(const std::string& path) { return Epub::cachePathForFilePath(path, "/.crosspoint"); }
+std::string bookStatsCachePathFor(const std::string& path) {
+  if (FsHelpers::hasEpubExtension(path)) {
+    return Epub::cachePathForFilePath(path, "/.crosspoint");
+  }
+  if (FsHelpers::hasXtcExtension(path)) {
+    return Xtc(path, "/.crosspoint").getCachePath();
+  }
+  return {};
+}
 
 BookReadingStats loadBookStatsForPath(const std::string& path) {
-  if (!FsHelpers::hasEpubExtension(path)) {
+  const std::string cachePath = bookStatsCachePathFor(path);
+  if (cachePath.empty()) {
     return BookReadingStats{};
   }
-  return BookReadingStats::load(epubCachePathFor(path));
+  return BookReadingStats::load(cachePath);
+}
+
+std::string loadChapterTitleForPath(const std::string& path) {
+  if (!FsHelpers::hasEpubExtension(path)) {
+    return {};
+  }
+
+  Epub epub(path, "/.crosspoint");
+  if (!epub.load(false, true)) {
+    return {};
+  }
+
+  EpubReaderUtils::Progress progress;
+  if (!EpubReaderUtils::loadProgress(epub, progress, "SLP")) {
+    return {};
+  }
+
+  const auto spineItem = epub.getSpineItem(progress.spineIndex);
+  if (spineItem.tocIndex < 0) {
+    return {};
+  }
+
+  const auto tocItem = epub.getTocItem(spineItem.tocIndex);
+  return tocItem.title;
 }
 
 enum class OverlayDrawResult : uint8_t { NotFound, Drawn, Failed };
@@ -553,7 +592,7 @@ void SleepActivity::renderBitmapSleepScreen(const Bitmap& bitmap) const {
   if (hasGreyscale) {
     // OEM grayscale pipeline base: use a full sleep-screen paint so the panel
     // enters deep sleep from a clean B/W baseline before the gray nudge refresh.
-    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+    renderer.displayGrayscaleBase(HalDisplay::FULL_REFRESH);
   } else {
     renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
   }
@@ -594,7 +633,7 @@ void SleepActivity::renderCoverSleepScreen() const {
 
   bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
   std::string coverBmpPath = SleepCoverAssets::cachedCoverPathFor(path, cropped);
-  if (coverBmpPath.empty() && SleepCoverAssets::prepareFullCoverForPath(path, cropped)) {
+  if (coverBmpPath.empty() && SleepCoverAssets::prepareFullCoverForPath(path, cropped, &renderer)) {
     coverBmpPath = SleepCoverAssets::cachedCoverPathFor(path, cropped);
   }
   if (coverBmpPath.empty()) {
@@ -638,8 +677,10 @@ void SleepActivity::renderReadingStatsSleepScreen() const {
   } else {
     renderPerBookStatsPage(renderer, nullptr, bookTitle, bookStats, progressPercent, false, 0, false, false, false);
   }
-  renderer.invertScreen();
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  if (!sleepCoverFilterInvertsGeneratedScreen()) {
+    renderer.invertScreen();
+  }
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
 void SleepActivity::renderMinimalSleepScreen() const {
@@ -650,12 +691,15 @@ void SleepActivity::renderMinimalSleepScreen() const {
 
   RecentBook book = recentBookForPath(path);
   book.coverBmpPath = SleepCoverAssets::cachedMinimalCoverPathFor(path);
+  if (book.coverBmpPath.empty() && SleepCoverAssets::prepareMinimalCoverForPath(path, &renderer)) {
+    book.coverBmpPath = SleepCoverAssets::cachedMinimalCoverPathFor(path);
+  }
 
   const BookReadingStats bookStats = loadBookStatsForPath(path);
   const float progressPercent = RecentBookProgress::loadPercent(book);
   MinimalTheme theme;
-  theme.drawSleepScreen(renderer, book, &bookStats, progressPercent);
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  theme.drawSleepScreen(renderer, book, &bookStats, progressPercent, sleepCoverFilterInvertsGeneratedScreen());
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
 void SleepActivity::renderMinimalStatsSleepScreen() const {
@@ -666,13 +710,17 @@ void SleepActivity::renderMinimalStatsSleepScreen() const {
 
   RecentBook book = recentBookForPath(path);
   book.coverBmpPath = SleepCoverAssets::cachedMinimalCoverPathFor(path);
+  if (book.coverBmpPath.empty() && SleepCoverAssets::prepareMinimalCoverForPath(path, &renderer)) {
+    book.coverBmpPath = SleepCoverAssets::cachedMinimalCoverPathFor(path);
+  }
 
   const BookReadingStats bookStats = loadBookStatsForPath(path);
   const GlobalReadingStats globalStats = GlobalReadingStats::load();
   const float progressPercent = RecentBookProgress::loadPercent(book);
   MinimalTheme theme;
-  theme.drawStatsSleepScreen(renderer, book, &bookStats, &globalStats, progressPercent);
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
+  theme.drawStatsSleepScreen(renderer, book, &bookStats, &globalStats, progressPercent,
+                             sleepCoverFilterInvertsGeneratedScreen());
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
 void SleepActivity::renderDashboardSleepScreen() const {
@@ -684,7 +732,7 @@ void SleepActivity::renderDashboardSleepScreen() const {
   RecentBook book = recentBookForPath(path);
   const std::string fallbackCoverPath = book.coverBmpPath;
   book.coverBmpPath = SleepCoverAssets::cachedDashboardCoverPathFor(path);
-  if (book.coverBmpPath.empty() && SleepCoverAssets::prepareDashboardCoverForPath(path)) {
+  if (book.coverBmpPath.empty() && SleepCoverAssets::prepareDashboardCoverForPath(path, &renderer)) {
     book.coverBmpPath = SleepCoverAssets::cachedDashboardCoverPathFor(path);
   }
   if (book.coverBmpPath.empty()) {
@@ -694,8 +742,10 @@ void SleepActivity::renderDashboardSleepScreen() const {
   const BookReadingStats bookStats = loadBookStatsForPath(path);
   const GlobalReadingStats globalStats = GlobalReadingStats::load();
   const float progressPercent = RecentBookProgress::loadPercent(book);
+  const std::string chapterTitle = loadChapterTitleForPath(path);
   DashboardTheme theme;
-  theme.drawSleepScreen(renderer, book, &bookStats, &globalStats, progressPercent);
+  theme.drawSleepScreen(renderer, book, &bookStats, &globalStats, progressPercent, chapterTitle.c_str(),
+                        sleepCoverFilterInvertsGeneratedScreen());
   renderer.displayBuffer(HalDisplay::FULL_REFRESH, TURN_OFF_SCREEN_AFTER_SLEEP_REFRESH);
 }
 
@@ -706,7 +756,7 @@ void SleepActivity::renderLastScreenSleepScreen() const {
   } else {
     renderer.drawImage(MoonIcon, 0, pageHeight - MOONICON_HEIGHT, MOONICON_WIDTH, MOONICON_HEIGHT);
   }
-  renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
 }
 
 void SleepActivity::renderBlankSleepScreen() const {

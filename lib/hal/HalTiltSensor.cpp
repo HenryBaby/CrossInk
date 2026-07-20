@@ -191,7 +191,7 @@ void HalTiltSensor::update(const uint8_t enabled, const uint8_t direction, const
   // On the X3 PCB: X axis = left/right in portrait, Y axis = left/right in landscape.
   const bool forwardBack = direction == CrossPointTiltPageTurnDirection::TILT_FORWARD_BACK ||
                            direction == CrossPointTiltPageTurnDirection::TILT_FORWARD_BACK_INVERTED;
-  const bool inverted = direction == CrossPointTiltPageTurnDirection::TILT_LEFT_RIGHT_INVERTED ||
+  const bool inverted = direction == CrossPointTiltPageTurnDirection::TILT_LEFT_RIGHT ||
                         direction == CrossPointTiltPageTurnDirection::TILT_FORWARD_BACK_INVERTED;
   float tiltAxis;
   switch (orientation) {

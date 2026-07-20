@@ -21,20 +21,6 @@ SECTION_TITLE_MAP = {
     'Security': 'Security',
 }
 
-TIP = """\
----
-
-Tip
-
-If you experience any problems, please clear your caches before opening an issue. Start with the least invasive and work your way to the most invasive if problems persist after each step.
-1. Delete book cache (In-reader menu > `Delete book cache`)
-2. From your SD card: Delete the individual `.crosspoint/epub_<hash>` folder for the book giving you issues
-3. Delete all reading cache (`Settings > System > Files & Cache > Clear Reading Cache`)
-4. From your SD card: Delete ALL `.crosspoint/epub_<hash>` folders and `recent.json` and `state.json`
-5. Back up your `global_stats.bin` and then delete the entire `.crosspoint/` folder
-"""
-
-
 def normalize_version(version):
     version = version.strip()
     return version[1:] if version.startswith('v') else version
@@ -81,7 +67,10 @@ def crossink_local_time():
 
 
 def default_intro():
-    return 'This release contains the fork-specific changes listed below.'
+    now, timezone_name = crossink_local_time()
+    time_text = now.strftime('%I:%M%p').lower()
+    date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
+    return f'This release is up to date with the master branch of CrossInk as of {time_text} {timezone_name} {date_text}.'
 
 
 def parse_args():
@@ -102,9 +91,7 @@ def main():
 
     body = f"""> {intro}
 
-{section}
-
-{TIP}"""
+{section}"""
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(body.strip() + '\n', encoding='utf-8')

@@ -88,6 +88,18 @@ uint8_t defaultEnumRawValue(const SettingInfo& info, uint8_t fieldDefault) {
 
 bool isSleepScreenSetting(const SettingInfo& info) { return info.key && strcmp(info.key, "sleepScreen") == 0; }
 
+constexpr uint8_t TILT_DIRECTION_SCHEMA_CURRENT = 2;
+
+uint8_t migrateTiltDirectionValue(uint8_t direction) {
+  if (direction == CrossPointSettings::TILT_LEFT_RIGHT) {
+    return CrossPointSettings::TILT_LEFT_RIGHT_INVERTED;
+  }
+  if (direction == CrossPointSettings::TILT_LEFT_RIGHT_INVERTED) {
+    return CrossPointSettings::TILT_LEFT_RIGHT;
+  }
+  return direction;
+}
+
 // ---- CrossPointState ----
 
 bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
@@ -104,6 +116,7 @@ bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
   doc["pendingBookmarkSpine"] = s.pendingBookmarkSpine;
   doc["pendingBookmarkProgress"] = s.pendingBookmarkProgress;
   doc["pendingBookmarkParagraphIndex"] = s.pendingBookmarkParagraphIndex;
+  doc["pendingClippingIndex"] = s.pendingClippingIndex;
   doc["showBootScreen"] = s.showBootScreen;
 
   String json;
@@ -144,6 +157,7 @@ bool JsonSettingsIO::loadState(CrossPointState& s, const char* json) {
   s.pendingBookmarkSpine = doc["pendingBookmarkSpine"] | static_cast<uint16_t>(UINT16_MAX);
   s.pendingBookmarkProgress = doc["pendingBookmarkProgress"] | static_cast<float>(-1.0f);
   s.pendingBookmarkParagraphIndex = doc["pendingBookmarkParagraphIndex"] | static_cast<uint16_t>(UINT16_MAX);
+  s.pendingClippingIndex = doc["pendingClippingIndex"] | static_cast<uint16_t>(UINT16_MAX);
   s.showBootScreen = doc["showBootScreen"] | true;
   return true;
 }
@@ -195,6 +209,7 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
   // Stored as ISO code string ("EN", "DE", ...) for stability across enum reorders.
   doc["language"] = (s.language < getLanguageCount()) ? LANGUAGE_CODES[s.language] : "EN";
+  doc["tiltPageTurnDirectionSchema"] = TILT_DIRECTION_SCHEMA_CURRENT;
   // Separate from the legacy clock sync flag because older builds synced time
   // only, leaving the RTC date registers at their placeholder/default value.
   doc["clockDateHasBeenSynced"] = s.clockDateHasBeenSynced;
@@ -216,6 +231,9 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
   const bool migrateLegacyTiltMode = !doc["tiltPageTurn"].isNull() && doc["tiltPageTurnDirection"].isNull();
   const uint8_t legacyTiltMode = doc["tiltPageTurn"] | static_cast<uint8_t>(CrossPointSettings::TILT_OFF);
+  const bool migrateTiltDirectionSchema =
+      !doc["tiltPageTurnDirection"].isNull() &&
+      ((doc["tiltPageTurnDirectionSchema"] | static_cast<uint8_t>(1)) < TILT_DIRECTION_SCHEMA_CURRENT);
 
   // Legacy migration: if statusBarChapterPageCount is absent this is a pre-refactor settings file.
   // Populate s with migrated values now so the generic loop below picks them up as defaults and clamps them.
@@ -312,11 +330,18 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
     if (legacyTiltMode == 1 || legacyTiltMode == 2) {
       s.tiltPageTurn = CrossPointSettings::TILT_ON;
       s.tiltPageTurnDirection =
-          legacyTiltMode == 2 ? CrossPointSettings::TILT_LEFT_RIGHT_INVERTED : CrossPointSettings::TILT_LEFT_RIGHT;
+          legacyTiltMode == 2 ? CrossPointSettings::TILT_LEFT_RIGHT : CrossPointSettings::TILT_LEFT_RIGHT_INVERTED;
       if (needsResave) *needsResave = true;
     } else {
       s.tiltPageTurn = CrossPointSettings::TILT_OFF;
     }
+  } else if (migrateTiltDirectionSchema) {
+    s.tiltPageTurnDirection = migrateTiltDirectionValue(s.tiltPageTurnDirection);
+    if (needsResave) *needsResave = true;
+  }
+
+  if (!doc["tiltPageTurnDirection"].isNull() && doc["tiltPageTurnDirectionSchema"].isNull()) {
+    if (needsResave) *needsResave = true;
   }
 
   if (doc["hideClock"].isNull() && !doc["statusBarClock"].isNull()) {
@@ -387,174 +412,5 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
 
   LOG_DBG("CPS", "Settings loaded from file");
 
-  return true;
-}
-
-// ---- WifiCredentialStore ----
-
-bool JsonSettingsIO::saveWifi(const WifiCredentialStore& store, const char* path) {
-  JsonDocument doc;
-  doc["lastConnectedSsid"] = store.getLastConnectedSsid();
-
-  JsonArray arr = doc["credentials"].to<JsonArray>();
-  for (const auto& cred : store.getCredentials()) {
-    JsonObject obj = arr.add<JsonObject>();
-    obj["ssid"] = cred.ssid;
-    obj["password_obf"] = obfuscation::obfuscateToBase64(cred.password);
-  }
-
-  String json;
-  serializeJson(doc, json);
-  return Storage.writeFile(path, json);
-}
-
-bool JsonSettingsIO::loadWifi(WifiCredentialStore& store, const char* json, bool* needsResave) {
-  if (needsResave) *needsResave = false;
-  JsonDocument doc;
-  auto error = deserializeJson(doc, json);
-  if (error) {
-    LOG_ERR("WCS", "JSON parse error: %s", error.c_str());
-    return false;
-  }
-
-  store.lastConnectedSsid = doc["lastConnectedSsid"] | std::string("");
-
-  store.credentials.clear();
-  JsonArray arr = doc["credentials"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (store.credentials.size() >= store.MAX_NETWORKS) break;
-    WifiCredential cred;
-    cred.ssid = obj["ssid"] | std::string("");
-    if (cred.ssid.empty()) {
-      LOG_ERR("WCS", "Skipping WiFi credential with empty SSID");
-      continue;
-    }
-
-    obfuscation::DecodeStatus status = obfuscation::DecodeStatus::INVALID;
-    cred.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &status);
-    if (status == obfuscation::DecodeStatus::LEGACY && !cred.password.empty() && needsResave) {
-      *needsResave = true;
-    }
-    if (status == obfuscation::DecodeStatus::INVALID || status == obfuscation::DecodeStatus::EMPTY ||
-        cred.password.empty()) {
-      cred.password = obj["password"] | std::string("");
-      if (!cred.password.empty() && needsResave) *needsResave = true;
-    }
-    if (status == obfuscation::DecodeStatus::INVALID && cred.password.empty()) {
-      LOG_ERR("WCS", "Skipping WiFi credential with unreadable password: %s", cred.ssid.c_str());
-      continue;
-    }
-    store.credentials.push_back(cred);
-  }
-
-  LOG_DBG("WCS", "Loaded %zu WiFi credentials from file", store.credentials.size());
-  return true;
-}
-
-// ---- RecentBooksStore ----
-
-bool JsonSettingsIO::saveRecentBooks(const RecentBooksStore& store, const char* path) {
-  JsonDocument doc;
-  JsonArray arr = doc["books"].to<JsonArray>();
-  for (const auto& book : store.getBooks()) {
-    JsonObject obj = arr.add<JsonObject>();
-    obj["path"] = book.path;
-    obj["title"] = book.title;
-    obj["author"] = book.author;
-    obj["coverBmpPath"] = book.coverBmpPath;
-  }
-
-  String json;
-  serializeJson(doc, json);
-  return Storage.writeFile(path, json);
-}
-
-bool JsonSettingsIO::loadRecentBooks(RecentBooksStore& store, const char* json) {
-  JsonDocument doc;
-  auto error = deserializeJson(doc, json);
-  if (error) {
-    LOG_ERR("RBS", "JSON parse error: %s", error.c_str());
-    return false;
-  }
-
-  store.recentBooks.clear();
-  JsonArray arr = doc["books"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (store.getCount() >= 10) break;
-    RecentBook book;
-    book.path = obj["path"] | std::string("");
-    book.title = obj["title"] | std::string("");
-    book.author = obj["author"] | std::string("");
-    book.coverBmpPath = obj["coverBmpPath"] | std::string("");
-    store.recentBooks.push_back(book);
-  }
-
-  LOG_DBG("RBS", "Recent books loaded from file (%d entries)", store.getCount());
-  return true;
-}
-
-// ---- OpdsServerStore ----
-// Follows the same save/load pattern as WifiCredentialStore above.
-// Passwords are XOR-obfuscated with the device MAC and base64-encoded ("password_obf" key).
-
-bool JsonSettingsIO::saveOpds(const OpdsServerStore& store, const char* path) {
-  JsonDocument doc;
-
-  JsonArray arr = doc["servers"].to<JsonArray>();
-  for (const auto& server : store.getServers()) {
-    JsonObject obj = arr.add<JsonObject>();
-    obj["name"] = server.name;
-    obj["url"] = server.url;
-    obj["username"] = server.username;
-    obj["password_obf"] = obfuscation::obfuscateToBase64(server.password);
-    obj["downloadFolder"] = normalizeOpdsDownloadFolder(server.downloadFolder);
-    obj["folderOrganization"] = opdsFolderOrganizationToJson(server.folderOrganization);
-    obj["filenameFormat"] = opdsFilenameFormatToJson(server.filenameFormat);
-  }
-
-  String json;
-  serializeJson(doc, json);
-  return Storage.writeFile(path, json);
-}
-
-bool JsonSettingsIO::loadOpds(OpdsServerStore& store, const char* json, bool* needsResave) {
-  if (needsResave) *needsResave = false;
-  JsonDocument doc;
-  auto error = deserializeJson(doc, json);
-  if (error) {
-    LOG_ERR("OPS", "JSON parse error: %s", error.c_str());
-    return false;
-  }
-
-  store.servers.clear();
-  JsonArray arr = doc["servers"].as<JsonArray>();
-  for (JsonObject obj : arr) {
-    if (store.servers.size() >= OpdsServerStore::MAX_SERVERS) break;
-    OpdsServer server;
-    server.name = obj["name"] | std::string("");
-    server.url = obj["url"] | std::string("");
-    server.username = obj["username"] | std::string("");
-    server.downloadFolder = normalizeOpdsDownloadFolder(obj["downloadFolder"] | std::string("/"));
-    server.folderOrganization = opdsFolderOrganizationFromJson(obj["folderOrganization"] | "");
-    server.filenameFormat = opdsFilenameFormatFromJson(obj["filenameFormat"] | "");
-    // Try the obfuscated key first; fall back to plaintext "password" for
-    // files written before obfuscation was added (or hand-edited JSON).
-    obfuscation::DecodeStatus status = obfuscation::DecodeStatus::INVALID;
-    server.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &status);
-    if (status == obfuscation::DecodeStatus::LEGACY && !server.password.empty() && needsResave) {
-      *needsResave = true;
-    }
-    if (status == obfuscation::DecodeStatus::INVALID || status == obfuscation::DecodeStatus::EMPTY ||
-        server.password.empty()) {
-      server.password = obj["password"] | std::string("");
-      if (!server.password.empty() && needsResave) *needsResave = true;
-    }
-    if (status == obfuscation::DecodeStatus::INVALID && server.password.empty()) {
-      LOG_ERR("OPS", "Ignoring unreadable password for OPDS server: %s", server.name.c_str());
-    }
-    store.servers.push_back(std::move(server));
-  }
-
-  LOG_DBG("OPS", "Loaded %zu OPDS servers from file", store.servers.size());
   return true;
 }
