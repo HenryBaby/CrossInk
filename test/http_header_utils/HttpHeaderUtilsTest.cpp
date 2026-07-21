@@ -4,8 +4,8 @@
 
 TEST(HttpHeaderUtilsTest, ExtractsQuotedAsciiFilename) {
   std::string filename;
-  EXPECT_TRUE(HttpHeaderUtils::extractContentDispositionFilename("attachment; filename=\"Series 01 - Book.epub\"",
-                                                                 filename));
+  EXPECT_TRUE(
+      HttpHeaderUtils::extractContentDispositionFilename("attachment; filename=\"Series 01 - Book.epub\"", filename));
   EXPECT_EQ(filename, "Series 01 - Book.epub");
 }
 
@@ -38,8 +38,8 @@ TEST(HttpHeaderUtilsTest, RejectsMissingFilename) {
 
 TEST(HttpHeaderUtilsTest, RejectsHeaderInjection) {
   std::string filename;
-  EXPECT_FALSE(HttpHeaderUtils::extractContentDispositionFilename("attachment; filename*=UTF-8''book%0Aevil.epub",
-                                                                  filename));
+  EXPECT_FALSE(
+      HttpHeaderUtils::extractContentDispositionFilename("attachment; filename*=UTF-8''book%0Aevil.epub", filename));
 }
 
 TEST(HttpHeaderUtilsTest, RejectsUnterminatedQuotedFilename) {

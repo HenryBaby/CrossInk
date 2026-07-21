@@ -236,7 +236,7 @@ void OpdsSettingsActivity::render(RenderLock&&) {
   const int menuItems = getMenuItemCount();
 
   const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
-                              StrId::STR_PASSWORD, StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
+                              StrId::STR_PASSWORD,    StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
                               StrId::STR_FILENAME};
 
   GUI.drawList(
@@ -261,9 +261,8 @@ void OpdsSettingsActivity::render(RenderLock&&) {
           return editServer.downloadFolder.empty() ? std::string("/")
                                                    : normalizeOpdsDownloadFolder(editServer.downloadFolder);
         } else if (index == 5) {
-          return editServer.folderOrganization == OpdsFolderOrganization::AUTHOR
-                     ? std::string(tr(STR_AUTHOR_FOLDERS))
-                     : std::string(tr(STR_SINGLE_FOLDER));
+          return editServer.folderOrganization == OpdsFolderOrganization::AUTHOR ? std::string(tr(STR_AUTHOR_FOLDERS))
+                                                                                 : std::string(tr(STR_SINGLE_FOLDER));
         } else if (index == 6) {
           return std::string(filenameFormatLabel(editServer.filenameFormat));
         }

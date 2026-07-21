@@ -9,9 +9,9 @@
 #include <OpdsStream.h>
 #include <WiFi.h>
 
-#include <utility>
 #include <cctype>
 #include <string_view>
+#include <utility>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"

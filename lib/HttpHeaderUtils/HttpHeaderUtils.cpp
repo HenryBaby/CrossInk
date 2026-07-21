@@ -9,8 +9,7 @@ constexpr size_t MAX_HEADER_FILENAME_BYTES = 512;
 bool equalsIgnoreCase(const std::string_view left, const std::string_view right) {
   if (left.size() != right.size()) return false;
   for (size_t i = 0; i < left.size(); ++i) {
-    if (std::tolower(static_cast<unsigned char>(left[i])) !=
-        std::tolower(static_cast<unsigned char>(right[i]))) {
+    if (std::tolower(static_cast<unsigned char>(left[i])) != std::tolower(static_cast<unsigned char>(right[i]))) {
       return false;
     }
   }

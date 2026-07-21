@@ -46,7 +46,7 @@ std::string readFolderForBook(const std::string& srcPath, const std::string& aut
   const std::string authorFolder = StringUtils::sanitizeFilename(folderAuthor, authorBudget);
   return authorFolder.empty() ? READ_FOLDER : std::string(READ_FOLDER) + "/" + authorFolder;
 }
-}
+}  // namespace
 
 namespace BookMoveUtils {
 
