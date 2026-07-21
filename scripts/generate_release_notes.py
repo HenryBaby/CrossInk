@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate GitHub release notes from CHANGELOG.md.
+Generate GitHub release notes from CHANGELOG.md and README.md.
 
-The release workflow uses this so tags, firmware binaries, and release notes
-share one source of truth.
+The release workflow uses CHANGELOG.md for version-specific notes and README.md
+for the persistent downstream-fork section.
 """
 
 import argparse
@@ -20,6 +20,8 @@ SECTION_TITLE_MAP = {
     'Fixed': 'Fixed',
     'Security': 'Security',
 }
+
+DOWNSTREAM_SECTION_TITLE = 'Changes maintained by this downstream fork'
 
 def normalize_version(version):
     version = version.strip()
@@ -51,6 +53,29 @@ def normalize_section_titles(section):
     return '\n'.join(lines).strip()
 
 
+def extract_markdown_section(markdown, title):
+    section = re.compile(
+        rf'^## {re.escape(title)}\s*\n\s*\n(?P<bullets>(?:- [^\n]*(?:\n|$))+)',
+        re.MULTILINE,
+    )
+    match = section.search(markdown)
+    if not match:
+        raise SystemExit(f'No README.md bullet section found for "{title}"')
+
+    return f'## {title}\n\n{match.group("bullets").strip()}'
+
+
+def remove_markdown_section(markdown, title):
+    heading = re.compile(rf'^## {re.escape(title)}\s*$', re.MULTILINE)
+    match = heading.search(markdown)
+    if not match:
+        return markdown.strip()
+
+    next_heading = re.search(r'^## ', markdown[match.end():], re.MULTILINE)
+    end = match.end() + next_heading.start() if next_heading else len(markdown)
+    return (markdown[:match.start()] + markdown[end:]).strip()
+
+
 def last_sunday(year, month):
     day = datetime(year, month + 1, 1, tzinfo=timezone.utc) - timedelta(days=1)
     return day - timedelta(days=(day.weekday() + 1) % 7)
@@ -77,6 +102,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Generate release notes from CHANGELOG.md.')
     parser.add_argument('--version', required=True, help='Release version, with or without leading v.')
     parser.add_argument('--changelog', default='CHANGELOG.md', type=Path, help='Path to CHANGELOG.md.')
+    parser.add_argument('--readme', default='README.md', type=Path, help='Path to README.md.')
     parser.add_argument('--output', required=True, type=Path, help='Output markdown file.')
     parser.add_argument('--intro', default=None, help='Optional release intro line without the leading blockquote marker.')
     return parser.parse_args()
@@ -87,11 +113,15 @@ def main():
     version = normalize_version(args.version)
     changelog = args.changelog.read_text(encoding='utf-8')
     section = normalize_section_titles(extract_version_section(changelog, version))
+    section = remove_markdown_section(section, DOWNSTREAM_SECTION_TITLE)
+    downstream_section = extract_markdown_section(args.readme.read_text(encoding='utf-8'), DOWNSTREAM_SECTION_TITLE)
     intro = args.intro.strip() if args.intro else default_intro()
 
     body = f"""> {intro}
 
-{section}"""
+{section}
+
+{downstream_section}"""
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(body.strip() + '\n', encoding='utf-8')
