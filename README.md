@@ -1,5 +1,5 @@
 > [!CAUTION]
-> This is a personal downstream build. Use the official [CrossInk](https://github.com/uxjulia/CrossInk) releases unless you specifically want the OPDS additions below.
+> This is a personal downstream build. Use the official [CrossInk](https://github.com/uxjulia/CrossInk) releases unless you specifically want the OPDS additions below. To be frank you shouldn't be using this though, since it's fully vibe-coded and there could be dragons!
 >
 > This repository is a fork of [uxjulia/CrossInk](https://github.com/uxjulia/CrossInk), which is itself a fork of [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader).
 
