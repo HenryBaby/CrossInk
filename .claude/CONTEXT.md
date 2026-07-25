@@ -27,4 +27,5 @@ Keep this file focused on repo-specific gotchas that are worth reusing in future
 
 - POSIX TZ signs are inverted from ISO 8601 in `TimeStore::applyTimezone()`: `"UTC-1"` means UTC+1.
 - `LyraTheme::drawHeader()` does not call `BaseTheme::drawHeader()`, so header changes in the base theme must be duplicated in Lyra if needed.
+- Preserve the complete opening `[!CAUTION]` block in `README.md` verbatim during upstream syncs, README rewrites, and documentation updates unless the user explicitly asks to change it. It identifies this as a personal, fully vibe-coded downstream build and warns that there could be dragons.
 - The README section `Changes maintained by this downstream fork` is the canonical persistent footer for published release notes. `scripts/generate_release_notes.py` appends it automatically; update the README section instead of duplicating new wording in the release workflow.
