@@ -554,5 +554,22 @@ let allSettings = [];
     }
   }
 
+  async function loadGrimmory() {
+    try { const r = await fetch('/api/grimmory'); const c = await r.json();
+      document.getElementById('grimmory-container').innerHTML = '<div class="card"><h2>Grimmory</h2>' +
+        '<label>URL<input id="grm-url" maxlength="127" value="' + escapeHtml(c.url || '') + '"></label>' +
+        '<label>Username<input id="grm-user" maxlength="127" value="' + escapeHtml(c.username || '') + '"></label>' +
+        '<label>Password<input id="grm-pass" maxlength="127" type="password" placeholder="' + (c.hasPassword ? '••••••••' : '') + '"></label>' +
+        '<label><input id="grm-clear" type="checkbox"> Clear saved password</label>' +
+        '<button class="btn-small btn-save-server" onclick="saveGrimmory()">Save</button></div>'; } catch (e) { console.error(e); }
+  }
+  async function saveGrimmory() {
+    const d = {url: document.getElementById('grm-url').value, username: document.getElementById('grm-user').value};
+    const p = document.getElementById('grm-pass').value; if (p || document.getElementById('grm-clear').checked) d.password = p;
+    const r = await fetch('/api/grimmory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
+    showMessage(r.ok ? 'Grimmory saved!' : 'Error saving Grimmory', !r.ok);
+  }
+
   loadWifiNetworks();
   loadOpdsServers();
+  loadGrimmory();

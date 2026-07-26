@@ -96,6 +96,8 @@ class ActivityManager {
   void goToHotspotFileTransfer(std::string returnBookPath = {});
   void goToNearbyStatsSync();
   void goToSettings();
+  void goToGrimmorySettings();
+  void goToGrimmoryBrowser();
   void goToFileBrowser(std::string path = {});
   void goToRecentBooks();
   void goToBrowser();

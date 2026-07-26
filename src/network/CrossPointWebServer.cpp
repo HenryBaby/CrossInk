@@ -22,6 +22,7 @@
 #include "AppVersion.h"
 #include "CrossPointSettings.h"
 #include "FontInstaller.h"
+#include "GrimmoryStore.h"
 #include "OpdsServerStore.h"
 #include "SdCardFontSystem.h"
 #include "SettingsList.h"
@@ -299,6 +300,8 @@ void CrossPointWebServer::begin() {
   server->on("/api/opds", HTTP_GET, [this] { handleGetOpdsServers(); });
   server->on("/api/opds", HTTP_POST, [this] { handlePostOpdsServer(); });
   server->on("/api/opds/delete", HTTP_POST, [this] { handleDeleteOpdsServer(); });
+  server->on("/api/grimmory", HTTP_GET, [this] { handleGetGrimmory(); });
+  server->on("/api/grimmory", HTTP_POST, [this] { handlePostGrimmory(); });
 
   // Wi-Fi credential endpoints
   server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiNetworks(); });
@@ -1554,6 +1557,60 @@ void CrossPointWebServer::handleDeleteOpdsServer() {
 
   OPDS_STORE.removeServer(static_cast<size_t>(idx));
   LOG_DBG("WEB", "Deleted OPDS server at index %d", idx);
+  server->send(200, "text/plain", "OK");
+}
+
+void CrossPointWebServer::handleGetGrimmory() const {
+  JsonDocument doc;
+  const auto& c = GRIMMORY_STORE.config();
+  doc["url"] = c.baseUrl;
+  doc["username"] = c.username;
+  doc["hasPassword"] = !c.password.empty();
+  String out;
+  serializeJson(doc, out);
+  server->send(200, "application/json", out);
+}
+
+void CrossPointWebServer::handlePostGrimmory() {
+  if (!server->hasArg("plain")) {
+    server->send(400, "text/plain", "Missing JSON body");
+    return;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, server->arg("plain"))) {
+    server->send(400, "text/plain", "Invalid JSON");
+    return;
+  }
+  if (!doc["url"].is<const char*>() || !doc["username"].is<const char*>()) {
+    server->send(400, "text/plain", "Invalid fields");
+    return;
+  }
+  GrimmoryConfig c = GRIMMORY_STORE.config();
+  c.baseUrl = doc["url"].as<const char*>();
+  c.username = doc["username"].as<const char*>();
+  if (c.baseUrl.size() > 127 || c.username.size() > 127) {
+    server->send(400, "text/plain", "Field too long");
+    return;
+  }
+  if (c.baseUrl.rfind("https://", 0) != 0) {
+    server->send(400, "text/plain", "HTTPS URL required");
+    return;
+  }
+  if (!doc["password"].isNull()) {
+    if (!doc["password"].is<const char*>()) {
+      server->send(400, "text/plain", "Invalid password");
+      return;
+    }
+    c.password = doc["password"].as<const char*>();
+    if (c.password.size() > 127) {
+      server->send(400, "text/plain", "Password too long");
+      return;
+    }
+  }
+  if (!GRIMMORY_STORE.setConfig(std::move(c))) {
+    server->send(500, "text/plain", "Failed to save");
+    return;
+  }
   server->send(200, "text/plain", "OK");
 }
 

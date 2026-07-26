@@ -2,6 +2,7 @@
 
 ### Added
 
+- Grimmory download integration: configure one server in Settings, browse EPUBs, and download them to the SD card.
 - Restored the downstream Docker firmware builder and contributor instructions, adapted to the current `freeink-sdk` layout and release environments.
 
 ### Fixed
