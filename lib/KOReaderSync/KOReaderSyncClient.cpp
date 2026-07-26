@@ -117,10 +117,10 @@ KOReaderSyncClient::Error validateAuthResponse(const char* body) {
 // KOSync's TLS-1.3 servers can't be reached through the precompiled system
 // mbedTLS (TLS 1.3 is stubbed out), so requests run over wolfSSL via
 // SecureHttpClient. The handshake still needs working heap; gate on it. wolfSSL's
-// footprint is smaller than mbedTLS's old ~48KB peak, but keep a conservative
-// floor. Check both total free heap and largest contiguous block so fragmented
-// heap does not fall through into a failed TLS allocation path.
-constexpr uint32_t MIN_HEAP_FOR_TLS = 55000;
+// footprint is smaller than mbedTLS's old ~48KB peak, but keep conservative
+// floors for total free heap and the largest contiguous block.
+constexpr uint32_t MIN_FREE_HEAP_FOR_TLS = 50000;
+constexpr uint32_t MIN_MAX_ALLOC_HEAP_FOR_TLS = 20000;
 
 #ifdef SIMULATOR
 void addAuthHeaders(HTTPClient& http) {
@@ -148,9 +148,9 @@ void applyAuthHeaders(freeink::SecureHttpClient& http) {
 bool insufficientHeap() {
   const uint32_t freeHeap = ESP.getFreeHeap();
   const uint32_t maxAllocHeap = ESP.getMaxAllocHeap();
-  if (freeHeap < MIN_HEAP_FOR_TLS || maxAllocHeap < MIN_HEAP_FOR_TLS) {
-    LOG_ERR("KOSync", "Insufficient heap for TLS handshake: %u bytes free, %u max alloc (need %u)", freeHeap,
-            maxAllocHeap, MIN_HEAP_FOR_TLS);
+  if (freeHeap < MIN_FREE_HEAP_FOR_TLS || maxAllocHeap < MIN_MAX_ALLOC_HEAP_FOR_TLS) {
+    LOG_ERR("KOSync", "Insufficient heap for TLS handshake: %u bytes free (need %u), %u max alloc (need %u)", freeHeap,
+            MIN_FREE_HEAP_FOR_TLS, maxAllocHeap, MIN_MAX_ALLOC_HEAP_FOR_TLS);
     return true;
   }
   return false;

@@ -13,7 +13,7 @@ OVERRIDES = f"""
 #define HAVE_FFDHE_2048
 #endif
 #undef FP_MAX_BITS
-#define FP_MAX_BITS 16384
+#define FP_MAX_BITS 8192
 """
 
 

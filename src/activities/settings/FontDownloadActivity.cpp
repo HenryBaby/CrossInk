@@ -267,17 +267,16 @@ bool FontDownloadActivity::fetchAndParseManifest() {
     JsonArray familiesArr = doc["families"].as<JsonArray>();
     parsedFamilies.reserve(familiesArr.size());
 
-    for (JsonObject fObj : familiesArr) {
+    // ArduinoJson owns a second copy of every manifest string. Consume the
+    // array from the front and remove each family after copying it so those
+    // strings are released before the next family's vectors grow. Keeping the
+    // whole JSON tree alive here can exhaust the heap partway through the list.
+    while (!familiesArr.isNull() && familiesArr.size() > 0) {
+      JsonObject fObj = familiesArr[0];
       ManifestFamily family;
       family.name = fObj["name"] | "";
       family.description = fObj["description"] | "";
       family.languages = fObj["languages"] | "";
-
-      JsonArray stylesArr = fObj["styles"].as<JsonArray>();
-      family.styles.reserve(stylesArr.size());
-      for (JsonVariant s : stylesArr) {
-        family.styles.push_back(s.as<std::string>());
-      }
 
       family.totalSize = 0;
       JsonArray filesArr = fObj["files"].as<JsonArray>();
@@ -308,10 +307,12 @@ bool FontDownloadActivity::fetchAndParseManifest() {
       }
 
       if (family.files.empty()) {
+        familiesArr.remove(0);
         continue;
       }
 
       parsedFamilies.push_back(std::move(family));
+      familiesArr.remove(0);
     }
 
     families_.swap(parsedFamilies);

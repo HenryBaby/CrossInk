@@ -24,9 +24,7 @@
 #include "util/FullScreenMessageActivity.h"
 
 void ActivityManager::begin() {
-  xTaskCreatePinnedToCore(&renderTaskTrampoline, "ActivityManagerRender",
-                          16384,  // Stack size - createSectionFile() puts ChapterHtmlSlimParser on stack during
-                                  // silentIndexNextChapterIfNeeded
+  xTaskCreatePinnedToCore(&renderTaskTrampoline, "ActivityManagerRender", 16384,
                           this,   // Parameters
                           1,      // Priority
                           &renderTaskHandle,  // Task handle
@@ -305,6 +303,17 @@ bool ActivityManager::isReaderActivity() const {
 
 bool ActivityManager::canSnapshotForSleepOverlay() const {
   return currentActivity && currentActivity->canSnapshotForSleepOverlay();
+}
+
+bool ActivityManager::requestManualReaderRefresh() {
+  RenderLock lock;
+  if (!currentActivity || !currentActivity->isReaderActivity() || !currentActivity->prepareManualRefresh()) {
+    return false;
+  }
+
+  lock.unlock();
+  requestUpdate(true);
+  return true;
 }
 
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }

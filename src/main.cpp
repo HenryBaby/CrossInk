@@ -475,6 +475,9 @@ bool handleGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action
       return true;
     case CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH: {
       LOG_DBG("MAIN", "Manual screen refresh triggered");
+      if (SETTINGS.textAntiAliasing && activityManager.requestManualReaderRefresh()) {
+        return true;
+      }
       RenderLock lock;
       renderer.displayBuffer(HalDisplay::HALF_REFRESH);
       return true;

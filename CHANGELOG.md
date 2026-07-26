@@ -1,3 +1,10 @@
+## [Unreleased]
+
+### Fixed
+
+- Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.
+- Reduced KOReader TLS and OPDS memory pressure, made EPUB page elements and font decompression allocations fallible, and avoided duplicate HTTP User-Agent headers.
+
 ## [v1.4.0] - 2026-07-10
 
 ### Upstream CrossInk v1.4.0

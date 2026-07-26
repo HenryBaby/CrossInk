@@ -234,8 +234,9 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
       LOG_ERR("HTTP", "wolfSSL rejected URL: %s", currentUrl.c_str());
       return HttpDownloader::HTTP_ERROR;
     }
-
-    http.addHeader("User-Agent", "CrossInk-ESP32-" CROSSINK_VERSION);
+    // Replace SecureHttpClient's built-in User-Agent so strict servers receive
+    // exactly one header while retaining CrossInk's device/version identity.
+    http.setUserAgent("CrossInk-ESP32-" CROSSINK_VERSION);
     if (sink.resumeOffset > 0) {
       char rangeHeader[40];
       snprintf(rangeHeader, sizeof(rangeHeader), "bytes=%zu-", sink.resumeOffset);

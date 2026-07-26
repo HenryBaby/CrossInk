@@ -115,6 +115,7 @@ X3ProbeResult runX3ProbePass() {
 }  // namespace X3GPIO
 
 namespace {
+constexpr unsigned long BUTTON_DEBOUNCE_REPOLL_MS = 6;
 constexpr char HW_NAMESPACE[] = "cphw";
 constexpr char NVS_KEY_DEV_OVERRIDE[] = "dev_ovr";  // 0=auto, 1=x4, 2=x3
 constexpr char NVS_KEY_DEV_CACHED[] = "dev_det";    // 0=unknown, 1=x4, 2=x3
@@ -209,6 +210,10 @@ void HalGPIO::begin() {
 
 void HalGPIO::update() {
   inputMgr.update();
+  if (inputMgr.isDebouncePending()) {
+    delay(BUTTON_DEBOUNCE_REPOLL_MS);
+    inputMgr.update();
+  }
   const bool connected = isUsbConnected();
   usbStateChanged = (connected != lastUsbConnected);
   lastUsbConnected = connected;

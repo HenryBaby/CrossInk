@@ -67,7 +67,6 @@ class FontDownloadActivity : public Activity {
     std::string installName;
     std::string description;
     std::string languages;
-    std::vector<std::string> styles;
     std::vector<ManifestFile> files;
     size_t totalSize = 0;
     bool installed = false;

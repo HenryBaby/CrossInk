@@ -38,6 +38,9 @@ class Activity {
 
   virtual void render(RenderLock&&) {}
 
+  // Let activities that need more than a framebuffer refresh prepare a full redraw.
+  virtual bool prepareManualRefresh() { return false; }
+
   // If immediate is true, the update will be triggered immediately.
   // Otherwise, it will be deferred until the end of the current loop iteration.
   virtual void requestUpdate(bool immediate = false);

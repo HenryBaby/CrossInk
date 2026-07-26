@@ -57,6 +57,10 @@ class TxtReaderActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  bool prepareManualRefresh() override {
+    pagesUntilFullRefresh = 1;
+    return true;
+  }
   bool isReaderActivity() const override { return true; }
   bool canSnapshotForSleepOverlay() const override { return true; }
   std::string getCurrentBookPath() const override { return txt ? txt->getPath() : std::string{}; }
