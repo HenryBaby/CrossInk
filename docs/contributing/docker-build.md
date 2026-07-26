@@ -79,6 +79,29 @@ On Windows, Docker Desktop applies ownership for bind-mounted files. On a
 Linux container host running as root, `HOST_UID` and `HOST_GID` can instead be
 set to chown copied artifacts.
 
+### Troubleshooting output permissions
+
+The builder checks that `/output` is writable before starting PlatformIO. If it
+reports `Output directory is not writable`, fix ownership on Linux or macOS
+from the host and rerun the command:
+
+```sh
+sudo chown -R "$(id -u):$(id -g)" ./output
+```
+
+On Windows, verify that Docker Desktop is allowed to share the repository drive
+or folder and that your user has permission to write to `output`. The exact
+settings depend on the Docker Desktop version and host security policy.
+
+If an earlier run compiled successfully but failed while copying with
+`cp ... Permission denied`, the firmware remains under `.pio/build`. After
+fixing the output permissions, recover it without rebuilding (replace `tiny`
+with the environment you built):
+
+```sh
+cp .pio/build/tiny/firmware-tiny.bin output/
+```
+
 Docker builds do not replace hardware validation. After flashing an image,
 open an EPUB, turn pages, open Reader Options, toggle a setting, and check
 serial logs for allocation or filesystem errors.

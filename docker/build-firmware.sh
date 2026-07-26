@@ -20,6 +20,24 @@ fi
 
 mkdir -p "$output_dir"
 
+# Fail before compilation if the bind mount cannot be written by this container user.
+write_probe=""
+cleanup_write_probe() {
+  if [[ -n "$write_probe" ]]; then
+    rm -f -- "$write_probe"
+  fi
+}
+trap cleanup_write_probe EXIT
+
+if ! write_probe=$(umask 077; mktemp "$output_dir/.crossink-write-probe.XXXXXX" 2>/dev/null); then
+  echo "Output directory is not writable: $output_dir" >&2
+  echo 'Linux/macOS: on the host, run: sudo chown -R "$(id -u):$(id -g)" ./output' >&2
+  echo "Windows: check Docker Desktop file sharing and folder permissions for the mounted output directory." >&2
+  exit 1
+fi
+rm -f -- "$write_probe"
+write_probe=""
+
 if [[ -d .pio/build ]]; then
   find .pio/build -maxdepth 2 -type f -name 'firmware-*.bin' -delete
 fi
