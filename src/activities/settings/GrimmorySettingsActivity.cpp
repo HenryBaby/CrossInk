@@ -59,7 +59,8 @@ void GrimmorySettingsActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const auto& m = UITheme::getInstance().getMetrics();
   GUI.drawHeader(renderer, Rect{0, m.topPadding, renderer.getScreenWidth(), m.headerHeight}, tr(STR_GRIMMORY_SETTINGS));
-  const StrId ids[] = {STR_GRIMMORY_URL, STR_GRIMMORY_USERNAME, STR_GRIMMORY_PASSWORD, STR_GRIMMORY_OPEN};
+  const StrId ids[] = {StrId::STR_GRIMMORY_URL, StrId::STR_GRIMMORY_USERNAME, StrId::STR_GRIMMORY_PASSWORD,
+                       StrId::STR_GRIMMORY_OPEN};
   GUI.drawList(
       renderer,
       Rect{0, m.topPadding + m.headerHeight, renderer.getScreenWidth(),
