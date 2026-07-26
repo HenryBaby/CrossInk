@@ -41,22 +41,28 @@ bool GrimmoryClient::login(const std::string& user, const std::string& password)
 bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& entries, size_t& total) {
   if (token_.empty() || page > 100000) return false;
   std::string response;
-  const std::string url = joinUrl(baseUrl_, "/api/v1/books/page?sort=addedOn&page=" + std::to_string(page));
+  const std::string url = joinUrl(baseUrl_, "/api/v1/books/page?sort=addedOn,asc&page=" + std::to_string(page));
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
   opts.caCert = GrimmoryTls::kIsrgRootX1;
   opts.transport = HttpDownloader::Transport::WOLFSSL;
-  if (HttpDownloader::streamUrl(
-          url,
-          [&response](const uint8_t* d, size_t n) {
-            if (response.size() + n > Grimmory::kMaxPageResponseBytes) return false;
-            response.append(reinterpret_cast<const char*>(d), n);
-            return true;
-          },
-          nullptr, "", "", opts) == HttpDownloader::OK) {
-    return Grimmory::parsePageResponse(response, entries, total);
+  const auto transfer = HttpDownloader::streamUrl(
+      url,
+      [&response](const uint8_t* d, size_t n) {
+        if (response.size() + n > Grimmory::kMaxPageResponseBytes) return false;
+        response.append(reinterpret_cast<const char*>(d), n);
+        return true;
+      },
+      nullptr, "", "", opts);
+  if (transfer != HttpDownloader::OK) {
+    LOG_ERR("GRM", "Book page request failed (page=%zu, error=%d)", page, static_cast<int>(transfer));
+    return false;
   }
-  return false;
+  if (!Grimmory::parsePageResponse(response, entries, total)) {
+    LOG_ERR("GRM", "Book page response could not be parsed (page=%zu, bytes=%zu)", page, response.size());
+    return false;
+  }
+  return true;
 }
 
 HttpDownloader::DownloadError GrimmoryClient::download(int id, const std::string& path, bool* cancel,

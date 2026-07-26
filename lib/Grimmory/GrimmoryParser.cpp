@@ -31,6 +31,33 @@ bool stringField(std::string_view obj, std::string_view key, size_t cap, std::st
   return false;
 }
 
+bool firstStringArrayValue(std::string_view obj, std::string_view key, size_t cap, std::string& out) {
+  const std::string needle = "\"" + std::string(key) + "\"";
+  const size_t p = obj.find(needle);
+  if (p == std::string_view::npos) return false;
+  size_t i = obj.find(':', p + needle.size());
+  if (i == std::string_view::npos) return false;
+  while (++i < obj.size() && std::isspace(static_cast<unsigned char>(obj[i]))) {
+  }
+  if (i >= obj.size() || obj[i] != '[') return false;
+  while (++i < obj.size() && std::isspace(static_cast<unsigned char>(obj[i]))) {
+  }
+  if (i >= obj.size() || obj[i] != '"') return false;
+  ++i;
+  std::string value;
+  while (i < obj.size()) {
+    char c = obj[i++];
+    if (c == '"') {
+      out = std::move(value);
+      return out.size() <= cap;
+    }
+    if (c == '\\' && i < obj.size()) c = obj[i++];
+    value.push_back(c);
+    if (value.size() > cap) return false;
+  }
+  return false;
+}
+
 bool intField(std::string_view obj, std::string_view key, int& out) {
   const std::string needle = "\"" + std::string(key) + "\"";
   size_t i = obj.find(needle);
@@ -121,7 +148,8 @@ bool parsePageResponse(const std::string_view json, std::vector<BookEntry>& entr
       }
       const auto obj = json.substr(i, end - i);
       if (metadata.empty() || !stringField(metadata, "title", kMaxTitleBytes, book.title)) book.title.clear();
-      if (!metadata.empty()) stringField(metadata, "author", kMaxAuthorBytes, book.author);
+      if (!metadata.empty() && !firstStringArrayValue(metadata, "authors", kMaxAuthorBytes, book.author))
+        stringField(metadata, "author", kMaxAuthorBytes, book.author);
       const auto pf = obj.find("\"primaryFile\"");
       bool hasPrimaryFilename = false;
       if (pf != std::string_view::npos) {
@@ -149,11 +177,25 @@ bool parsePageResponse(const std::string_view json, std::vector<BookEntry>& entr
     }
     i = end;
   }
-  const auto total = json.find("\"totalElements\"");
   totalElements = 0;
-  if (total != std::string_view::npos) {
-    int n = 0;
-    if (intField(json.substr(total), "totalElements", n) && n >= 0) totalElements = static_cast<size_t>(n);
+  // Current Grimmory nests pagination metadata under `page`; older servers
+  // exposed totalElements at the response root, so retain that fallback.
+  const auto pageKey = json.find("\"page\"");
+  if (pageKey != std::string_view::npos) {
+    const auto pageOpen = json.find('{', pageKey);
+    size_t pageEnd = 0;
+    if (pageOpen != std::string_view::npos && objectAt(json, pageOpen, pageEnd)) {
+      int n = 0;
+      if (intField(json.substr(pageOpen, pageEnd - pageOpen), "totalElements", n) && n >= 0)
+        totalElements = static_cast<size_t>(n);
+    }
+  }
+  if (totalElements == 0) {
+    const auto total = json.find("\"totalElements\"");
+    if (total != std::string_view::npos) {
+      int n = 0;
+      if (intField(json.substr(total), "totalElements", n) && n >= 0) totalElements = static_cast<size_t>(n);
+    }
   }
   entries = std::move(parsed);
   return i < json.size() && json[i] == ']';
