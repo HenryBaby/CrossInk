@@ -9,6 +9,7 @@
 #include "WiFi.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "components/UITheme.h"
+#include "fontIds.h"
 #include "network/GrimmoryClient.h"
 void GrimmoryBrowserActivity::onEnter() {
   Activity::onEnter();
