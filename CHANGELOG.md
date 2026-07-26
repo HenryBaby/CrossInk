@@ -8,6 +8,7 @@
 
 - Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.
 - Reduced KOReader TLS and OPDS memory pressure, made EPUB page elements and font decompression allocations fallible, and avoided duplicate HTTP User-Agent headers.
+- Fixed an Arduino `HEX` macro collision in the web server's JSON string escaping code.
 
 ## [v1.4.0] - 2026-07-10
 
