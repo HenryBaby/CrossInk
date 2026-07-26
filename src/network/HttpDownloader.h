@@ -60,7 +60,7 @@ class HttpDownloader {
   static bool fetchUrl(const std::string& url, std::string& outContent, const std::string& username = "",
                        const std::string& password = "");
   static bool postJson(const std::string& url, const std::string& json, std::string& outContent, size_t maxBytes = 8192,
-                       const char* caCert = nullptr);
+                       const char* caCert = nullptr, Transport transport = Transport::ESP_HTTP);
 
   static bool fetchUrl(const std::string& url, Stream& stream, const std::string& username = "",
                        const std::string& password = "");

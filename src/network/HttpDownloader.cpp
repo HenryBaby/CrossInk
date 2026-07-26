@@ -591,9 +591,47 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, c
 }
 
 bool HttpDownloader::postJson(const std::string& url, const std::string& json, std::string& outContent, size_t maxBytes,
-                              const char* caCert) {
+                              const char* caCert, Transport transport) {
   outContent.clear();
   if (json.size() > maxBytes) return false;
+#if defined(FREEINK_NET_WOLFSSL)
+  if (transport == Transport::WOLFSSL) {
+    ParsedUrl parsed;
+    if (!parseUrl(url, parsed)) {
+      LOG_ERR("HTTP", "wolfSSL POST rejected URL");
+      return false;
+    }
+    if (parsed.https && caCert == nullptr) {
+      LOG_ERR("HTTP", "Refusing credentialed wolfSSL POST without CA certificate");
+      return false;
+    }
+    freeink::SecureHttpClient http;
+    http.setTimeout(HTTP_TIMEOUT_MS);
+    if (parsed.https) http.setCACert(caCert);
+    if (!http.begin(url)) {
+      LOG_ERR("HTTP", "wolfSSL rejected POST URL: %s", url.c_str());
+      return false;
+    }
+    http.setUserAgent("CrossInk-ESP32-" CROSSINK_VERSION);
+    http.addHeader("Content-Type", "application/json");
+    const int status = http.sendRequest("POST", reinterpret_cast<const uint8_t*>(json.data()), json.size(),
+                                        [&outContent, maxBytes](const uint8_t* data, size_t len) {
+                                          if (outContent.size() + len > maxBytes) return false;
+                                          outContent.append(reinterpret_cast<const char*>(data), len);
+                                          return true;
+                                        });
+    const bool complete = http.responseComplete();
+    const bool callbackAborted = http.callbackAborted();
+    http.end();
+    if (status < 200 || status >= 300 || callbackAborted || !complete) {
+      LOG_ERR("HTTP", "wolfSSL POST failed: status=%d complete=%d bytes=%zu", status, complete, outContent.size());
+      return false;
+    }
+    return true;
+  }
+#else
+  (void)transport;
+#endif
   esp_http_client_config_t config = {};
   config.url = url.c_str();
   config.method = HTTP_METHOD_POST;

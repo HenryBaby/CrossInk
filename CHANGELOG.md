@@ -9,7 +9,7 @@
 
 ### Fixed
 
-- Moved Grimmory transfers to ESP-IDF TLS with its built-in verified certificate bundle for generation-Y chains.
+- Moved Grimmory transfers to wolfSSL with verified Let's Encrypt X1/Root YR trust and alternate-chain validation for generation-Y servers.
 - Docker firmware builds now fail early with actionable output-directory permission guidance instead of compiling before a bind-mount copy error.
 - Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.
 - Reduced KOReader TLS and OPDS memory pressure, made EPUB page elements and font decompression allocations fallible, and avoided duplicate HTTP User-Agent headers.
