@@ -1,5 +1,9 @@
 #include "GrimmoryBrowserActivity.h"
 
+#include <esp_sntp.h>
+
+#include <ctime>
+
 #include "GrimmoryStore.h"
 #include "HalStorage.h"
 #include "I18n.h"
@@ -11,6 +15,37 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/GrimmoryClient.h"
+
+namespace {
+bool ensureSystemTime() {
+  static bool syncedThisBoot = false;
+  if (syncedThisBoot) return true;
+
+  if (esp_sntp_enabled()) esp_sntp_stop();
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_setservername(1, "time.nist.gov");
+  esp_sntp_init();
+
+  constexpr int kMaxRetries = 50;  // 5 seconds max
+  int retry = 0;
+  while (sntp_get_sync_status() != SNTP_SYNC_STATUS_COMPLETED && retry < kMaxRetries) {
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    ++retry;
+  }
+  constexpr std::time_t kPlausibleEpoch = 1767225600;  // 2026-01-01 UTC
+  const bool synced = sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED && std::time(nullptr) >= kPlausibleEpoch;
+  if (esp_sntp_enabled()) esp_sntp_stop();
+  if (synced) {
+    syncedThisBoot = true;
+    LOG_INF("GRM", "NTP time synced");
+  } else {
+    LOG_ERR("GRM", "NTP sync failed; refusing authenticated request");
+  }
+  return synced;
+}
+}  // namespace
+
 void GrimmoryBrowserActivity::onEnter() {
   Activity::onEnter();
   sdFontSystem.releaseLoadedFont(renderer);
@@ -27,6 +62,12 @@ void GrimmoryBrowserActivity::onExit() {
 }
 void GrimmoryBrowserActivity::load() {
   if (!GRIMMORY_STORE.isConfigured()) {
+    state = BrowserState::ERROR;
+    error = tr(STR_GRIMMORY_AUTH_ERROR);
+    requestUpdate();
+    return;
+  }
+  if (!ensureSystemTime()) {
     state = BrowserState::ERROR;
     error = tr(STR_GRIMMORY_AUTH_ERROR);
     requestUpdate();
@@ -91,6 +132,12 @@ void GrimmoryBrowserActivity::download() {
   if (!Storage.exists(path.c_str()) && Storage.exists(backup.c_str()) &&
       !Storage.rename(backup.c_str(), path.c_str())) {
     LOG_ERR("GRM", "Failed to recover Grimmory backup");
+    state = BrowserState::ERROR;
+    error = tr(STR_GRIMMORY_DOWNLOAD_FAILED);
+    requestUpdate();
+    return;
+  }
+  if (!ensureSystemTime()) {
     state = BrowserState::ERROR;
     error = tr(STR_GRIMMORY_DOWNLOAD_FAILED);
     requestUpdate();
