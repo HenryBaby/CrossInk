@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- Restored the downstream Docker firmware builder and contributor instructions, adapted to the current `freeink-sdk` layout and release environments.
+
 ### Fixed
 
 - Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.

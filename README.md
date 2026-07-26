@@ -148,6 +148,8 @@ CrossInk uses PlatformIO for building and flashing firmware.
 
 See [Getting Started](./docs/contributing/getting-started.md) for prerequisites, clone setup, hooks, and validation commands.
 
+To build in a consistent containerized environment, see [Docker Build](./docs/contributing/docker-build.md).
+
 ### Build / flash / monitor
 
 Connect your Xteink X4 or X3 via USB-C and run:

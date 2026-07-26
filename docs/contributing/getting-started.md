@@ -75,6 +75,8 @@ pio run -e default
 
 `pio run` without an environment builds the release variants listed in `platformio.ini`: `tiny` and `xlarge`.
 
+To build without installing PlatformIO on the host, see [Docker Build](./docker-build.md).
+
 ## Flash
 
 ```sh

@@ -1,0 +1,12 @@
+.pio/
+.git/
+freeink-sdk/
+output/
+dist/
+fs_/
+.cache/
+compile_commands.json
+platformio.local.ini
+*.log
+.DS_Store
+Thumbs.db
