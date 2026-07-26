@@ -45,7 +45,7 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
   opts.caCert = GrimmoryTls::kLetsEncryptRoots;
-  opts.transport = HttpDownloader::Transport::WOLFSSL;
+  opts.transport = HttpDownloader::Transport::ESP_HTTP;
   const auto transfer = HttpDownloader::streamUrl(
       url,
       [&response](const uint8_t* d, size_t n) {
@@ -72,7 +72,7 @@ HttpDownloader::DownloadError GrimmoryClient::download(int id, const std::string
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
   opts.caCert = GrimmoryTls::kLetsEncryptRoots;
-  opts.transport = HttpDownloader::Transport::WOLFSSL;
+  opts.transport = HttpDownloader::Transport::ESP_HTTP;
   opts.shouldCancel = std::move(shouldCancel);
   if (!opts.shouldCancel) opts.shouldCancel = [cancel] { return cancel && *cancel; };
   return HttpDownloader::downloadToFile(joinUrl(baseUrl_, "/api/v1/books/" + std::to_string(id) + "/download"), path,

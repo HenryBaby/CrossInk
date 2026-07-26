@@ -361,7 +361,7 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
 
 HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::string& username,
                                             const std::string& password, const std::string& bearerToken, Sink& sink,
-                                            const size_t bufferSize) {
+                                            const size_t bufferSize, const char* caCert) {
   std::string currentUrl = url;
 
   ParsedUrl credentialOrigin;
@@ -381,7 +381,10 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     config.buffer_size = HTTP_RX_BUF;
     config.buffer_size_tx = HTTP_TX_BUF;
     config.timeout_ms = HTTP_TIMEOUT_MS;
-    config.crt_bundle_attach = esp_crt_bundle_attach;
+    if (caCert)
+      config.cert_pem = caCert;
+    else
+      config.crt_bundle_attach = esp_crt_bundle_attach;
     config.keep_alive_enable = false;
     config.event_handler = captureResponseHeaders;
     config.user_data = &responseHeaders;
@@ -564,7 +567,7 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
 #else
   (void)transport;
 #endif
-  return runGetDefault(url, username, password, bearerToken, sink, bufferSize);
+  return runGetDefault(url, username, password, bearerToken, sink, bufferSize, caCert);
 }
 }  // namespace
 
@@ -595,9 +598,11 @@ bool HttpDownloader::postJson(const std::string& url, const std::string& json, s
   config.url = url.c_str();
   config.method = HTTP_METHOD_POST;
   config.timeout_ms = HTTP_TIMEOUT_MS;
-  config.crt_bundle_attach = esp_crt_bundle_attach;
+  if (caCert)
+    config.cert_pem = caCert;
+  else
+    config.crt_bundle_attach = esp_crt_bundle_attach;
   config.keep_alive_enable = false;
-  if (caCert) config.cert_pem = caCert;
   auto* client = esp_http_client_init(&config);
   if (!client) {
     LOG_ERR("HTTP", "POST client init failed");
