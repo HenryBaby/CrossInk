@@ -194,7 +194,7 @@ void setRequestHeaders(esp_http_client_handle_t client, const std::string& usern
     LOG_DBG("HTTP", "Resuming download at byte %zu", resumeOffset);
   }
   if (!bearerToken.empty() && sendAuthorization) {
-    const String header = "Bearer " + bearerToken.c_str();
+    const String header = String("Bearer ") + bearerToken.c_str();
     esp_http_client_set_header(client, "Authorization", header.c_str());
   } else if (sendAuthorization) {
     const std::string credentials = username + ":" + password;

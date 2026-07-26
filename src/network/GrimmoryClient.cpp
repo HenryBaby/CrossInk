@@ -2,8 +2,8 @@
 
 #include <ArduinoJson.h>
 #include <Logging.h>
-#include "Memory.h"
 
+#include "Memory.h"
 #include "network/GrimmoryTls.h"
 #include "network/HttpDownloader.h"
 
@@ -15,7 +15,7 @@ std::string joinUrl(const std::string& base, const std::string& path) {
 }  // namespace
 
 bool GrimmoryClient::login(const std::string& user, const std::string& password) {
-  auto doc = makeUniqueNoThrow<DynamicJsonDocument>(512);
+  auto doc = makeUniqueNoThrow<JsonDocument>();
   if (!doc) {
     LOG_ERR("GRM", "Failed to allocate login JSON document");
     return false;
@@ -24,6 +24,10 @@ bool GrimmoryClient::login(const std::string& user, const std::string& password)
   (*doc)["password"] = password;
   std::string body;
   serializeJson(*doc, body);
+  if (body.size() > 512) {
+    LOG_ERR("GRM", "Login request exceeds JSON size limit");
+    return false;
+  }
   std::string response;
   if (!HttpDownloader::postJson(joinUrl(baseUrl_, "/api/v1/auth/login"), body, response,
                                 Grimmory::kMaxLoginResponseBytes, GrimmoryTls::kIsrgRootX1))
