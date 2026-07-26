@@ -1,6 +1,7 @@
 #pragma once
 #include <ArduinoJson.h>
 #include <PersistableStore.h>
+
 #include <string>
 
 struct GrimmoryConfig {
@@ -18,7 +19,12 @@ class GrimmoryStore : public PersistableStore<GrimmoryStore> {
   bool loadFromFile();
   const GrimmoryConfig& config() const { return config_; }
   bool setConfig(GrimmoryConfig config);
-  bool isConfigured() const { return !config_.baseUrl.empty() && !config_.username.empty() && !config_.password.empty(); }
+  bool removeConfig();
+  bool hasConfig() const { return !config_.baseUrl.empty() || !config_.username.empty() || !config_.password.empty(); }
+  bool isConfigured() const {
+    return !config_.baseUrl.empty() && !config_.username.empty() && !config_.password.empty();
+  }
+
  private:
   GrimmoryStore() = default;
   GrimmoryConfig config_;

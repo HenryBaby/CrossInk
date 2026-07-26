@@ -7,9 +7,15 @@
 #include <utility>
 
 namespace {
-std::string normalizeUrl(std::string url) {
+std::string trimUrl(std::string url) {
   while (!url.empty() && (url.back() == '/' || url.back() == ' ' || url.back() == '\n' || url.back() == '\r'))
     url.pop_back();
+  return url;
+}
+
+std::string normalizeUrl(std::string url) {
+  url = trimUrl(std::move(url));
+  if (url.empty()) return {};
   if (url.rfind("https://", 0) != 0) return {};
   return url;
 }
@@ -43,16 +49,26 @@ bool GrimmoryStore::loadFromFile() {
 }
 
 bool GrimmoryStore::setConfig(GrimmoryConfig config) {
-  config.baseUrl = normalizeUrl(std::move(config.baseUrl));
-  if (config.baseUrl.empty()) {
+  config.baseUrl = trimUrl(std::move(config.baseUrl));
+  if (!config.baseUrl.empty() && config.baseUrl.rfind("https://", 0) != 0) {
     LOG_ERR("GRM", "Rejected Grimmory configuration: HTTPS URL required");
     return false;
   }
   config.downloadFolder = "/Grimmory";
-  config_ = std::move(config);
+  std::swap(config_, config);
   if (!saveToFile()) {
+    std::swap(config_, config);
     LOG_ERR("GRM", "Failed to persist Grimmory configuration");
     return false;
   }
+  return true;
+}
+
+bool GrimmoryStore::removeConfig() {
+  if (Storage.exists(getFilePath()) && !Storage.remove(getFilePath())) {
+    LOG_ERR("GRM", "Failed to remove Grimmory configuration");
+    return false;
+  }
+  config_ = GrimmoryConfig{};
   return true;
 }

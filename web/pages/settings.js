@@ -565,10 +565,22 @@ let allSettings = [];
         '<div class="setting-row"><span class="setting-name">Username</span><span class="setting-control"><input type="text" id="grm-user" maxlength="127" value="' + escapeHtml(c.username || '') + '"></span></div>' +
         '<div class="setting-row"><span class="setting-name">Password</span><span class="setting-control"><input type="password" id="grm-pass" maxlength="127" placeholder="' + (c.hasPassword ? '(unchanged)' : '') + '"></span></div>' +
         '<div class="setting-row"><span class="setting-name">Saved password</span><span class="setting-control"><label><input id="grm-clear" type="checkbox"> Clear saved password</label></span></div>' +
-        '<div class="opds-actions"><button class="btn-small btn-save-server" onclick="saveGrimmory()">Save</button></div>' +
+        '<div class="opds-actions"><button class="btn-small btn-save-server" onclick="saveGrimmory()">Save</button>' +
+        (c.hasConfig ? '<button class="btn-small btn-delete" onclick="deleteGrimmory()">Delete</button>' : '') + '</div>' +
         '</div></div>';
     } catch (e) {
       console.error('Grimmory load error:', e);
+    }
+  }
+  async function deleteGrimmory() {
+    if (!confirm('Delete this Grimmory server?')) return;
+    try {
+      const r = await fetch('/api/grimmory/delete', {method:'POST'});
+      if (!r.ok) throw new Error(await r.text());
+      showMessage('Grimmory server deleted', false);
+      await loadGrimmory();
+    } catch (e) {
+      showMessage('Error: ' + e.message, true);
     }
   }
   async function saveGrimmory() {
@@ -578,6 +590,7 @@ let allSettings = [];
       const r = await fetch('/api/grimmory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
       if (!r.ok) throw new Error(await r.text());
       showMessage('Grimmory saved!', false);
+      await loadGrimmory();
     } catch (e) {
       showMessage('Error: ' + e.message, true);
     }

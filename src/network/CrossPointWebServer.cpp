@@ -302,6 +302,7 @@ void CrossPointWebServer::begin() {
   server->on("/api/opds/delete", HTTP_POST, [this] { handleDeleteOpdsServer(); });
   server->on("/api/grimmory", HTTP_GET, [this] { handleGetGrimmory(); });
   server->on("/api/grimmory", HTTP_POST, [this] { handlePostGrimmory(); });
+  server->on("/api/grimmory/delete", HTTP_POST, [this] { handleDeleteGrimmory(); });
 
   // Wi-Fi credential endpoints
   server->on("/api/wifi", HTTP_GET, [this] { handleGetWifiNetworks(); });
@@ -1566,9 +1567,18 @@ void CrossPointWebServer::handleGetGrimmory() const {
   doc["url"] = c.baseUrl;
   doc["username"] = c.username;
   doc["hasPassword"] = !c.password.empty();
+  doc["hasConfig"] = GRIMMORY_STORE.hasConfig();
   String out;
   serializeJson(doc, out);
   server->send(200, "application/json", out);
+}
+
+void CrossPointWebServer::handleDeleteGrimmory() {
+  if (!GRIMMORY_STORE.removeConfig()) {
+    server->send(500, "text/plain", "Failed to delete Grimmory configuration");
+    return;
+  }
+  server->send(200, "text/plain", "Grimmory configuration deleted");
 }
 
 void CrossPointWebServer::handlePostGrimmory() {
@@ -1592,7 +1602,7 @@ void CrossPointWebServer::handlePostGrimmory() {
     server->send(400, "text/plain", "Field too long");
     return;
   }
-  if (c.baseUrl.rfind("https://", 0) != 0) {
+  if (!c.baseUrl.empty() && c.baseUrl.rfind("https://", 0) != 0) {
     server->send(400, "text/plain", "HTTPS URL required");
     return;
   }

@@ -17,4 +17,5 @@ class GrimmorySettingsActivity final : public Activity {
   bool error = false;
   void editField(size_t index);
   void save();
+  size_t getMenuItemCount() const;
 };
