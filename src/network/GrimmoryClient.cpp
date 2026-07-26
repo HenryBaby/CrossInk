@@ -4,7 +4,6 @@
 #include <Logging.h>
 
 #include "Memory.h"
-#include "network/GrimmoryTls.h"
 #include "network/HttpDownloader.h"
 
 namespace {
@@ -30,7 +29,7 @@ bool GrimmoryClient::login(const std::string& user, const std::string& password)
   }
   std::string response;
   if (!HttpDownloader::postJson(joinUrl(baseUrl_, "/api/v1/auth/login"), body, response,
-                                Grimmory::kMaxLoginResponseBytes, GrimmoryTls::kLetsEncryptRoots))
+                                Grimmory::kMaxLoginResponseBytes))
     return false;
   Grimmory::LoginResult result;
   if (!Grimmory::parseLoginResponse(response, result)) return false;
@@ -44,7 +43,6 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
   const std::string url = joinUrl(baseUrl_, "/api/v1/books/page?sort=addedOn,asc&page=" + std::to_string(page));
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
-  opts.caCert = GrimmoryTls::kLetsEncryptRoots;
   opts.transport = HttpDownloader::Transport::ESP_HTTP;
   const auto transfer = HttpDownloader::streamUrl(
       url,
@@ -71,7 +69,6 @@ HttpDownloader::DownloadError GrimmoryClient::download(int id, const std::string
   if (token_.empty() || id < 0) return HttpDownloader::HTTP_ERROR;
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
-  opts.caCert = GrimmoryTls::kLetsEncryptRoots;
   opts.transport = HttpDownloader::Transport::ESP_HTTP;
   opts.shouldCancel = std::move(shouldCancel);
   if (!opts.shouldCancel) opts.shouldCancel = [cancel] { return cancel && *cancel; };
