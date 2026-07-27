@@ -25,8 +25,8 @@
 
 void ActivityManager::begin() {
   xTaskCreatePinnedToCore(&renderTaskTrampoline, "ActivityManagerRender", 16384,
-                          this,   // Parameters
-                          1,      // Priority
+                          this,               // Parameters
+                          1,                  // Priority
                           &renderTaskHandle,  // Task handle
                           0                   // Pin to core 0 (PRO_CPU)
   );

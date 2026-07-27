@@ -168,9 +168,12 @@ void OpdsParser::appendBounded(std::string& target, const char* value, const siz
     if (safeByteCount > 0) {
       const unsigned char lead = static_cast<unsigned char>(value[safeByteCount - 1]);
       size_t sequenceLength = 1;
-      if ((lead & 0xE0U) == 0xC0U) sequenceLength = 2;
-      else if ((lead & 0xF0U) == 0xE0U) sequenceLength = 3;
-      else if ((lead & 0xF8U) == 0xF0U) sequenceLength = 4;
+      if ((lead & 0xE0U) == 0xC0U)
+        sequenceLength = 2;
+      else if ((lead & 0xF0U) == 0xE0U)
+        sequenceLength = 3;
+      else if ((lead & 0xF8U) == 0xF0U)
+        sequenceLength = 4;
       if (sequenceLength > byteCount - (safeByteCount - 1)) safeByteCount = safeByteCount - 1;
     }
   }
