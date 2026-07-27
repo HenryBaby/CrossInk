@@ -49,7 +49,7 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
     return false;
   }
   size_t responseSize = 0;
-  const std::string url = joinUrl(baseUrl_, "/api/v1/app/books?fileType=%5B%22EPUB%22%5D&sort=addedOn&dir=asc&size=" +
+  const std::string url = joinUrl(baseUrl_, "/api/v1/app/books?fileType=EPUB&sort=addedOn&dir=asc&size=" +
                                                  std::to_string(Grimmory::kPageSize) + "&page=" + std::to_string(page));
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
