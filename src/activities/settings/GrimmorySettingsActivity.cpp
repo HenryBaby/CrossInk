@@ -1,6 +1,7 @@
 #include "GrimmorySettingsActivity.h"
 
 #include "I18n.h"
+#include "OpdsServerStore.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
