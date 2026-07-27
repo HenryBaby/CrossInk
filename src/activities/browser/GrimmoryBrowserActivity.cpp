@@ -19,6 +19,8 @@
 #include "network/HttpDownloader.h"
 
 namespace {
+constexpr int kVisibleRows = 23;
+
 bool ensureSystemTime() {
   static bool syncedThisBoot = false;
   if (syncedThisBoot) return true;
@@ -64,6 +66,8 @@ void GrimmoryBrowserActivity::onEnter() {
   Activity::onEnter();
   sdFontSystem.releaseLoadedFont(renderer);
   state = BrowserState::CHECK_WIFI;
+  books.clear();
+  page = selected = total = 0;
   checkWifi();
 }
 void GrimmoryBrowserActivity::onExit() {
@@ -100,10 +104,27 @@ void GrimmoryBrowserActivity::load() {
   if (!c.listPage(page, books, total)) {
     state = BrowserState::ERROR;
     error = tr(STR_GRIMMORY_LIST_ERROR);
-  } else
+  } else {
     state = BrowserState::BROWSING;
+  }
   requestUpdate();
 }
+
+size_t GrimmoryBrowserActivity::rowCount() const {
+  const size_t pageCount = total == 0 ? 0 : (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize;
+  return books.size() + (page > 0 ? 1 : 0) + (page + 1 < pageCount ? 1 : 0);
+}
+
+bool GrimmoryBrowserActivity::rowIsNavigation(const size_t row) const {
+  return (page > 0 && row == 0) || row >= (page > 0 ? 1 : 0) + books.size();
+}
+
+bool GrimmoryBrowserActivity::rowIsNextPage(const size_t row) const {
+  const size_t pageCount = total == 0 ? 0 : (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize;
+  return page + 1 < pageCount && row == (page > 0 ? 1 : 0) + books.size();
+}
+
+size_t GrimmoryBrowserActivity::rowBookIndex(const size_t row) const { return row - (page > 0 ? 1 : 0); }
 void GrimmoryBrowserActivity::loadPage(size_t requestedPage) {
   const size_t maxPage = total == 0 ? 0 : (total - 1) / Grimmory::kPageSize;
   page = requestedPage > maxPage ? maxPage : requestedPage;
@@ -130,11 +151,12 @@ void GrimmoryBrowserActivity::onWifi(bool connected) {
   }
 }
 void GrimmoryBrowserActivity::download() {
-  if (selected >= books.size()) return;
-  const auto& b = books[selected];
-  const std::string path = GRIMMORY_STORE.config().downloadFolder + "/" + b.filename;
-  const std::string part = path + ".part";
+  if (selected >= rowCount() || rowIsNavigation(selected)) return;
+  const auto& b = books[rowBookIndex(selected)];
+  downloadTitle = b.title;
   const std::string folder = GRIMMORY_STORE.config().downloadFolder;
+  const std::string path = folder == "/" ? "/" + b.filename : folder + "/" + b.filename;
+  const std::string part = path + ".part";
   if (!Storage.exists(folder.c_str()) && !Storage.mkdir(folder.c_str())) {
     LOG_ERR("GRM", "Failed to create Grimmory download folder");
     state = BrowserState::ERROR;
@@ -222,44 +244,92 @@ void GrimmoryBrowserActivity::loop() {
   if (state == BrowserState::DOWNLOADING) return;
   if (state != BrowserState::BROWSING) return;
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-    download();
+    if (selected < rowCount() && rowIsNavigation(selected))
+      loadPage(rowIsNextPage(selected) ? page + 1 : page - 1);
+    else
+      download();
     return;
   }
-  nav.onNextPress([this] {
-    if (!books.empty()) selected = (selected + 1) % books.size();
+  nav.onNextRelease([this] {
+    const size_t count = rowCount();
+    if (count > 0) selected = ButtonNavigator::nextIndex(selected, count);
     requestUpdate();
   });
-  nav.onPreviousPress([this] {
-    if (!books.empty()) selected = (selected + books.size() - 1) % books.size();
+  nav.onPreviousRelease([this] {
+    const size_t count = rowCount();
+    if (count > 0) selected = ButtonNavigator::previousIndex(selected, count);
     requestUpdate();
   });
   nav.onNextContinuous([this] {
-    if (page + 1 < (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize) loadPage(page + 1);
+    const size_t count = rowCount();
+    if (count > 0) {
+      selected = ButtonNavigator::nextPageIndex(selected, count, kVisibleRows);
+      requestUpdate();
+    }
   });
   nav.onPreviousContinuous([this] {
-    if (page > 0) loadPage(page - 1);
+    const size_t count = rowCount();
+    if (count > 0) {
+      selected = ButtonNavigator::previousPageIndex(selected, count, kVisibleRows);
+      requestUpdate();
+    }
   });
 }
 void GrimmoryBrowserActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const auto& m = UITheme::getInstance().getMetrics();
   GUI.drawHeader(renderer, Rect{0, m.topPadding, renderer.getScreenWidth(), m.headerHeight}, tr(STR_GRIMMORY));
-  if (state == BrowserState::ERROR) {
+  if (state == BrowserState::CHECK_WIFI || state == BrowserState::WIFI_SELECTION || state == BrowserState::LOGIN ||
+      state == BrowserState::LOADING) {
+    const char* status = state == BrowserState::CHECK_WIFI ? tr(STR_CHECKING_WIFI)
+                         : state == BrowserState::LOGIN    ? tr(STR_GRIMMORY_LOGIN)
+                                                           : tr(STR_LOADING);
+    renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2, status);
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+  } else if (state == BrowserState::ERROR) {
     GUI.drawPopup(renderer, error.c_str());
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_RETRY), "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state == BrowserState::DOWNLOADING) {
-    char msg[64];
-    snprintf(msg, sizeof(msg), "%s %zu/%zu", tr(STR_DOWNLOADING), downloadDone, downloadTotal);
-    renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2, msg);
+    const int pageWidth = renderer.getScreenWidth();
+    const int pageHeight = renderer.getScreenHeight();
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 40, tr(STR_DOWNLOADING));
+    const auto title = renderer.truncatedText(UI_10_FONT_ID, downloadTitle.c_str(), pageWidth - 40);
+    renderer.drawCenteredText(UI_10_FONT_ID, pageHeight / 2 - 10, title.c_str());
+    if (downloadTotal > 0)
+      GUI.drawProgressBar(renderer, Rect{50, pageHeight / 2 + 20, pageWidth - 100, 20}, downloadDone, downloadTotal);
+    const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), "", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else {
-    GUI.drawList(
-        renderer,
-        Rect{0, m.topPadding + m.headerHeight, renderer.getScreenWidth(), renderer.getScreenHeight() - m.headerHeight},
-        books.size(), (int)selected, [this](int i) { return books[i].title; }, nullptr, nullptr,
-        [this](int i) { return books[i].author; }, true);
-    char pageLabel[48];
-    const size_t pageCount = total == 0 ? 1 : (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize;
-    snprintf(pageLabel, sizeof(pageLabel), "%s %zu/%zu", tr(STR_NEXT_PAGE), page + 1, pageCount);
-    renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() - 16, pageLabel);
+    const char* confirmLabel = selected < rowCount() && rowIsNavigation(selected) ? tr(STR_OPEN) : tr(STR_DOWNLOAD);
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    const size_t count = rowCount();
+    if (count == 0) {
+      renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() / 2, tr(STR_GRIMMORY_NO_BOOKS));
+    } else {
+      const int rowTop = 60;
+      const int rowHeight = 30;
+      const int visibleStart = static_cast<int>(selected / kVisibleRows) * kVisibleRows;
+      renderer.fillRect(0, rowTop + static_cast<int>(selected - visibleStart) * rowHeight - 2,
+                        renderer.getScreenWidth() - 1, rowHeight);
+      for (size_t i = visibleStart; i < count && i < visibleStart + kVisibleRows; ++i) {
+        char text[Grimmory::kMaxTitleBytes + Grimmory::kMaxAuthorBytes + 8];
+        if (rowIsNavigation(i)) {
+          snprintf(text, sizeof(text), "> %s", rowIsNextPage(i) ? tr(STR_GRIMMORY_NEXT) : tr(STR_GRIMMORY_PREV));
+        } else {
+          const auto& book = books[rowBookIndex(i)];
+          if (book.author.empty())
+            snprintf(text, sizeof(text), "%s", book.title.c_str());
+          else
+            snprintf(text, sizeof(text), "%s - %s", book.title.c_str(), book.author.c_str());
+        }
+        const auto item = renderer.truncatedText(UI_10_FONT_ID, text, renderer.getScreenWidth() - 40);
+        renderer.drawText(UI_10_FONT_ID, 20, rowTop + static_cast<int>(i - visibleStart) * rowHeight, item.c_str(),
+                          i != selected);
+      }
+    }
   }
   renderer.displayBuffer();
 }

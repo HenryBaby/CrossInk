@@ -50,7 +50,7 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
   }
   size_t responseSize = 0;
   const std::string url = joinUrl(baseUrl_, "/api/v1/app/books?fileType=EPUB&sort=addedOn&dir=asc&size=" +
-                                                 std::to_string(Grimmory::kPageSize) + "&page=" + std::to_string(page));
+                                                std::to_string(Grimmory::kPageSize) + "&page=" + std::to_string(page));
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
   opts.caCert = GrimmoryTls::kLetsEncryptRoots;
@@ -72,6 +72,8 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
     LOG_ERR("GRM", "Book page response could not be parsed (page=%zu, bytes=%zu)", page, responseSize);
     return false;
   }
+  LOG_DBG("GRM", "Book page loaded: page=%zu bytes=%zu entries=%zu total=%zu", page, responseSize, entries.size(),
+          total);
   return true;
 }
 

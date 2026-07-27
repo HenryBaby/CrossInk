@@ -20,6 +20,7 @@ class GrimmoryBrowserActivity final : public Activity {
   std::vector<Grimmory::BookEntry> books;
   size_t page = 0, selected = 0, total = 0;
   std::string error;
+  std::string downloadTitle;
   bool cancel = false;
   size_t downloadDone = 0, downloadTotal = 0;
   void load();
@@ -27,4 +28,8 @@ class GrimmoryBrowserActivity final : public Activity {
   void checkWifi();
   void onWifi(bool connected);
   void loadPage(size_t requestedPage);
+  size_t rowCount() const;
+  bool rowIsNavigation(size_t row) const;
+  bool rowIsNextPage(size_t row) const;
+  size_t rowBookIndex(size_t row) const;
 };

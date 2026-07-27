@@ -564,6 +564,7 @@ let allSettings = [];
         '<div class="setting-row"><span class="setting-name">URL</span><span class="setting-control"><input type="text" id="grm-url" maxlength="127" value="' + escapeHtml(c.url || '') + '"></span></div>' +
         '<div class="setting-row"><span class="setting-name">Username</span><span class="setting-control"><input type="text" id="grm-user" maxlength="127" value="' + escapeHtml(c.username || '') + '"></span></div>' +
         '<div class="setting-row"><span class="setting-name">Password</span><span class="setting-control"><input type="password" id="grm-pass" maxlength="127" placeholder="' + (c.hasPassword ? '(unchanged)' : '') + '"></span></div>' +
+        '<div class="setting-row"><span class="setting-name">Download Folder</span><span class="setting-control"><input type="text" id="grm-folder" maxlength="127" value="' + escapeHtml(c.downloadFolder || '/Grimmory') + '"></span></div>' +
         '<div class="setting-row"><span class="setting-name">Saved password</span><span class="setting-control"><label><input id="grm-clear" type="checkbox"> Clear saved password</label></span></div>' +
         '<div class="opds-actions"><button class="btn-small btn-save-server" onclick="saveGrimmory()">Save</button>' +
         (c.hasConfig ? '<button class="btn-small btn-delete" onclick="deleteGrimmory()">Delete</button>' : '') + '</div>' +
@@ -584,7 +585,8 @@ let allSettings = [];
     }
   }
   async function saveGrimmory() {
-    const d = {url: document.getElementById('grm-url').value, username: document.getElementById('grm-user').value};
+    const d = {url: document.getElementById('grm-url').value, username: document.getElementById('grm-user').value,
+      downloadFolder: document.getElementById('grm-folder').value};
     const p = document.getElementById('grm-pass').value; if (p || document.getElementById('grm-clear').checked) d.password = p;
     try {
       const r = await fetch('/api/grimmory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});

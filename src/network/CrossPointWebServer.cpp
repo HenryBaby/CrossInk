@@ -1566,6 +1566,7 @@ void CrossPointWebServer::handleGetGrimmory() const {
   const auto& c = GRIMMORY_STORE.config();
   doc["url"] = c.baseUrl;
   doc["username"] = c.username;
+  doc["downloadFolder"] = normalizeOpdsDownloadFolder(c.downloadFolder);
   doc["hasPassword"] = !c.password.empty();
   doc["hasConfig"] = GRIMMORY_STORE.hasConfig();
   String out;
@@ -1601,6 +1602,19 @@ void CrossPointWebServer::handlePostGrimmory() {
   if (c.baseUrl.size() > 127 || c.username.size() > 127) {
     server->send(400, "text/plain", "Field too long");
     return;
+  }
+  if (!doc["downloadFolder"].isNull() && !doc["downloadFolder"].is<const char*>()) {
+    server->send(400, "text/plain", "Invalid download folder");
+    return;
+  }
+  if (doc["downloadFolder"].is<const char*>()) {
+    const std::string folder = doc["downloadFolder"].as<const char*>();
+    const std::string normalizedFolder = normalizeOpdsDownloadFolder(folder);
+    if (folder.size() > 127 || normalizedFolder.size() > 127) {
+      server->send(400, "text/plain", "Download folder too long");
+      return;
+    }
+    c.downloadFolder = normalizedFolder;
   }
   if (!c.baseUrl.empty() && c.baseUrl.rfind("https://", 0) != 0) {
     server->send(400, "text/plain", "HTTPS URL required");

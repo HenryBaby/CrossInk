@@ -6,6 +6,8 @@
 
 #include <utility>
 
+#include "OpdsServerStore.h"
+
 namespace {
 std::string trimUrl(std::string url) {
   while (!url.empty() && (url.back() == '/' || url.back() == ' ' || url.back() == '\n' || url.back() == '\r'))
@@ -25,7 +27,7 @@ void GrimmoryStore::toJson(JsonDocument& doc) const {
   doc["baseUrl"] = normalizeUrl(config_.baseUrl);
   doc["username"] = config_.username;
   doc["password_obf"] = obfuscation::obfuscateToBase64(config_.password);
-  doc["downloadFolder"] = "/Grimmory";
+  doc["downloadFolder"] = normalizeOpdsDownloadFolder(config_.downloadFolder);
 }
 
 bool GrimmoryStore::fromJson(JsonVariantConst doc) {
@@ -34,7 +36,9 @@ bool GrimmoryStore::fromJson(JsonVariantConst doc) {
   parsed.username = doc["username"] | "";
   bool needsResave = false;
   parsed.password = extractPassword(doc, needsResave);
-  parsed.downloadFolder = "/Grimmory";
+  const std::string folder = doc["downloadFolder"] | std::string("/Grimmory");
+  const std::string normalizedFolder = normalizeOpdsDownloadFolder(folder);
+  parsed.downloadFolder = folder.size() <= 127 && normalizedFolder.size() <= 127 ? normalizedFolder : "/Grimmory";
   config_ = std::move(parsed);
   if (needsResave) saveToFile();
   return true;
@@ -54,7 +58,12 @@ bool GrimmoryStore::setConfig(GrimmoryConfig config) {
     LOG_ERR("GRM", "Rejected Grimmory configuration: HTTPS URL required");
     return false;
   }
-  config.downloadFolder = "/Grimmory";
+  const std::string normalizedFolder = normalizeOpdsDownloadFolder(config.downloadFolder);
+  if (config.downloadFolder.size() > 127 || normalizedFolder.size() > 127) {
+    LOG_ERR("GRM", "Rejected Grimmory configuration: download folder too long");
+    return false;
+  }
+  config.downloadFolder = normalizedFolder;
   std::swap(config_, config);
   if (!saveToFile()) {
     std::swap(config_, config);
