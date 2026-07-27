@@ -1,15 +1,27 @@
 ## [Unreleased]
 
-### Added
+## [v1.4.1] - 2026-07-27
 
-- Restored the downstream Docker firmware builder and contributor instructions, adapted to the current `freeink-sdk` layout and release environments.
+### Imported CrossInk development work
 
-### Fixed
+- [`79650f62`](https://github.com/HenryBaby/CrossInk/commit/79650f62) ports selected memory-management and stability improvements from the CrossInk development branch:
+  - [`a73a84d7`](https://github.com/uxjulia/CrossInk/commit/a73a84d789c804d6d564e37cfdedca6ee5e6fb22) — reduce SDK runtime memory reservations.
+  - [`9a6db70f`](https://github.com/uxjulia/CrossInk/commit/9a6db70f7e87f703324369c4e57d8edf57c52a8c) — reduce KOReader Sync TLS memory pressure.
+  - [`9498a24d`](https://github.com/uxjulia/CrossInk/commit/9498a24d30f45f7c71cced78c8ca8bb2ad04650f) — defer EPUB background builds when memory is low.
+  - [`d6617288`](https://github.com/uxjulia/CrossInk/commit/d66172889c0b6da339b869ec81130700374500a6) — reduce OPDS feed memory pressure.
+  - [`2d6ad446`](https://github.com/uxjulia/CrossInk/commit/2d6ad44689576994b374bce096bcc368c5da036b) — preserve short button presses in low-power mode.
+  - [`1d13a44c`](https://github.com/uxjulia/CrossInk/commit/1d13a44cd547a40bf1bad97c7f1bac3e5e23d7fa) — harden watchdog and asynchronous refresh fallbacks.
+  - [`3c941a6a`](https://github.com/uxjulia/CrossInk/commit/3c941a6a949bafd44502726172399bf1610f1cef) — stream the web font catalogue.
+  - [`b701ef17`](https://github.com/uxjulia/CrossInk/commit/b701ef178955feb2b520033464b09280f3b6271f) — avoid duplicate wolfSSL `User-Agent` headers.
+  - [`a02a0d99`](https://github.com/uxjulia/CrossInk/commit/a02a0d99afb26ff3a2c2977246ab47609c7b6188) — reuse SD-card font page buffers.
+  - [`97867951`](https://github.com/uxjulia/CrossInk/commit/9786795125692a02850ef814d107359bd8f342b0) — make EPUB page-element allocations fallible.
+  - [`bcd39796`](https://github.com/uxjulia/CrossInk/commit/bcd39796dfc91c8949cbb1f27cf00b7723b3924d), [`d4d29710`](https://github.com/uxjulia/CrossInk/commit/d4d29710c4c6f7cbe7e9ebefcf3b147208cbba9d), [`23aba785`](https://github.com/uxjulia/CrossInk/commit/23aba785ccbc88f67e5a736b38be91d3e4726903), and [`636126e0`](https://github.com/uxjulia/CrossInk/commit/636126e072a281fc46cc3bdcecbe55a94cb515fc) — reduce memory use and prevent out-of-memory failures while managing SD-card fonts.
+- [`1cfb09a3`](https://github.com/HenryBaby/CrossInk/commit/1cfb09a3) ports [`c5414013`](https://github.com/uxjulia/CrossInk/commit/c5414013c9686f1497c209ab84d0b863046b8bc1) — avoid an Arduino `HEX` macro collision in the streamed font catalogue.
 
-- Docker firmware builds now fail early with actionable output-directory permission guidance instead of compiling before a bind-mount copy error.
-- Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.
-- Reduced KOReader TLS and OPDS memory pressure, made EPUB page elements and font decompression allocations fallible, and avoided duplicate HTTP User-Agent headers.
-- Fixed an Arduino `HEX` macro collision in the web server's JSON string escaping code.
+### Downstream build maintenance
+
+- [`c425fcfb`](https://github.com/HenryBaby/CrossInk/commit/c425fcfb) restores the documented Docker firmware builder.
+- [`703531c3`](https://github.com/HenryBaby/CrossInk/commit/703531c3) checks Docker output-directory permissions before starting a build.
 
 ## [v1.4.0] - 2026-07-10
 
