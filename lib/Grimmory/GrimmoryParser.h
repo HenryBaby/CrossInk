@@ -8,8 +8,11 @@
 namespace Grimmory {
 
 constexpr size_t kMaxLoginResponseBytes = 8192;
-constexpr size_t kMaxPageResponseBytes = 32768;
-constexpr size_t kMaxEntries = 20;
+// Keep the listing small enough that the response and TLS buffers can coexist
+// on the ESP32-C3 heap without triggering geometric std::string growth.
+constexpr size_t kMaxPageResponseBytes = 12288;
+constexpr size_t kPageSize = 5;
+constexpr size_t kMaxEntries = kPageSize;
 constexpr size_t kMaxTitleBytes = 96;
 constexpr size_t kMaxAuthorBytes = 96;
 constexpr size_t kMaxFilenameBytes = 128;

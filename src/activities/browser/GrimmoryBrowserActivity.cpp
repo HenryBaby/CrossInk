@@ -105,7 +105,7 @@ void GrimmoryBrowserActivity::load() {
   requestUpdate();
 }
 void GrimmoryBrowserActivity::loadPage(size_t requestedPage) {
-  const size_t maxPage = total == 0 ? 0 : (total - 1) / 20;
+  const size_t maxPage = total == 0 ? 0 : (total - 1) / Grimmory::kPageSize;
   page = requestedPage > maxPage ? maxPage : requestedPage;
   selected = 0;
   load();
@@ -234,7 +234,7 @@ void GrimmoryBrowserActivity::loop() {
     requestUpdate();
   });
   nav.onNextContinuous([this] {
-    if (page + 1 < (total + 19) / 20) loadPage(page + 1);
+    if (page + 1 < (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize) loadPage(page + 1);
   });
   nav.onPreviousContinuous([this] {
     if (page > 0) loadPage(page - 1);
@@ -257,7 +257,7 @@ void GrimmoryBrowserActivity::render(RenderLock&&) {
         books.size(), (int)selected, [this](int i) { return books[i].title; }, nullptr, nullptr,
         [this](int i) { return books[i].author; }, true);
     char pageLabel[48];
-    const size_t pageCount = total == 0 ? 1 : (total + 19) / 20;
+    const size_t pageCount = total == 0 ? 1 : (total + Grimmory::kPageSize - 1) / Grimmory::kPageSize;
     snprintf(pageLabel, sizeof(pageLabel), "%s %zu/%zu", tr(STR_NEXT_PAGE), page + 1, pageCount);
     renderer.drawCenteredText(UI_10_FONT_ID, renderer.getScreenHeight() - 16, pageLabel);
   }

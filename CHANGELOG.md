@@ -9,6 +9,8 @@
 
 ### Fixed
 
+- Grimmory book listings now request compact, EPUB-only pages to avoid out-of-memory failures on Xteink X4.
+
 - Grimmory now synchronizes the ESP system clock with SNTP before authenticated TLS requests, falling back to an unauthenticated HTTP Date header when UDP time services are blocked.
 - Moved Grimmory transfers to wolfSSL with verified Let's Encrypt X1/Root YR trust and alternate-chain validation for generation-Y servers.
 - Docker firmware builds now fail early with actionable output-directory permission guidance instead of compiling before a bind-mount copy error.

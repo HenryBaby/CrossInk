@@ -3,6 +3,8 @@
 #include <ArduinoJson.h>
 #include <Logging.h>
 
+#include <cstring>
+
 #include "Memory.h"
 #include "network/GrimmoryTls.h"
 #include "network/HttpDownloader.h"
@@ -41,17 +43,24 @@ bool GrimmoryClient::login(const std::string& user, const std::string& password)
 
 bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& entries, size_t& total) {
   if (token_.empty() || page > 100000) return false;
-  std::string response;
-  const std::string url = joinUrl(baseUrl_, "/api/v1/books/page?sort=addedOn,asc&page=" + std::to_string(page));
+  auto response = makeUniqueNoThrow<char[]>(Grimmory::kMaxPageResponseBytes + 1);
+  if (!response) {
+    LOG_ERR("GRM", "Failed to allocate book page response buffer");
+    return false;
+  }
+  size_t responseSize = 0;
+  const std::string url = joinUrl(baseUrl_, "/api/v1/app/books?fileType=%5B%22EPUB%22%5D&sort=addedOn&dir=asc&size=" +
+                                                 std::to_string(Grimmory::kPageSize) + "&page=" + std::to_string(page));
   HttpDownloader::DownloadOptions opts;
   opts.bearerToken = token_;
   opts.caCert = GrimmoryTls::kLetsEncryptRoots;
   opts.transport = HttpDownloader::Transport::WOLFSSL;
   const auto transfer = HttpDownloader::streamUrl(
       url,
-      [&response](const uint8_t* d, size_t n) {
-        if (response.size() + n > Grimmory::kMaxPageResponseBytes) return false;
-        response.append(reinterpret_cast<const char*>(d), n);
+      [&response, &responseSize](const uint8_t* d, size_t n) {
+        if (n > Grimmory::kMaxPageResponseBytes - responseSize) return false;
+        memcpy(response.get() + responseSize, d, n);
+        responseSize += n;
         return true;
       },
       nullptr, "", "", opts);
@@ -59,8 +68,8 @@ bool GrimmoryClient::listPage(size_t page, std::vector<Grimmory::BookEntry>& ent
     LOG_ERR("GRM", "Book page request failed (page=%zu, error=%d)", page, static_cast<int>(transfer));
     return false;
   }
-  if (!Grimmory::parsePageResponse(response, entries, total)) {
-    LOG_ERR("GRM", "Book page response could not be parsed (page=%zu, bytes=%zu)", page, response.size());
+  if (!Grimmory::parsePageResponse(std::string_view(response.get(), responseSize), entries, total)) {
+    LOG_ERR("GRM", "Book page response could not be parsed (page=%zu, bytes=%zu)", page, responseSize);
     return false;
   }
   return true;

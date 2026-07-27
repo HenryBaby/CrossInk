@@ -24,6 +24,17 @@ TEST(GrimmoryParser, ParsesEpubEntriesAndTitleFallback) {
   EXPECT_EQ(entries[1].filename, "Third.epub");
 }
 
+TEST(GrimmoryParser, ParsesCompactAppBooksAndRejectsNonEpub) {
+  const std::string json = R"({"content":[{"id":7,"title":"Compact","authors":["Ada"],"primaryFileName":"compact.epub","primaryFileType":"EPUB"},{"id":8,"title":"PDF","authors":["Bob"],"primaryFileName":"x.pdf","primaryFileType":"PDF"}],"totalElements":2})";
+  std::vector<Grimmory::BookEntry> entries;
+  size_t total = 0;
+  ASSERT_TRUE(Grimmory::parsePageResponse(json, entries, total));
+  ASSERT_EQ(entries.size(), 1u);
+  EXPECT_EQ(entries[0].id, 7);
+  EXPECT_EQ(entries[0].author, "Ada");
+  EXPECT_EQ(total, 2u);
+}
+
 TEST(GrimmoryParser, BoundsEntries) {
   std::string json = R"({"content":[)";
   for (size_t i = 0; i < 25; ++i) {

@@ -18,6 +18,7 @@ bool stringField(std::string_view obj, std::string_view key, size_t cap, std::st
   if (i >= obj.size() || obj[i] != '"') return false;
   ++i;
   std::string value;
+  value.reserve(cap + 1);
   while (i < obj.size()) {
     char c = obj[i++];
     if (c == '"') {
@@ -45,6 +46,7 @@ bool firstStringArrayValue(std::string_view obj, std::string_view key, size_t ca
   if (i >= obj.size() || obj[i] != '"') return false;
   ++i;
   std::string value;
+  value.reserve(cap + 1);
   while (i < obj.size()) {
     char c = obj[i++];
     if (c == '"') {
@@ -138,39 +140,50 @@ bool parsePageResponse(const std::string_view json, std::vector<BookEntry>& entr
     if (!objectAt(json, i, end)) return false;
     BookEntry book;
     if (intField(json.substr(i, end - i), "id", book.id)) {
-      std::string metadata;
-      const auto m = json.substr(i, end - i).find("\"metadata\"");
-      if (m != std::string_view::npos) {
-        size_t mo = json.substr(i, end - i).find('{', m);
-        size_t me = 0;
-        if (mo != std::string_view::npos && objectAt(json.substr(i, end - i), mo, me))
-          metadata.assign(json.substr(i + mo, me - mo));
-      }
       const auto obj = json.substr(i, end - i);
-      if (metadata.empty() || !stringField(metadata, "title", kMaxTitleBytes, book.title)) book.title.clear();
-      if (!metadata.empty() && !firstStringArrayValue(metadata, "authors", kMaxAuthorBytes, book.author))
-        stringField(metadata, "author", kMaxAuthorBytes, book.author);
-      const auto pf = obj.find("\"primaryFile\"");
-      bool hasPrimaryFilename = false;
-      if (pf != std::string_view::npos) {
-        const auto colon = obj.find(':', pf);
-        size_t valueStart = colon == std::string_view::npos ? obj.size() : colon + 1;
-        while (valueStart < obj.size() && std::isspace(static_cast<unsigned char>(obj[valueStart]))) ++valueStart;
-        size_t fe = 0;
-        if (valueStart < obj.size() && obj[valueStart] == '{' && objectAt(obj, valueStart, fe)) {
-          hasPrimaryFilename =
-              stringField(obj.substr(valueStart, fe - valueStart), "fileName", kMaxFilenameBytes, book.filename) &&
-              !book.filename.empty();
+      // The compact /api/v1/app/books representation puts these fields on the
+      // book itself. Keep the legacy metadata/primaryFile shape as a fallback.
+      bool gotTitle = stringField(obj, "title", kMaxTitleBytes, book.title);
+      bool gotAuthor = firstStringArrayValue(obj, "authors", kMaxAuthorBytes, book.author);
+      bool gotFilename = stringField(obj, "primaryFileName", kMaxFilenameBytes, book.filename);
+      std::string fileType;
+      const bool gotFileType = stringField(obj, "primaryFileType", 16, fileType);
+      if (!gotFilename) {
+        const auto m = obj.find("\"metadata\"");
+        size_t mo = m == std::string_view::npos ? std::string_view::npos : obj.find('{', m);
+        size_t me = 0;
+        if (mo != std::string_view::npos && objectAt(obj, mo, me)) {
+          const auto metadata = obj.substr(mo, me - mo);
+          gotTitle = stringField(metadata, "title", kMaxTitleBytes, book.title);
+          gotAuthor = firstStringArrayValue(metadata, "authors", kMaxAuthorBytes, book.author) ||
+                      stringField(metadata, "author", kMaxAuthorBytes, book.author);
         }
       }
-      // Grimmory can expose non-EPUB primary files.  Download-only v1 must
-      // never offer those; when a filename is absent, derive a safe name from
-      // the title instead.
-      if (hasPrimaryFilename && !hasEpubExtension(book.filename)) {
+      if (!gotFilename) {
+        const auto pf = obj.find("\"primaryFile\"");
+        if (pf != std::string_view::npos) {
+          const auto colon = obj.find(':', pf);
+          size_t valueStart = colon == std::string_view::npos ? obj.size() : colon + 1;
+          while (valueStart < obj.size() && std::isspace(static_cast<unsigned char>(obj[valueStart]))) ++valueStart;
+          size_t fe = 0;
+          if (valueStart < obj.size() && obj[valueStart] == '{' && objectAt(obj, valueStart, fe))
+            gotFilename = stringField(obj.substr(valueStart, fe - valueStart), "fileName", kMaxFilenameBytes,
+                                      book.filename);
+        }
+      }
+      // Download-only listing must never expose non-EPUB files.
+      if (gotFileType && (fileType.size() != 4 || std::toupper(static_cast<unsigned char>(fileType[0])) != 'E' ||
+                          std::toupper(static_cast<unsigned char>(fileType[1])) != 'P' ||
+                          std::toupper(static_cast<unsigned char>(fileType[2])) != 'U' ||
+                          std::toupper(static_cast<unsigned char>(fileType[3])) != 'B')) {
         i = end;
         continue;
       }
-      if (!hasPrimaryFilename && !book.title.empty()) book.filename = book.title + ".epub";
+      if (gotFilename && !hasEpubExtension(book.filename)) {
+        i = end;
+        continue;
+      }
+      if (!gotFilename && gotTitle && !book.title.empty()) book.filename = book.title + ".epub";
       book.filename = sanitizeEpubFilename(book.filename);
       if (!book.title.empty() && !book.filename.empty() && parsed.size() < kMaxEntries)
         parsed.push_back(std::move(book));
