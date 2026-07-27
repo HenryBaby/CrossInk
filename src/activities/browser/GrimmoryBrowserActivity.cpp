@@ -1,6 +1,7 @@
 #include "GrimmoryBrowserActivity.h"
 
 #include <esp_sntp.h>
+#include <sys/time.h>
 
 #include <ctime>
 
@@ -15,6 +16,7 @@
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "network/GrimmoryClient.h"
+#include "network/HttpDownloader.h"
 
 namespace {
 bool ensureSystemTime() {
@@ -39,10 +41,22 @@ bool ensureSystemTime() {
   if (synced) {
     syncedThisBoot = true;
     LOG_INF("GRM", "NTP time synced");
-  } else {
-    LOG_ERR("GRM", "NTP sync failed; refusing authenticated request");
+    return true;
   }
-  return synced;
+
+  std::time_t httpTime = 0;
+  if (HttpDownloader::fetchHttpDate(GRIMMORY_STORE.config().baseUrl, httpTime) && httpTime >= kPlausibleEpoch) {
+    timeval networkTime{httpTime, 0};
+    if (settimeofday(&networkTime, nullptr) != 0) {
+      LOG_ERR("GRM", "HTTP Date fallback settimeofday failed");
+      return false;
+    }
+    syncedThisBoot = true;
+    LOG_ERR("GRM", "NTP unavailable; using unauthenticated HTTP Date fallback");
+    return true;
+  }
+  LOG_ERR("GRM", "NTP sync and HTTP Date fallback failed");
+  return false;
 }
 }  // namespace
 

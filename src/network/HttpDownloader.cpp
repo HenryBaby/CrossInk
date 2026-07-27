@@ -12,7 +12,9 @@
 #include <esp_http_client.h>
 #include <strings.h>
 
+#include <cctype>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <string>
 #include <utility>
@@ -90,10 +92,23 @@ bool parseUrl(const std::string& url, ParsedUrl& out) {
       url.substr(hostStart, pathStart == std::string::npos ? std::string::npos : pathStart - hostStart);
   out.path = pathStart == std::string::npos ? "/" : url.substr(pathStart);
   out.port = out.https ? 443 : 80;
+  out.host.clear();
 
-  const size_t portSep = hostPort.rfind(':');
+  size_t portSep = std::string::npos;
+  if (!hostPort.empty() && hostPort.front() == '[') {
+    const size_t close = hostPort.find(']');
+    if (close == std::string::npos || close == 1) return false;
+    out.host = hostPort.substr(1, close - 1);
+    if (close + 1 < hostPort.size()) {
+      if (hostPort[close + 1] != ':') return false;
+      portSep = close + 1;
+    }
+  } else {
+    if (hostPort.find(':') != hostPort.rfind(':')) return false;
+    portSep = hostPort.rfind(':');
+  }
   if (portSep != std::string::npos) {
-    out.host = hostPort.substr(0, portSep);
+    if (out.host.empty()) out.host = hostPort.substr(0, portSep);
     const std::string portText = hostPort.substr(portSep + 1);
     if (portText.empty()) return false;
     uint32_t parsedPort = 0;
@@ -105,10 +120,52 @@ bool parseUrl(const std::string& url, ParsedUrl& out) {
     if (parsedPort == 0) return false;
     out.port = static_cast<uint16_t>(parsedPort);
   } else {
-    out.host = hostPort;
+    if (out.host.empty()) out.host = hostPort;
   }
 
   return !out.host.empty() && !out.path.empty();
+}
+
+struct DateHeader {
+  char value[30] = {};
+};
+
+esp_err_t captureDateHeader(esp_http_client_event_t* evt) {
+  auto* date = static_cast<DateHeader*>(evt->user_data);
+  if (evt->event_id == HTTP_EVENT_ON_HEADER && date != nullptr && evt->header_key != nullptr &&
+      evt->header_value != nullptr && strcasecmp(evt->header_key, "Date") == 0) {
+    const size_t length = std::strlen(evt->header_value);
+    if (length == sizeof(date->value) - 1) std::memcpy(date->value, evt->header_value, sizeof(date->value));
+  }
+  return ESP_OK;
+}
+
+bool parseUnsigned(const char* text, size_t len, int& value) {
+  if (len == 0 || len > 4) return false;
+  int result = 0;
+  for (size_t i = 0; i < len; ++i) {
+    if (!std::isdigit(static_cast<unsigned char>(text[i]))) return false;
+    result = result * 10 + text[i] - '0';
+  }
+  value = result;
+  return true;
+}
+
+int monthNumber(const char* month) {
+  static constexpr const char* names[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  for (int i = 0; i < 12; ++i)
+    if (std::strncmp(month, names[i], 3) == 0) return i + 1;
+  return 0;
+}
+
+std::time_t daysFromCivil(int year, unsigned month, unsigned day) {
+  year -= month <= 2;
+  const int era = (year >= 0 ? year : year - 399) / 400;
+  const unsigned yoe = static_cast<unsigned>(year - era * 400);
+  const unsigned doy = (153 * (month + (month > 2 ? -3 : 9)) + 2) / 5 + day - 1;
+  const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return static_cast<std::time_t>(era * 146097 + static_cast<int>(doe) - 719468) * 86400;
 }
 
 bool sameOrigin(const ParsedUrl& a, const ParsedUrl& b) {
@@ -570,6 +627,69 @@ HttpDownloader::DownloadError runGet(const std::string& url, const std::string& 
   return runGetDefault(url, username, password, bearerToken, sink, bufferSize, caCert);
 }
 }  // namespace
+
+bool HttpDownloader::parseHttpDate(const std::string& value, std::time_t& outTime) {
+  if (value.size() != 29 || value[3] != ',' || value[4] != ' ' || value[7] != ' ' || value[11] != ' ' ||
+      value[16] != ' ' || value[19] != ':' || value[22] != ':' || value[25] != ' ' || value.substr(26) != "GMT")
+    return false;
+  static constexpr const char* weekdays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+  bool validWeekday = false;
+  for (const char* weekday : weekdays) {
+    if (value.compare(0, 3, weekday) == 0) {
+      validWeekday = true;
+      break;
+    }
+  }
+  if (!validWeekday) return false;
+  int day = 0, year = 0, hour = 0, minute = 0, second = 0;
+  if (!parseUnsigned(value.c_str() + 5, 2, day) || !parseUnsigned(value.c_str() + 12, 4, year) ||
+      !parseUnsigned(value.c_str() + 17, 2, hour) || !parseUnsigned(value.c_str() + 20, 2, minute) ||
+      !parseUnsigned(value.c_str() + 23, 2, second) || monthNumber(value.c_str() + 8) == 0 || day < 1 || day > 31 ||
+      hour > 23 || minute > 59 || second > 59 || year < 1970)
+    return false;
+  const int month = monthNumber(value.c_str() + 8);
+  static constexpr int daysPerMonth[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  const bool leapYear = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+  const int maxDay = month == 2 && leapYear ? 29 : daysPerMonth[month - 1];
+  if (day > maxDay) return false;
+  outTime = daysFromCivil(year, static_cast<unsigned>(month), static_cast<unsigned>(day)) + hour * 3600 + minute * 60 +
+            second;
+  return outTime > 0;
+}
+
+bool HttpDownloader::fetchHttpDate(const std::string& url, std::time_t& outTime) {
+  ParsedUrl parsed;
+  if (!parseUrl(url, parsed)) return false;
+  std::string httpUrl = "http://";
+  if (parsed.host.find(':') != std::string::npos)
+    httpUrl += "[" + parsed.host + "]";
+  else
+    httpUrl += parsed.host;
+  httpUrl += "/";
+
+  DateHeader date;
+  esp_http_client_config_t config = {};
+  config.url = httpUrl.c_str();
+  config.buffer_size = 512;
+  config.buffer_size_tx = 256;
+  config.timeout_ms = 5000;
+  config.keep_alive_enable = false;
+  config.disable_auto_redirect = true;
+  config.event_handler = captureDateHeader;
+  config.user_data = &date;
+  esp_http_client_handle_t client = esp_http_client_init(&config);
+  if (!client) return false;
+  const esp_err_t openResult = esp_http_client_open(client, 0);
+  if (openResult != ESP_OK) {
+    esp_http_client_cleanup(client);
+    return false;
+  }
+  const int64_t headers = esp_http_client_fetch_headers(client);
+  const int status = esp_http_client_get_status_code(client);
+  esp_http_client_cleanup(client);
+  if (headers < 0 || status < 100 || status >= 600 || date.value[0] == '\0') return false;
+  return parseHttpDate(date.value, outTime);
+}
 
 bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent, const std::string& username,
                               const std::string& password) {
