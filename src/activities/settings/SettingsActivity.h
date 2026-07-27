@@ -21,7 +21,6 @@ enum class SettingAction {
   CustomiseStatusBar,
   KOReaderSync,
   OPDSBrowser,
-  Grimmory,
   DisplaySleepScreen,
   ReaderFontOptions,
   ReaderPageLayout,

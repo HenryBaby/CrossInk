@@ -11,10 +11,6 @@
 
 Everything below describes upstream CrossInk.
 
-### Grimmory downloads
-
-Configure Grimmory under Settings with the server URL and credentials, then choose **Open Grimmory**. Books are downloaded as EPUB files into `/Grimmory`; downloads use temporary `.part` files and are only renamed after a successful transfer.
-
 ## What's different in this fork
 
 My goal with this fork was to maintain the core Crosspoint firmware while integrating my preferred typography and some lightweight reading statistics. I’ve focused on keeping the underlying system stable while layering in a few "nice-to-have" features and UI refinements along the way.

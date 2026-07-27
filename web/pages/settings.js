@@ -554,50 +554,5 @@ let allSettings = [];
     }
   }
 
-  async function loadGrimmory() {
-    try {
-      const r = await fetch('/api/grimmory');
-      if (!r.ok) throw new Error(await r.text());
-      const c = await r.json();
-      document.getElementById('grimmory-container').innerHTML = '<div class="card"><h2>Grimmory</h2>' +
-        '<div class="opds-server" id="grimmory-server">' +
-        '<div class="setting-row"><span class="setting-name">URL</span><span class="setting-control"><input type="text" id="grm-url" maxlength="127" value="' + escapeHtml(c.url || '') + '"></span></div>' +
-        '<div class="setting-row"><span class="setting-name">Username</span><span class="setting-control"><input type="text" id="grm-user" maxlength="127" value="' + escapeHtml(c.username || '') + '"></span></div>' +
-        '<div class="setting-row"><span class="setting-name">Password</span><span class="setting-control"><input type="password" id="grm-pass" maxlength="127" placeholder="' + (c.hasPassword ? '(unchanged)' : '') + '"></span></div>' +
-        '<div class="setting-row"><span class="setting-name">Download Folder</span><span class="setting-control"><input type="text" id="grm-folder" maxlength="127" value="' + escapeHtml(c.downloadFolder || '/Grimmory') + '"></span></div>' +
-        '<div class="setting-row"><span class="setting-name">Saved password</span><span class="setting-control"><label><input id="grm-clear" type="checkbox"> Clear saved password</label></span></div>' +
-        '<div class="opds-actions"><button class="btn-small btn-save-server" onclick="saveGrimmory()">Save</button>' +
-        (c.hasConfig ? '<button class="btn-small btn-delete" onclick="deleteGrimmory()">Delete</button>' : '') + '</div>' +
-        '</div></div>';
-    } catch (e) {
-      console.error('Grimmory load error:', e);
-    }
-  }
-  async function deleteGrimmory() {
-    if (!confirm('Delete this Grimmory server?')) return;
-    try {
-      const r = await fetch('/api/grimmory/delete', {method:'POST'});
-      if (!r.ok) throw new Error(await r.text());
-      showMessage('Grimmory server deleted', false);
-      await loadGrimmory();
-    } catch (e) {
-      showMessage('Error: ' + e.message, true);
-    }
-  }
-  async function saveGrimmory() {
-    const d = {url: document.getElementById('grm-url').value, username: document.getElementById('grm-user').value,
-      downloadFolder: document.getElementById('grm-folder').value};
-    const p = document.getElementById('grm-pass').value; if (p || document.getElementById('grm-clear').checked) d.password = p;
-    try {
-      const r = await fetch('/api/grimmory', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(d)});
-      if (!r.ok) throw new Error(await r.text());
-      showMessage('Grimmory saved!', false);
-      await loadGrimmory();
-    } catch (e) {
-      showMessage('Error: ' + e.message, true);
-    }
-  }
-
   loadWifiNetworks();
   loadOpdsServers();
-  loadGrimmory();

@@ -21,8 +21,6 @@
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
-#include "settings/GrimmorySettingsActivity.h"
-#include "browser/GrimmoryBrowserActivity.h"
 #include "util/FullScreenMessageActivity.h"
 
 void ActivityManager::begin() {
@@ -210,8 +208,6 @@ void ActivityManager::goToNearbyStatsSync() {
 }
 
 void ActivityManager::goToSettings() { replaceActivity(std::make_unique<SettingsActivity>(renderer, mappedInput)); }
-void ActivityManager::goToGrimmorySettings() { replaceActivity(std::make_unique<GrimmorySettingsActivity>(renderer, mappedInput)); }
-void ActivityManager::goToGrimmoryBrowser() { replaceActivity(std::make_unique<GrimmoryBrowserActivity>(renderer, mappedInput)); }
 
 void ActivityManager::goToFileBrowser(std::string path) {
   replaceActivity(std::make_unique<FileBrowserActivity>(renderer, mappedInput, std::move(path)));

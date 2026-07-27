@@ -2,19 +2,10 @@
 
 ### Added
 
-- Refined the Grimmory browser with OPDS-style rows, visible previous/next page navigation, and progress-aware downloads.
-- Grimmory download integration: configure one server in Settings, browse EPUBs, and download them to the SD card.
-- Grimmory is now available from the Home menu when configured, with OPDS-consistent WebUI and on-device settings.
-- Grimmory server settings can be explicitly deleted without removing downloaded books.
-- Grimmory downloads now support a configurable, normalized download folder in device settings and WebUI.
 - Restored the downstream Docker firmware builder and contributor instructions, adapted to the current `freeink-sdk` layout and release environments.
 
 ### Fixed
 
-- Grimmory book listings now request compact, EPUB-only pages to avoid out-of-memory failures on Xteink X4.
-
-- Grimmory now synchronizes the ESP system clock with SNTP before authenticated TLS requests, falling back to an unauthenticated HTTP Date header when UDP time services are blocked.
-- Moved Grimmory transfers to wolfSSL with verified Let's Encrypt X1/Root YR trust and alternate-chain validation for generation-Y servers.
 - Docker firmware builds now fail early with actionable output-directory permission guidance instead of compiling before a bind-mount copy error.
 - Hardened watchdog and refresh fallbacks, low-memory EPUB layout, SD-font/page allocations, font management, OPDS parsing, and low-power button polling.
 - Reduced KOReader TLS and OPDS memory pressure, made EPUB page elements and font decompression allocations fallible, and avoided duplicate HTTP User-Agent headers.

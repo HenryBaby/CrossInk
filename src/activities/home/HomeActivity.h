@@ -32,7 +32,6 @@ class HomeActivity final : public Activity {
   bool hasBookmarks = false;
   bool hasClippings = false;
   bool hasOpdsServers = false;
-  bool hasGrimmory = false;
   bool minimalMenuOpen = false;
   bool minimalSuppressInitialFrontRelease = false;
   bool homeBookSwapLongPressHandled = false;
@@ -75,7 +74,6 @@ class HomeActivity final : public Activity {
   void onSettingsOpen();
   void onFileTransferOpen();
   void onOpdsBrowserOpen();
-  void onGrimmoryBrowserOpen();
   void onReadingStatsOpen();
   void onSavedItemsOpen();
 

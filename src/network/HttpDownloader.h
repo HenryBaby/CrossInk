@@ -2,7 +2,6 @@
 #include <HalStorage.h>
 #include <Stream.h>
 
-#include <ctime>
 #include <functional>
 #include <string>
 #include <utility>
@@ -50,9 +49,6 @@ class HttpDownloader {
     Transport transport;
     // Optional output populated from the final response's Content-Disposition header.
     std::string* responseFilename;
-    // Optional bearer token. It is sent only to the original URL origin.
-    std::string bearerToken;
-    const char* caCert = nullptr;
   };
 
   /**
@@ -60,12 +56,6 @@ class HttpDownloader {
    */
   static bool fetchUrl(const std::string& url, std::string& outContent, const std::string& username = "",
                        const std::string& password = "");
-  static bool postJson(const std::string& url, const std::string& json, std::string& outContent, size_t maxBytes = 8192,
-                       const char* caCert = nullptr, Transport transport = Transport::ESP_HTTP);
-
-  // Fetch an unauthenticated HTTP Date header without following redirects.
-  static bool fetchHttpDate(const std::string& url, std::time_t& outTime);
-  static bool parseHttpDate(const std::string& value, std::time_t& outTime);
 
   static bool fetchUrl(const std::string& url, Stream& stream, const std::string& username = "",
                        const std::string& password = "");
