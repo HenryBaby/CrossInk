@@ -17,6 +17,7 @@ void HalDisplay::begin(bool seamless) {
 
   // Set X3-specific panel mode before initializing.
   if (gpio.deviceIsX3()) {
+    // The SDK keeps a previously selected UC8279 sibling profile intact.
     einkDisplay.setDisplayX3();
   }
 

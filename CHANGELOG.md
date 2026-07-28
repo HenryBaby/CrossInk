@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- Updated the upstream FreeInk SDK and Xteink integration to use its canonical X3/X4 and UC8253/UC8279 detection, selecting the exact X3 display profile before SPI initialization.
+
 ## [v1.4.1] - 2026-07-27
 
 ### Imported CrossInk development work
