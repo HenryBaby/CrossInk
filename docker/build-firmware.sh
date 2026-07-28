@@ -13,10 +13,13 @@ fi
 
 git config --global --add safe.directory "$project_dir"
 
-# The current PlatformIO configuration links libraries from freeink-sdk.
-if [[ ! -d freeink-sdk/libs ]]; then
-  git submodule update --init --recursive
-fi
+# PlatformIO links libraries directly from freeink-sdk. Pulling a new CrossInk
+# revision updates the recorded gitlink but does not automatically move an
+# existing submodule checkout, which can leave headers and application code on
+# incompatible SDK revisions. Synchronize to the exact recorded commit before
+# every build. Git refuses the checkout if the submodule has conflicting local
+# changes, preserving them instead of silently overwriting them.
+git submodule update --init --recursive
 
 mkdir -p "$output_dir"
 

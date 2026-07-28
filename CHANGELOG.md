@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Docker firmware builds now synchronize the FreeInk SDK submodule to the revision recorded by CrossInk before compiling, preventing stale SDK API errors after switching or pulling branches.
+
 ### Changed
 
 - Updated the upstream FreeInk SDK and Xteink integration to use its canonical X3/X4 and UC8253/UC8279 detection, selecting the exact X3 display profile before SPI initialization.
