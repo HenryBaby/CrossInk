@@ -1,12 +1,21 @@
 ## [Unreleased]
 
-### Fixed
+## [v1.4.2] - 2026-07-28
 
-- Docker firmware builds now synchronize the FreeInk SDK submodule to the revision recorded by CrossInk before compiling, preventing stale SDK API errors after switching or pulling branches.
+### Updated FreeInk SDK integration
 
-### Changed
+- [`0f83d454`](https://github.com/HenryBaby/CrossInk/commit/0f83d454) updates the FreeInk SDK from [`4350bc7a`](https://github.com/Free-Ink/freeink-sdk/commit/4350bc7a0e1fa7ff52c0cf7671b535d55a939535) to [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca). The complete upstream SDK changes are available in the [revision comparison](https://github.com/Free-Ink/freeink-sdk/compare/4350bc7a0e1fa7ff52c0cf7671b535d55a939535...ae68356de994a536dd6c45615a42ea485b3dddca).
+- Relevant upstream FreeInk SDK changes incorporated by that update:
+  - [`35a96df1`](https://github.com/Free-Ink/freeink-sdk/commit/35a96df1d0fcb7ae491bdd487a080097f7354832) — fix SD-card SPI pin fallback on shared buses.
+  - [`c188c9e2`](https://github.com/Free-Ink/freeink-sdk/commit/c188c9e25304131293cbcc96b2ee92760486c05c) — add IMU sleep and wake handling.
+  - [`7479aefc`](https://github.com/Free-Ink/freeink-sdk/commit/7479aefc25b8bcc34840671b439bc369265bc76a) and [`d6781be0`](https://github.com/Free-Ink/freeink-sdk/commit/d6781be0ebb75897bf8a78a11bf0ec5360587a80) — improve secondary-framebuffer ownership and prevent dual-buffer use-after-free errors.
+  - [`c3480a02`](https://github.com/Free-Ink/freeink-sdk/commit/c3480a0213b10593976065120da32b06608654c1) — add canonical X3/X4 hardware detection.
+  - [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca) — add support for X3 devices using the UC8279 display controller.
+- CrossInk now detects X3 versus X4 and selects the appropriate UC8253 or UC8279 X3 display profile before SPI initialization.
 
-- Updated the upstream FreeInk SDK and Xteink integration to use its canonical X3/X4 and UC8253/UC8279 detection, selecting the exact X3 display profile before SPI initialization.
+### Downstream build maintenance
+
+- [`db733a80`](https://github.com/HenryBaby/CrossInk/commit/db733a80) synchronizes the FreeInk SDK submodule to the revision recorded by CrossInk before Docker firmware builds, preventing stale SDK API errors after switching or pulling branches.
 
 ## [v1.4.1] - 2026-07-27
 
