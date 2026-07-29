@@ -1,13 +1,18 @@
 ## [Unreleased]
 
-### Added
-
-- Replaced the upstream waterdrop boot and logo sleep-screen artwork with this downstream fork's Crossfish artwork.
+## [v1.4.3] - 2026-07-29
 
 ### Updated FreeInk SDK integration
 
-- Advances the [`freeink-sdk`](https://github.com/Free-Ink/freeink-sdk) submodule to [`92303ba5`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba5e4d4f762bb2f9126a3e31c303d66eb28), the upstream v1.4.0.1 display-controller update. CrossInk now honors OEM `hw_calib/screenType` data and uses the SDK's board-independent controller resolution, with UC8279 (X3) and UC8179 (X4) bus-probe fallback before SPI initialization.
-- Ports the upstream [CrossInk v1.4.0.1 release changes](https://github.com/uxjulia/CrossInk/commit/ae612f6f1636a36ddc6a343e8c8cbb95155fd8cc), including EXT1 deep-sleep wake recognition and corrected board power-latch/profile selection while preserving `FORCE_DEVICE_X3`.
+- [`0777fa62`](https://github.com/HenryBaby/CrossInk/commit/0777fa62) ports the display-controller support released in [`uxjulia/CrossInk` v1.4.0.1](https://github.com/uxjulia/CrossInk/releases/tag/v1.4.0.1), based on upstream commit [`ae612f6f`](https://github.com/uxjulia/CrossInk/commit/ae612f6f1636a36ddc6a343e8c8cbb95155fd8cc).
+- The FreeInk SDK advances from [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca) to [`92303ba5`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba5e4d4f762bb2f9126a3e31c303d66eb28). The complete upstream SDK changes are available in the [revision comparison](https://github.com/Free-Ink/freeink-sdk/compare/ae68356de994a536dd6c45615a42ea485b3dddca...92303ba5e4d4f762bb2f9126a3e31c303d66eb28).
+- Relevant upstream FreeInk SDK changes incorporated by that update:
+  - [`66fd305`](https://github.com/Free-Ink/freeink-sdk/commit/66fd305) — add the UC8179 display driver used by newer X4 panels.
+  - [`0252c62`](https://github.com/Free-Ink/freeink-sdk/commit/0252c62) — match the UC8179 driver to the OEM 800×600 addressing geometry.
+  - [`92303ba`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba) — correct UC8179 framebuffer row orientation.
+  - [`fe5fd47`](https://github.com/Free-Ink/freeink-sdk/commit/fe5fd47) — add battery power-latch configuration for newer X4 hardware.
+  - [`87b1929`](https://github.com/Free-Ink/freeink-sdk/commit/87b1929) — correct QMI8658 IMU power-down and wake sequencing.
+  - [`1e9165d`](https://github.com/Free-Ink/freeink-sdk/commit/1e9165d) and [`e514a86`](https://github.com/Free-Ink/freeink-sdk/commit/e514a86) — preserve HTTP header order and simplify header copying.
 
 ## [v1.4.2] - 2026-07-28
 
