@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Updated FreeInk SDK integration
+
+- Advances the [`freeink-sdk`](https://github.com/Free-Ink/freeink-sdk) submodule to [`92303ba5`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba5e4d4f762bb2f9126a3e31c303d66eb28), the upstream v1.4.0.1 display-controller update. CrossInk now honors OEM `hw_calib/screenType` data and uses the SDK's board-independent controller resolution, with UC8279 (X3) and UC8179 (X4) bus-probe fallback before SPI initialization.
+- Ports the upstream [CrossInk v1.4.0.1 release changes](https://github.com/uxjulia/CrossInk/commit/ae612f6f1636a36ddc6a343e8c8cbb95155fd8cc), including EXT1 deep-sleep wake recognition and corrected board power-latch/profile selection while preserving `FORCE_DEVICE_X3`.
+
 ## [v1.4.2] - 2026-07-28
 
 ### Updated FreeInk SDK integration

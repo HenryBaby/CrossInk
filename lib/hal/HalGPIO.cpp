@@ -93,7 +93,7 @@ HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
   uint8_t score1 = 0;
   uint8_t score2 = 0;
   const freeink::XteinkVerdict verdict = freeink::detectXteinkVerdict(&score1, &score2);
-  LOG_INF("HW", "X3 probe scores: pass1=%u pass2=%u", score1, score2);
+  LOG_INF("HW", "Xteink probe scores: pass1=%u pass2=%u verdict=%u", score1, score2, static_cast<unsigned>(verdict));
   if (verdict == freeink::XteinkVerdict::X3Confirmed) {
     writeNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::X3);
     return HalGPIO::DeviceType::X3;
@@ -107,30 +107,15 @@ HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
   return HalGPIO::DeviceType::X4;
 }
 
-constexpr char NVS_KEY_EPD_OVERRIDE[] = "epd_ovr";
-constexpr char NVS_KEY_EPD_CACHED[] = "epd_det";
-
-bool detectX3DisplayIsUc8279() {
-  const NvsDeviceValue overrideValue = readNvsDeviceValue(NVS_KEY_EPD_OVERRIDE, NvsDeviceValue::Unknown);
-  if (overrideValue != NvsDeviceValue::Unknown) return overrideValue == NvsDeviceValue::X3;
-  const NvsDeviceValue cachedValue = readNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::Unknown);
-  if (cachedValue != NvsDeviceValue::Unknown) return cachedValue == NvsDeviceValue::X3;
-  uint8_t ver[5] = {};
-  uint8_t flg = 0;
-  const freeink::X3DisplayVerdict verdict = freeink::detectX3DisplayController(ver, &flg);
-  LOG_INF("HW", "EPD probe: ver=%02X %02X %02X %02X %02X flg=%02X verdict=%u", ver[0], ver[1], ver[2], ver[3], ver[4],
-          flg, static_cast<unsigned>(verdict));
-  if (verdict == freeink::X3DisplayVerdict::Uc8279Confirmed) {
-    writeNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::X3);
-    return true;
-  }
-  if (verdict == freeink::X3DisplayVerdict::Uc8253Assumed) writeNvsDeviceValue(NVS_KEY_EPD_CACHED, NvsDeviceValue::X4);
-  return false;
-}
-
 }  // namespace
 
 void HalGPIO::begin() {
+#if FREEINK_MCU_C3
+  // The dual X3/X4 build starts from the X4 profile. Assert its battery latch
+  // before NVS or hardware probing so newer X4 boards stay powered after the
+  // user releases the power button. selectDevice() reasserts the final profile.
+  BoardConfig::holdPowerRails();
+
 #ifdef FORCE_DEVICE_X3
   _deviceType = DeviceType::X3;
   LOG_INF("HW", "Device override active via build flag: X3");
@@ -138,11 +123,21 @@ void HalGPIO::begin() {
   _deviceType = detectDeviceTypeWithFingerprint();
 #endif
 
-  const bool x3IsUc8279 = deviceIsX3() && detectX3DisplayIsUc8279();
-  BoardConfig::selectDevice(!deviceIsX3() ? BoardConfig::Board::XteinkX4
-                            : x3IsUc8279  ? BoardConfig::Board::XteinkX3Uc8279
-                                          : BoardConfig::Board::XteinkX3);
+  BoardConfig::selectDevice(deviceIsX3() ? BoardConfig::Board::XteinkX3 : BoardConfig::Board::XteinkX4);
+
+  // Resolve the per-batch controller before SPI owns the display pins.
+  // This keeps OEM hw_calib/screenType authoritative and probes UC8279/UC8179
+  // as a fallback while the bus is still available.
+  freeink::applyXteinkDisplayController();
+  if (deviceIsX3() && BoardConfig::ACTIVE.displayController == BoardConfig::DisplayController::UC8279) {
+    BoardConfig::selectDevice(BoardConfig::Board::XteinkX3Uc8279);
+  }
+
   SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
+#else
+  _deviceType = DeviceType::X4;
+#endif
+
   inputMgr.begin();
 
   if (deviceIsX4()) {
@@ -245,7 +240,8 @@ HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
 
   const bool usbConnected = isUsbConnected();
 
-  if (wakeupCause == ESP_SLEEP_WAKEUP_GPIO && resetReason == ESP_RST_DEEPSLEEP) {
+  if (resetReason == ESP_RST_DEEPSLEEP &&
+      (wakeupCause == ESP_SLEEP_WAKEUP_GPIO || wakeupCause == ESP_SLEEP_WAKEUP_EXT1)) {
     return WakeupReason::PowerButton;
   }
   if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && !usbConnected) {
