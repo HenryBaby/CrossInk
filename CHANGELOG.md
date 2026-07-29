@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- Replaced the upstream waterdrop boot and logo sleep-screen artwork with this downstream fork's Crossfish artwork.
+
 ### Updated FreeInk SDK integration
 
 - Advances the [`freeink-sdk`](https://github.com/Free-Ink/freeink-sdk) submodule to [`92303ba5`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba5e4d4f762bb2f9126a3e31c303d66eb28), the upstream v1.4.0.1 display-controller update. CrossInk now honors OEM `hw_calib/screenType` data and uses the SDK's board-independent controller resolution, with UC8279 (X3) and UC8179 (X4) bus-probe fallback before SPI initialization.
