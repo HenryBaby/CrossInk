@@ -351,10 +351,19 @@ void SettingsActivity::openSubmenu(SettingAction action) {
 }
 
 void SettingsActivity::closeSubmenu() {
+  const SettingAction closedSubmenu = activeSubmenu;
   activeSubmenu = parentSubmenu;
   parentSubmenu = SettingAction::None;
   setCurrentSettingsForCategory();
+
   selectedSettingIndex = 1;
+  for (int index = 0; index < settingsCount; ++index) {
+    const SettingInfo& setting = (*currentSettings)[index];
+    if (setting.type == SettingType::SUBMENU && setting.action == closedSubmenu) {
+      selectedSettingIndex = index + 1;
+      break;
+    }
+  }
 }
 
 bool SettingsActivity::currentSettingUsesOptionMenu(const SettingInfo& setting) const {

@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Settings submenus now remain highlighted when returning to their parent menu across Display, Reader, Controls, and System.
+
 ## [v1.4.3] - 2026-07-29
 
 ### Updated FreeInk SDK integration
