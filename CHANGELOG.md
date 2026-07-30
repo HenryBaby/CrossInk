@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.4.4] - 2026-07-30
+
 ### Fixed
 
-- Settings submenus now remain highlighted when returning to their parent menu across Display, Reader, Controls, and System.
+- [`20a575b5`](https://github.com/HenryBaby/CrossInk/commit/20a575b5) — Settings submenus remain highlighted when returning to their parent menu across Display, Reader, Controls, and System.
 
 ## [v1.4.3] - 2026-07-29
 

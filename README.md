@@ -5,6 +5,7 @@
 
 ## Changes maintained by this downstream fork
 
+- [`20a575b5`](https://github.com/HenryBaby/CrossInk/commit/20a575b5) — Settings submenus remain highlighted when returning to their parent menu.
 - [`5cbd063f`](https://github.com/HenryBaby/CrossInk/commit/5cbd063f) — replaces the upstream waterdrop with this downstream fork's artwork on the boot and logo sleep screens.
 - [`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55), [`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1) — Per-server OPDS download folders and optional author subfolders.
 - [`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3) — Finished OPDS books retain their author folder when moved to `/Read`.
