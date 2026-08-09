@@ -428,6 +428,7 @@ void SettingsActivity::openSubmenu(SettingAction action) {
 }
 
 void SettingsActivity::closeSubmenu() {
+  const SettingAction closedSubmenu = activeSubmenu;
   activeSubmenu = parentSubmenu;
   parentSubmenu = SettingAction::None;
   setCurrentSettingsForCategory();
