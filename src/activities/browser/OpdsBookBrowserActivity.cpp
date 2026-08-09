@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <FreeInkUIIcon.h>
+#include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -10,9 +11,9 @@
 #include <OpdsStream.h>
 #include <WiFi.h>
 
-#include <utility>
 #include <cctype>
 #include <string_view>
+#include <utility>
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
@@ -30,7 +31,6 @@
 #include "util/BookCacheUtils.h"
 #include "util/StringUtils.h"
 #include "util/UrlUtils.h"
-#include <FsHelpers.h>
 
 namespace fui = freeink::ui;
 
@@ -673,7 +673,8 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
   downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
   std::string responseFilename;
-  if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME) downloadOptions.responseFilename = &responseFilename;
+  if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME)
+    downloadOptions.responseFilename = &responseFilename;
   int lastRenderedPercent = -1;
   unsigned long lastProgressUpdateMs = 0;
 

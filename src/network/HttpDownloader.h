@@ -39,7 +39,8 @@ class HttpDownloader {
           resumePartial(resumePartial),
           shouldCancel(std::move(shouldCancel)),
           bufferSize(bufferSize),
-          transport(transport), responseFilename(responseFilename) {}
+          transport(transport),
+          responseFilename(responseFilename) {}
 
     bool preservePartial;
     bool resumePartial;

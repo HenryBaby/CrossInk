@@ -1527,8 +1527,10 @@ void CrossPointWebServer::handlePostOpdsServer() {
   std::string password = doc["password"] | std::string("");
   const bool hasFilenameFormatField =
       doc["filenameFormat"].is<const char*>() || doc["filenameFormat"].is<std::string>();
-  const bool hasDownloadFolderField = doc["downloadFolder"].is<const char*>() || doc["downloadFolder"].is<std::string>();
-  const bool hasFolderOrganizationField = doc["folderOrganization"].is<const char*>() || doc["folderOrganization"].is<std::string>();
+  const bool hasDownloadFolderField =
+      doc["downloadFolder"].is<const char*>() || doc["downloadFolder"].is<std::string>();
+  const bool hasFolderOrganizationField =
+      doc["folderOrganization"].is<const char*>() || doc["folderOrganization"].is<std::string>();
 
   if (doc["index"].is<int>()) {
     int idx = doc["index"].as<int>();

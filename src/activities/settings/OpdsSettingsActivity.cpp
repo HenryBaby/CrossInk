@@ -18,7 +18,7 @@
 namespace fui = freeink::ui;
 
 namespace {
-// Editable fields: Name, URL, Username, Password, Filename.
+// Editable fields: Name, URL, Username, Password, Folder, layout, Filename.
 // Existing servers also show a Delete option (BASE_ITEMS + 1).
 constexpr int BASE_ITEMS = 7;
 constexpr fui::ActionId ACTION_ROW = 1;
@@ -206,14 +206,15 @@ void OpdsSettingsActivity::handleSelection() {
     requestUpdate();
   } else if (selectedIndex == 5) {
     editServer.folderOrganization = editServer.folderOrganization == OpdsFolderOrganization::FLAT
-                                        ? OpdsFolderOrganization::AUTHOR : OpdsFolderOrganization::FLAT;
+                                        ? OpdsFolderOrganization::AUTHOR
+                                        : OpdsFolderOrganization::FLAT;
     saveServer();
     requestUpdate();
   } else if (selectedIndex == 6) {
     editServer.filenameFormat = static_cast<OpdsFilenameFormat>((static_cast<int>(editServer.filenameFormat) + 1) % 4);
     saveServer();
     requestUpdate();
-  } else if (selectedIndex == 5 && !isNewServer) {
+  } else if (selectedIndex == BASE_ITEMS && !isNewServer) {
     // Delete flow is only available for existing servers.
     if (!OPDS_STORE.removeServer(static_cast<size_t>(serverIndex))) {
       LOG_ERR("OPS", "Failed to remove OPDS server at index %d", serverIndex);
@@ -243,7 +244,7 @@ void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
   screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
 
   const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
-                              StrId::STR_PASSWORD, StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
+                              StrId::STR_PASSWORD,    StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
                               StrId::STR_FILENAME};
   const int menuItems = getMenuItemCount();
   const char* values[BASE_ITEMS] = {

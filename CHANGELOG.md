@@ -4,6 +4,10 @@
 
 - Updated the downstream fork to the complete [`uxjulia/CrossInk` v1.5.0](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.0) codebase while retaining the fork's OPDS organization, Crossfish branding, Docker builder, OTA source, release-note footer, and settings-navigation behavior.
 
+### Fixed
+
+- Restored the Delete action for existing OPDS server configurations after adding the downstream folder and filename settings.
+
 ## [v1.5.0] - 2026-08-08
 
 ### Upstream CrossInk v1.5.0

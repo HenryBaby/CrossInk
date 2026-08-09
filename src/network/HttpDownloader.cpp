@@ -319,7 +319,8 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
     progressNotifier.notify(sink.downloaded, true);
     if (sink.responseFilename != nullptr) {
       const std::string header = http.getHeader("content-disposition");
-      if (!HttpHeaderUtils::extractContentDispositionFilename(header, *sink.responseFilename)) sink.responseFilename->clear();
+      if (!HttpHeaderUtils::extractContentDispositionFilename(header, *sink.responseFilename))
+        sink.responseFilename->clear();
     }
     return HttpDownloader::OK;
   }
