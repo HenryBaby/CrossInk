@@ -7,6 +7,7 @@
 
 - [`20a575b5`](https://github.com/HenryBaby/CrossInk/commit/20a575b5) — Settings submenus remain highlighted when returning to their parent menu.
 - [`5cbd063f`](https://github.com/HenryBaby/CrossInk/commit/5cbd063f) — replaces the upstream waterdrop with this downstream fork's artwork on the boot and logo sleep screens.
+- [`03355ac8`](https://github.com/HenryBaby/CrossInk/commit/03355ac8) — Network and menu transitions follow CrossPoint Reader's normal fast-refresh behavior instead of CrossInk's full-refresh transition policy.
 - [`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55), [`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1) — Per-server OPDS download folders and optional author subfolders.
 - [`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3) — Finished OPDS books retain their author folder when moved to `/Read`.
 - [`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063), [`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), and [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722) — OPDS downloads support title-only filenames and server-supplied filenames.

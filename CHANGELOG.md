@@ -1,13 +1,11 @@
 ## [Unreleased]
 
-### Changed
-
-- Updated the downstream fork to the complete [`uxjulia/CrossInk` v1.5.0](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.0) codebase while retaining the fork's OPDS organization, Crossfish branding, Docker builder, OTA source, release-note footer, and settings-navigation behavior.
+## [v1.5.1] - 2026-08-09
 
 ### Fixed
 
-- Restored the Delete action for existing OPDS server configurations after adding the downstream folder and filename settings.
-- Aligned network and menu screen transitions with [`crosspoint-reader/crosspoint-reader` v1.5.0](https://github.com/crosspoint-reader/crosspoint-reader/releases/tag/v1.5.0) by using the normal `FAST_REFRESH` waveform.
+- [`9b2bde45`](https://github.com/HenryBaby/CrossInk/commit/9b2bde45) — Restored the Delete action for existing OPDS server configurations after adding the downstream folder and filename settings.
+- [`03355ac8`](https://github.com/HenryBaby/CrossInk/commit/03355ac8) — Replaced `uxjulia/CrossInk`'s network-state full-refresh policy with the normal fast-refresh behavior used by [`crosspoint-reader/crosspoint-reader` v1.5.0](https://github.com/crosspoint-reader/crosspoint-reader/releases/tag/v1.5.0).
 
 ## [v1.5.0] - 2026-08-08
 
