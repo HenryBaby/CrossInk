@@ -7,6 +7,7 @@
 ### Fixed
 
 - Restored the Delete action for existing OPDS server configurations after adding the downstream folder and filename settings.
+- Aligned network and menu screen transitions with [`crosspoint-reader/crosspoint-reader` v1.5.0](https://github.com/crosspoint-reader/crosspoint-reader/releases/tag/v1.5.0) by using the normal `FAST_REFRESH` waveform.
 
 ## [v1.5.0] - 2026-08-08
 
