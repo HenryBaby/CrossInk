@@ -11,10 +11,12 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback, void*, s
 #include <ReleaseJsonParser.h>
 #include <strings.h>
 
+#include <algorithm>
 #include <cstring>
 #include <utility>
 
 #include "AppVersion.h"
+#include "FirmwareFlasher.h"
 #include "OtaUpdater.h"
 #include "esp_http_client.h"
 #include "esp_ota_ops.h"
@@ -29,16 +31,14 @@ namespace {
 
 constexpr char latestReleaseUrl[] = CROSSINK_OTA_RELEASE_URL;
 
-#ifdef CROSSPOINT_FIRMWARE_VARIANT
-constexpr char firmwareAssetStem[] = "firmware-" CROSSPOINT_FIRMWARE_VARIANT;
-constexpr char firmwareAssetName[] = "firmware-" CROSSPOINT_FIRMWARE_VARIANT ".bin";
+#ifdef CROSSINK_FIRMWARE_DEVICE_TYPE
+constexpr char firmwareAssetStem[] = "firmware-" CROSSINK_FIRMWARE_DEVICE_TYPE;
+constexpr char firmwareAssetName[] = "firmware-" CROSSINK_FIRMWARE_DEVICE_TYPE ".bin";
 #else
 constexpr char firmwareAssetStem[] = "firmware";
 constexpr char firmwareAssetName[] = "firmware.bin";
 #endif
 
-constexpr char genericFirmwareAssetStem[] = "firmware";
-constexpr char genericFirmwareAssetName[] = "firmware.bin";
 constexpr char binSuffix[] = ".bin";
 constexpr size_t VERSION_SEGMENT_COUNT = 4;
 constexpr size_t OTA_PROGRESS_UPDATE_BYTES = 64 * 1024;
@@ -164,12 +164,8 @@ bool endsWith(const char* value, const char* suffix) {
 bool isMatchingFirmwareAssetName(const char* assetName) {
   if (assetName == nullptr) return false;
   if (strcmp(assetName, firmwareAssetName) == 0) return true;
-  if (strcmp(assetName, genericFirmwareAssetName) == 0) return true;
-  if (startsWith(assetName, firmwareAssetStem) && assetName[strlen(firmwareAssetStem)] == '-') {
-    return endsWith(assetName, binSuffix);
-  }
-  if (!startsWith(assetName, genericFirmwareAssetStem)) return false;
-  if (assetName[strlen(genericFirmwareAssetStem)] != '-') return false;
+  if (!startsWith(assetName, firmwareAssetStem)) return false;
+  if (assetName[strlen(firmwareAssetStem)] != '-') return false;
   return endsWith(assetName, binSuffix);
 }
 
@@ -204,7 +200,6 @@ esp_err_t release_manifest_event_handler(esp_http_client_event_t* event) {
   }
 
   totalBytesReceived += static_cast<size_t>(event->data_len);
-  LOG_DBG("OTA", "HTTP chunk: %d bytes (total: %zu)", event->data_len, totalBytesReceived);
   parser->feed(static_cast<const char*>(event->data), event->data_len);
   return ESP_OK;
 }
@@ -374,6 +369,9 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   bool otaStarted = false;
   esp_err_t otaBeginError = ESP_OK;
   esp_err_t otaWriteError = ESP_OK;
+  uint8_t imageHeader[14] = {};
+  size_t imageHeaderLength = 0;
+  bool wrongChip = false;
 
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = isCancellationRequested;
@@ -384,36 +382,63 @@ OtaUpdater::OtaUpdaterError OtaUpdater::installUpdate(ProgressCallback onProgres
   const auto transferResult = HttpDownloader::streamUrl(
       otaUrl,
       [&](const uint8_t* data, const size_t len) {
-        if (!otaStarted) {
-          const size_t firmwareSize = otaSize > 0 ? otaSize : OTA_SIZE_UNKNOWN;
-          LOG_INF("OTA", "Writing firmware to %s @0x%x size=%zu heap=%u maxAlloc=%u", updatePartition->label,
-                  static_cast<unsigned>(updatePartition->address), firmwareSize, ESP.getFreeHeap(),
-                  ESP.getMaxAllocHeap());
-          otaBeginError = esp_ota_begin(updatePartition, firmwareSize, &otaHandle);
-          if (otaBeginError != ESP_OK) {
-            LOG_ERR("OTA", "esp_ota_begin failed: %s (heap=%u maxAlloc=%u)", esp_err_to_name(otaBeginError),
-                    ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+        if (len == 0) return true;
+        const auto writeChunk = [&](const uint8_t* chunk, const size_t chunkLength) {
+          if (chunkLength == 0) return true;
+          if (!otaStarted) {
+            const size_t firmwareSize = otaSize > 0 ? otaSize : OTA_SIZE_UNKNOWN;
+            LOG_INF("OTA", "Writing firmware to %s @0x%x size=%zu heap=%u maxAlloc=%u", updatePartition->label,
+                    static_cast<unsigned>(updatePartition->address), firmwareSize, ESP.getFreeHeap(),
+                    ESP.getMaxAllocHeap());
+            otaBeginError = esp_ota_begin(updatePartition, firmwareSize, &otaHandle);
+            if (otaBeginError != ESP_OK) {
+              LOG_ERR("OTA", "esp_ota_begin failed: %s (heap=%u maxAlloc=%u)", esp_err_to_name(otaBeginError),
+                      ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+              return false;
+            }
+            otaStarted = true;
+          }
+
+          otaWriteError = esp_ota_write(otaHandle, chunk, chunkLength);
+          if (otaWriteError != ESP_OK) {
+            LOG_ERR("OTA", "esp_ota_write failed after %zu bytes: %s", processedSize, esp_err_to_name(otaWriteError));
             return false;
           }
-          otaStarted = true;
+
+          mbedtls_sha256_update(&shaCtx, chunk, chunkLength);
+          processedSize += chunkLength;
+          notifyOtaProgress(&installCtx, false);
+          return true;
+        };
+
+        size_t dataOffset = 0;
+        if (imageHeaderLength < sizeof(imageHeader)) {
+          const size_t take = std::min(len, sizeof(imageHeader) - imageHeaderLength);
+          std::memcpy(imageHeader + imageHeaderLength, data, take);
+          imageHeaderLength += take;
+          dataOffset = take;
+          if (imageHeaderLength < sizeof(imageHeader)) return true;
+
+          uint16_t imageChipId;
+          std::memcpy(&imageChipId, imageHeader + 12, sizeof(imageChipId));
+          const uint16_t runningChipId = firmware_flash::runningPartitionChipId();
+          if (runningChipId != 0xFFFF && imageChipId != runningChipId) {
+            LOG_ERR("OTA", "wrong chip: image=0x%04X device=0x%04X", imageChipId, runningChipId);
+            wrongChip = true;
+            return false;
+          }
+
+          if (!writeChunk(imageHeader, sizeof(imageHeader))) return false;
         }
 
-        otaWriteError = esp_ota_write(otaHandle, data, len);
-        if (otaWriteError != ESP_OK) {
-          LOG_ERR("OTA", "esp_ota_write failed after %zu bytes: %s", processedSize, esp_err_to_name(otaWriteError));
-          return false;
-        }
-
-        mbedtls_sha256_update(&shaCtx, data, len);
-        processedSize += len;
-        notifyOtaProgress(&installCtx, false);
-        return true;
+        return writeChunk(data + dataOffset, len - dataOffset);
       },
       nullptr, "", "", std::move(downloadOptions));
 
   if (transferResult != HttpDownloader::OK) {
     mbedtls_sha256_free(&shaCtx);
     if (otaStarted) esp_ota_abort(otaHandle);
+    if (wrongChip) return WRONG_DEVICE_ERROR;
     if (transferResult == HttpDownloader::ABORTED || isCancellationRequested()) {
       LOG_INF("OTA", "Update cancelled");
       return CANCELLED_ERROR;

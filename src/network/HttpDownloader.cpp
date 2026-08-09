@@ -47,24 +47,11 @@ bool isRedirect(const int status) {
   return status == 301 || status == 302 || status == 303 || status == 307 || status == 308;
 }
 
-struct ResponseHeaders {
-  std::string redirectLocation;
-  std::string* responseFilename = nullptr;
-};
-
-esp_err_t captureResponseHeaders(esp_http_client_event_t* evt) {
-  auto* headers = static_cast<ResponseHeaders*>(evt->user_data);
-  if (evt->event_id != HTTP_EVENT_ON_HEADER || headers == nullptr || evt->header_key == nullptr ||
-      evt->header_value == nullptr) {
-    return ESP_OK;
-  }
-
-  if (strcasecmp(evt->header_key, "Location") == 0) {
-    headers->redirectLocation.assign(evt->header_value);
-  } else if (headers->responseFilename != nullptr && strcasecmp(evt->header_key, "Content-Disposition") == 0) {
-    if (!HttpHeaderUtils::extractContentDispositionFilename(evt->header_value, *headers->responseFilename)) {
-      headers->responseFilename->clear();
-    }
+esp_err_t captureLocationHeader(esp_http_client_event_t* evt) {
+  auto* location = static_cast<std::string*>(evt->user_data);
+  if (evt->event_id == HTTP_EVENT_ON_HEADER && location != nullptr && evt->header_key != nullptr &&
+      evt->header_value != nullptr && strcasecmp(evt->header_key, "Location") == 0) {
+    location->assign(evt->header_value);
   }
   return ESP_OK;
 }
@@ -264,7 +251,6 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
           if (sink.total == 0 && http.hasContentLength()) {
             sink.total = sink.resumeOffset + http.getContentLength();
             progressNotifier.setTotal(sink.total);
-            LOG_DBG("HTTP", "Content-Length: %zu", sink.total);
           }
           if (!sink.write(data, len)) return false;
           sink.downloaded += len;
@@ -330,13 +316,11 @@ HttpDownloader::DownloadError runGetWolfSsl(const std::string& url, const std::s
       sink.total = sink.resumeOffset + http.getContentLength();
       progressNotifier.setTotal(sink.total);
     }
-    if (sink.responseFilename != nullptr) {
-      const std::string contentDisposition = http.getHeader("content-disposition");
-      if (!HttpHeaderUtils::extractContentDispositionFilename(contentDisposition, *sink.responseFilename)) {
-        sink.responseFilename->clear();
-      }
-    }
     progressNotifier.notify(sink.downloaded, true);
+    if (sink.responseFilename != nullptr) {
+      const std::string header = http.getHeader("content-disposition");
+      if (!HttpHeaderUtils::extractContentDispositionFilename(header, *sink.responseFilename)) sink.responseFilename->clear();
+    }
     return HttpDownloader::OK;
   }
 
@@ -356,9 +340,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     ParsedUrl currentOrigin;
     const bool currentParsed = parseUrl(currentUrl, currentOrigin);
     const bool sendAuthorization = hasCredentials && currentParsed && sameOrigin(currentOrigin, credentialOrigin);
-    if (sink.responseFilename != nullptr) sink.responseFilename->clear();
-    ResponseHeaders responseHeaders;
-    responseHeaders.responseFilename = sink.responseFilename;
+    std::string redirectLocation;
 
     esp_http_client_config_t config = {};
     config.url = currentUrl.c_str();
@@ -367,8 +349,8 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     config.timeout_ms = HTTP_TIMEOUT_MS;
     config.crt_bundle_attach = esp_crt_bundle_attach;
     config.keep_alive_enable = false;
-    config.event_handler = captureResponseHeaders;
-    config.user_data = &responseHeaders;
+    config.event_handler = captureLocationHeader;
+    config.user_data = &redirectLocation;
 
     esp_http_client_handle_t client = esp_http_client_init(&config);
     if (!client) {
@@ -398,14 +380,14 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     }
 
     if (isRedirect(status)) {
-      if (responseHeaders.redirectLocation.empty()) {
+      if (redirectLocation.empty()) {
         LOG_ERR("HTTP", "Redirect missing Location header");
         logNetworkState("Redirect missing Location");
         esp_http_client_cleanup(client);
         return HttpDownloader::HTTP_ERROR;
       }
 
-      const std::string redirectUrl = buildRedirectUrl(currentUrl, responseHeaders.redirectLocation);
+      const std::string redirectUrl = buildRedirectUrl(currentUrl, redirectLocation);
       ParsedUrl redirect;
       if (!parseUrl(redirectUrl, redirect)) {
         LOG_ERR("HTTP", "Rejected redirect with unsupported Location");
@@ -448,9 +430,7 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
     sink.total = bodyLength > 0 ? sink.resumeOffset + bodyLength : 0;
     sink.downloaded = sink.resumeOffset;
     if (sink.total > 0) {
-      LOG_DBG("HTTP", "Content-Length: %zu", sink.total);
     } else {
-      LOG_DBG("HTTP", "Content-Length: unknown");
     }
 #ifdef ESP_ERR_HTTP_EAGAIN
     err = esp_http_client_set_timeout_ms(client, HTTP_READ_POLL_TIMEOUT_MS);
@@ -471,7 +451,6 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
 
     ProgressNotifier progressNotifier(sink.progress);
     progressNotifier.setTotal(sink.total);
-    LOG_DBG("HTTP", "Reading body: buffer=%zu bytes", bufferSize);
 #ifdef ESP_ERR_HTTP_EAGAIN
     uint32_t lastReadMs = millis();
 #endif
@@ -514,7 +493,6 @@ HttpDownloader::DownloadError runGetDefault(const std::string& url, const std::s
       lastReadMs = millis();
 #endif
       if (sink.total > 0 && sink.total <= PROGRESS_UPDATE_BYTES) {
-        LOG_DBG("HTTP", "Read progress: %zu/%zu bytes", sink.downloaded, sink.total);
       }
       progressNotifier.notify(sink.downloaded, false);
       if (sink.total > 0 && sink.downloaded >= sink.total) break;
@@ -581,8 +559,6 @@ HttpDownloader::DownloadError HttpDownloader::streamUrl(const std::string& url, 
   WifiPowerSaveGuard wifiPowerSaveGuard;
   (void)wifiPowerSaveGuard;
 
-  LOG_DBG("HTTP", "Fetching: %s", url.c_str());
-
   if (!onData) {
     LOG_ERR("HTTP", "Fetch failed: missing data callback");
     return HTTP_ERROR;
@@ -592,6 +568,7 @@ HttpDownloader::DownloadError HttpDownloader::streamUrl(const std::string& url, 
   sink.write = onData;
   sink.progress = std::move(progress);
   sink.shouldCancel = std::move(options.shouldCancel);
+  sink.responseFilename = options.responseFilename;
   const size_t bufferSize = options.bufferSize > 0 ? options.bufferSize : DEFAULT_DOWNLOAD_BUFFER_SIZE;
   return runGet(url, username, password, sink, bufferSize, options.transport);
 }
@@ -612,10 +589,6 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
       existingFile.close();
     }
   }
-
-  LOG_DBG("HTTP", "Downloading: %s", url.c_str());
-  LOG_DBG("HTTP", "Destination: %s", destPath.c_str());
-  LOG_DBG("HTTP", "Timeout: %d ms buffer=%zu bytes", HTTP_TIMEOUT_MS, bufferSize);
 
   if (resumeOffset == 0 && Storage.exists(destPath.c_str())) {
     Storage.remove(destPath.c_str());
@@ -695,6 +668,5 @@ HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& 
     return HTTP_ERROR;
   }
 
-  LOG_DBG("HTTP", "Downloaded %zu bytes", sink.downloaded);
   return OK;
 }

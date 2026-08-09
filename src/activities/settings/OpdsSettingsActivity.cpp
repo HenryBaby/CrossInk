@@ -9,42 +9,37 @@
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "activities/util/KeyboardEntryActivity.h"
+#include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
+#include "components/UIThemeTokens.h"
+#include "components/UiAppHelpers.h"
 #include "fontIds.h"
 
+namespace fui = freeink::ui;
+
 namespace {
-// Editable fields: Name, URL, Username, Password, Folder, Folder layout, Filename.
+// Editable fields: Name, URL, Username, Password, Filename.
 // Existing servers also show a Delete option (BASE_ITEMS + 1).
 constexpr int BASE_ITEMS = 7;
-
-OpdsFilenameFormat nextFilenameFormat(const OpdsFilenameFormat format) {
-  switch (format) {
-    case OpdsFilenameFormat::AUTHOR_TITLE:
-      return OpdsFilenameFormat::TITLE_AUTHOR;
-    case OpdsFilenameFormat::TITLE_AUTHOR:
-      return OpdsFilenameFormat::TITLE;
-    case OpdsFilenameFormat::TITLE:
-      return OpdsFilenameFormat::SERVER_FILENAME;
-    case OpdsFilenameFormat::SERVER_FILENAME:
-    default:
-      return OpdsFilenameFormat::AUTHOR_TITLE;
-  }
-}
-
-const char* filenameFormatLabel(const OpdsFilenameFormat format) {
-  switch (format) {
-    case OpdsFilenameFormat::TITLE_AUTHOR:
-      return tr(STR_TITLE_AUTHOR);
-    case OpdsFilenameFormat::TITLE:
-      return tr(STR_TITLE);
-    case OpdsFilenameFormat::SERVER_FILENAME:
-      return tr(STR_SERVER_FILENAME);
-    case OpdsFilenameFormat::AUTHOR_TITLE:
-    default:
-      return tr(STR_AUTHOR_TITLE);
-  }
-}
+constexpr fui::ActionId ACTION_ROW = 1;
 }  // namespace
+
+OpdsSettingsActivity::OpdsSettingsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
+                                           const int serverIndex)
+    : Activity("OpdsSettings", renderer, mappedInput),
+      serverIndex(serverIndex),
+      uiTarget(makeUiTarget(renderer)),
+      app(uiTarget, uiTarget.deviceContext()) {}
+
+void OpdsSettingsActivity::onRowEvent(const fui::ActionEvent& event, void* user) {
+  auto* self = static_cast<OpdsSettingsActivity*>(user);
+  if (event.value < 0 || event.value >= static_cast<int16_t>(self->getMenuItemCount())) return;
+  self->selectedIndex = static_cast<size_t>(event.value);
+  // Activation opens a keyboard or leaves the screen; a lingering flash would
+  // gray an unrelated row.
+  self->app.clearTapFlash();
+  self->handleSelection();
+}
 
 int OpdsSettingsActivity::getMenuItemCount() const {
   return isNewServer ? BASE_ITEMS : BASE_ITEMS + 1;  // +1 for Delete
@@ -70,12 +65,33 @@ void OpdsSettingsActivity::onEnter() {
     }
   }
 
+  uiReady = false;
+  visibleRows = 1;
+  topIndex = 0;
+  app.setTheme(uiThemeTokens(uiTarget));
+  app.on(ACTION_ROW, &OpdsSettingsActivity::onRowEvent, this);
+  app.setScreen(&OpdsSettingsActivity::listScreen, this);
   requestUpdate();
 }
 
 void OpdsSettingsActivity::onExit() { Activity::onExit(); }
 
 void OpdsSettingsActivity::loop() {
+  if (TouchHeaderBackButton::wasTapped(mappedInput, renderer)) {
+    finish();
+    return;
+  }
+  // Touch goes through the FreeInkApp: render() registered the row hit rects;
+  // route the snapshot and let onRowEvent dispatch.
+  if (uiReady) {
+    const fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
+    if (snap.touchPressed || snap.touchReleased) {
+      const auto event = app.route(snap);
+      if (app.invalidated()) requestUpdate();
+      if (event) return;  // dispatched to onRowEvent
+    }
+  }
+
   if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     finish();
     return;
@@ -185,28 +201,19 @@ void OpdsSettingsActivity::handleSelection() {
                                                                    editServer.password, 63, InputType::Password),
                            handler);
   } else if (selectedIndex == 4) {
-    auto handler = [this](const ActivityResult& result) {
-      if (!result.isCancelled) {
-        const auto& kb = std::get<KeyboardResult>(result.data);
-        editServer.downloadFolder = normalizeOpdsDownloadFolder(kb.text);
-        saveServer();
-        requestUpdate();
-      }
-    };
-    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_DOWNLOAD_FOLDER),
-                                                                   editServer.downloadFolder, 127, InputType::Text),
-                           handler);
+    editServer.downloadFolder = editServer.downloadFolder == "/" ? "/Books" : "/";
+    saveServer();
+    requestUpdate();
   } else if (selectedIndex == 5) {
     editServer.folderOrganization = editServer.folderOrganization == OpdsFolderOrganization::FLAT
-                                        ? OpdsFolderOrganization::AUTHOR
-                                        : OpdsFolderOrganization::FLAT;
+                                        ? OpdsFolderOrganization::AUTHOR : OpdsFolderOrganization::FLAT;
     saveServer();
     requestUpdate();
   } else if (selectedIndex == 6) {
-    editServer.filenameFormat = nextFilenameFormat(editServer.filenameFormat);
+    editServer.filenameFormat = static_cast<OpdsFilenameFormat>((static_cast<int>(editServer.filenameFormat) + 1) % 4);
     saveServer();
     requestUpdate();
-  } else if (selectedIndex == 7 && !isNewServer) {
+  } else if (selectedIndex == 5 && !isNewServer) {
     // Delete flow is only available for existing servers.
     if (!OPDS_STORE.removeServer(static_cast<size_t>(serverIndex))) {
       LOG_ERR("OPS", "Failed to remove OPDS server at index %d", serverIndex);
@@ -218,57 +225,80 @@ void OpdsSettingsActivity::handleSelection() {
   }
 }
 
+void OpdsSettingsActivity::listScreen(UiApp::ScreenType& screen, void* user) {
+  static_cast<OpdsSettingsActivity*>(user)->buildListScreen(screen);
+}
+
+void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  // Content below the GUI.drawHeader band, above the button hints.
+  screen.setContentMargin(
+      fui::Insets{static_cast<int16_t>(metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput)), 0,
+                  static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+
+  // URL hint where the old sub-header band sat.
+  const fui::Rect band = screen.takeTop(static_cast<int16_t>(metrics.tabBarHeight));
+  const int16_t pad = screen.theme().headerSidePadding;
+  screen.target().text(band.inset(fui::Insets{0, pad, 0, pad}), tr(STR_CALIBRE_URL_HINT), screen.theme().smallText);
+  screen.spacer(static_cast<int16_t>(metrics.verticalSpacing));
+
+  const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
+                              StrId::STR_PASSWORD, StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
+                              StrId::STR_FILENAME};
+  const int menuItems = getMenuItemCount();
+  const char* values[BASE_ITEMS] = {
+      editServer.name.empty() ? tr(STR_NOT_SET) : editServer.name.c_str(),
+      editServer.url.empty() ? tr(STR_NOT_SET) : editServer.url.c_str(),
+      editServer.username.empty() ? tr(STR_NOT_SET) : editServer.username.c_str(),
+      editServer.password.empty() ? tr(STR_NOT_SET) : "******",
+      editServer.downloadFolder.c_str(),
+      editServer.folderOrganization == OpdsFolderOrganization::AUTHOR ? tr(STR_AUTHOR_FOLDERS) : tr(STR_SINGLE_FOLDER),
+      opdsFilenameFormatToJson(editServer.filenameFormat),
+  };
+
+  std::vector<fui::ListItem> items;
+  items.reserve(menuItems);
+  for (int i = 0; i < menuItems; i++) {
+    fui::ListItem item;
+    item.label = i < BASE_ITEMS ? I18N.get(fieldNames[i]) : tr(STR_DELETE_SERVER);
+    if (i < BASE_ITEMS) item.value = values[i];
+    item.actionValue = static_cast<int16_t>(i);
+    items.push_back(item);
+  }
+
+  fui::ListProps props;
+  props.items = items.data();
+  props.count = static_cast<uint16_t>(items.size());
+  props.selectedIndex = static_cast<int16_t>(selectedIndex);
+  props.action = ACTION_ROW;
+  props.inputMask = fui::InputTouch;  // physical buttons stay in loop()
+  props.valueInset = 8;               // air between the value and the row edge
+  const auto rows = configureUiList(props, screen.theme(), screen.body());
+  visibleRows = rows > 0 ? rows : 1;
+  topIndex = scrollListBy(topIndex, 0, visibleRows, menuItems);  // clamp to range
+  props.topIndex = static_cast<uint16_t>(topIndex);
+  screen.list(props);
+}
+
 void OpdsSettingsActivity::render(RenderLock&&) {
   renderer.clearScreen();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
-  const auto pageHeight = renderer.getScreenHeight();
   // Reuse STR_OPDS_BROWSER as the "edit existing server" title.
   // New server creation uses STR_ADD_SERVER.
   const char* header = isNewServer ? tr(STR_ADD_SERVER) : tr(STR_OPDS_BROWSER);
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, header);
-  GUI.drawSubHeader(renderer, Rect{0, metrics.topPadding + metrics.headerHeight, pageWidth, metrics.tabBarHeight},
-                    tr(STR_CALIBRE_URL_HINT));
-
-  const int contentTop = metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing + metrics.tabBarHeight;
-  const int contentHeight = pageHeight - contentTop - metrics.buttonHintsHeight - metrics.verticalSpacing * 2;
-  const int menuItems = getMenuItemCount();
-
-  const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
-                              StrId::STR_PASSWORD,    StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
-                              StrId::STR_FILENAME};
-
-  GUI.drawList(
-      renderer, Rect{0, contentTop, pageWidth, contentHeight}, menuItems, static_cast<int>(selectedIndex),
-      [this, &fieldNames](int index) {
-        if (index < BASE_ITEMS) {
-          return std::string(I18N.get(fieldNames[index]));
-        }
-        return std::string(tr(STR_DELETE_SERVER));
-      },
-      nullptr, nullptr,
-      [this](int index) {
-        if (index == 0) {
-          return editServer.name.empty() ? std::string(tr(STR_NOT_SET)) : editServer.name;
-        } else if (index == 1) {
-          return editServer.url.empty() ? std::string(tr(STR_NOT_SET)) : editServer.url;
-        } else if (index == 2) {
-          return editServer.username.empty() ? std::string(tr(STR_NOT_SET)) : editServer.username;
-        } else if (index == 3) {
-          return editServer.password.empty() ? std::string(tr(STR_NOT_SET)) : std::string("******");
-        } else if (index == 4) {
-          return editServer.downloadFolder.empty() ? std::string("/")
-                                                   : normalizeOpdsDownloadFolder(editServer.downloadFolder);
-        } else if (index == 5) {
-          return editServer.folderOrganization == OpdsFolderOrganization::AUTHOR ? std::string(tr(STR_AUTHOR_FOLDERS))
-                                                                                 : std::string(tr(STR_SINGLE_FOLDER));
-        } else if (index == 6) {
-          return std::string(filenameFormatLabel(editServer.filenameFormat));
-        }
-        return std::string("");
-      },
-      true);
+  // Header via GUI.drawHeader (already FreeInkUI-themed) for the battery
+  // indicator; the rest of the screen renders through the app.
+  const Rect headerRect = TouchHeaderBackButton::headerRect(renderer, mappedInput);
+  if (mappedInput.hasTouchHardware()) {
+    TouchHeaderBackButton::draw(renderer, uiTarget, headerRect, header, false);
+  } else {
+    GUI.drawHeader(renderer, headerRect, header);
+  }
+  uiReady = false;
+  app.render();
+  uiReady = true;
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

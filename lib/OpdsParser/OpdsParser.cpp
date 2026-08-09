@@ -156,28 +156,7 @@ void OpdsParser::assignBounded(std::string& target, const char* value, const siz
 void OpdsParser::appendBounded(std::string& target, const char* value, const size_t len, const size_t maxLen) {
   if (target.size() >= maxLen) return;
   const size_t remaining = maxLen - target.size();
-  const size_t byteCount = len < remaining ? len : remaining;
-  size_t safeByteCount = byteCount;
-  if (safeByteCount < len) {
-    // The XML parser reports UTF-8 character data as byte spans. When the
-    // cap cuts through a multibyte sequence, back up to the previous complete
-    // codepoint so stored titles/authors/IDs remain valid UTF-8.
-    while (safeByteCount > 0 && (static_cast<unsigned char>(value[safeByteCount]) & 0xC0U) == 0x80U) {
-      --safeByteCount;
-    }
-    if (safeByteCount > 0) {
-      const unsigned char lead = static_cast<unsigned char>(value[safeByteCount - 1]);
-      size_t sequenceLength = 1;
-      if ((lead & 0xE0U) == 0xC0U)
-        sequenceLength = 2;
-      else if ((lead & 0xF0U) == 0xE0U)
-        sequenceLength = 3;
-      else if ((lead & 0xF8U) == 0xF0U)
-        sequenceLength = 4;
-      if (sequenceLength > byteCount - (safeByteCount - 1)) safeByteCount = safeByteCount - 1;
-    }
-  }
-  target.append(value, safeByteCount);
+  target.append(value, len < remaining ? len : remaining);
 }
 
 void XMLCALL OpdsParser::startElement(void* userData, const XML_Char* name, const XML_Char** atts) {

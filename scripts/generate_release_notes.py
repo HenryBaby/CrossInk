@@ -46,8 +46,11 @@ def extract_version_section(changelog, version):
 def normalize_section_titles(section):
     lines = []
     for line in section.splitlines():
-        title = line.removeprefix('### ').strip() if line.startswith('### ') else None
-        if title:
+        if line.startswith('#### '):
+            title = line.removeprefix('#### ').strip()
+            line = f'### {SECTION_TITLE_MAP.get(title, title)}'
+        elif line.startswith('### '):
+            title = line.removeprefix('### ').strip()
             line = f'## {SECTION_TITLE_MAP.get(title, title)}'
         lines.append(line)
     return '\n'.join(lines).strip()

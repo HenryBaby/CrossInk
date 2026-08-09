@@ -52,7 +52,6 @@ jobs:
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
       - name: Resolve release version
-        shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             VERSION="${{ inputs.version }}"
@@ -69,11 +68,11 @@ jobs:
           import configparser
           config = configparser.ConfigParser()
           config.read('platformio.ini')
-          print(config.get('crosspoint', 'crossink_version'))
+          print(config.get('crossink', 'version'))
           PY
           )"
           if [ "$CONFIG_VERSION" != "${RELEASE_VERSION}" ]; then
-            echo "platformio.ini crossink_version ($CONFIG_VERSION) must match release ${RELEASE_VERSION}" >&2
+            echo "platformio.ini version ($CONFIG_VERSION) must match release ${RELEASE_VERSION}" >&2
             exit 1
           fi
 
@@ -85,8 +84,8 @@ jobs:
 
       - name: Build CrossInk
         env:
-          CROSSPOINT_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-        run: pio run -e tiny
+          CROSSINK_RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+        run: pio run -e default
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
@@ -99,4 +98,4 @@ jobs:
           prerelease: false
           make_latest: true
           files: |
-            .pio/build/tiny/firmware-v${{ env.RELEASE_VERSION }}.bin
+            .pio/build/default/firmware-x3-x4-v${{ env.RELEASE_VERSION }}.bin

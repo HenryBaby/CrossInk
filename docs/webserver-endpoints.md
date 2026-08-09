@@ -39,7 +39,8 @@ Response:
   "rssi": -45,
   "freeHeap": 123456,
   "uptime": 3600,
-  "device": "X4"
+  "device": "X4",
+  "serial": "Not found"
 }
 ```
 
@@ -52,6 +53,7 @@ Response:
 | `freeHeap` | number | Free heap in bytes |
 | `uptime` | number | Seconds since boot |
 | `device` | string | `"X3"` or `"X4"` hardware detection |
+| `serial` | string | Device serial number from eFuse, or `"Not found"` when unavailable |
 
 ## File Management
 
@@ -192,8 +194,8 @@ Form parameters:
 | `path` | Yes, unless `paths` is provided | Single path to delete |
 | `paths` | Yes, unless `path` is provided | JSON array of paths to delete |
 
-Protected items cannot be deleted. Non-empty folders are rejected. EPUB cache
-data for deleted files is cleared.
+Hidden and system items are protected while **Show Hidden Files** is off.
+Non-empty folders are rejected. EPUB cache data for deleted files is cleared.
 
 ## Settings API
 
@@ -333,7 +335,7 @@ Response:
     "url": "http://calibre.local:8080/opds",
     "username": "reader",
     "downloadFolder": "/Books",
-    "folderOrganization": "flat",
+    "folderOrganization": "author",
     "filenameFormat": "author_title",
     "hasPassword": true
   }
@@ -343,18 +345,15 @@ Response:
 ### `POST /api/opds`
 
 Adds or updates an OPDS server. Include `index` to update an existing entry.
-If `password` is omitted during an update, the existing password is preserved.
-If `downloadFolder` is omitted during an update, the existing download folder is
-preserved. Empty or missing download folders default to `/`.
-If `folderOrganization` is omitted during an update, the existing folder
-organization is preserved. Supported values are `flat` and `author`.
-If `filenameFormat` is omitted during an update, the existing filename format is
-preserved. Supported values are `author_title`, `title_author`, and `title`.
+If `password`, `downloadFolder`, `folderOrganization`, or `filenameFormat` is
+omitted during an update, the existing value is preserved. `folderOrganization`
+is either `flat` (the default) or `author`. `filenameFormat` is `author_title`
+(the default), `title_author`, `title`, or `server_filename`.
 
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d '{"name":"My Catalog","url":"http://calibre.local:8080/opds","username":"reader","password":"secret","downloadFolder":"/Books","folderOrganization":"author","filenameFormat":"title_author"}' \
+  -d '{"name":"My Catalog","url":"http://calibre.local:8080/opds","username":"reader","password":"secret"}' \
   http://crosspoint.local/api/opds
 ```
 

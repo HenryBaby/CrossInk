@@ -18,7 +18,8 @@ RUN apt-get update \
     && chmod 0777 /platformio /output
 
 COPY docker/build-firmware.sh /usr/local/bin/build-firmware
-RUN chmod +x /usr/local/bin/build-firmware
+RUN sed -i 's/\r$//' /usr/local/bin/build-firmware \
+    && chmod +x /usr/local/bin/build-firmware
 
 WORKDIR /workspace
 ENTRYPOINT ["build-firmware"]

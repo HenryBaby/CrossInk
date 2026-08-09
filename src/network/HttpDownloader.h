@@ -39,15 +39,13 @@ class HttpDownloader {
           resumePartial(resumePartial),
           shouldCancel(std::move(shouldCancel)),
           bufferSize(bufferSize),
-          transport(transport),
-          responseFilename(responseFilename) {}
+          transport(transport), responseFilename(responseFilename) {}
 
     bool preservePartial;
     bool resumePartial;
     CancelCallback shouldCancel;
     size_t bufferSize;
     Transport transport;
-    // Optional output populated from the final response's Content-Disposition header.
     std::string* responseFilename;
   };
 

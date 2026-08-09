@@ -1,5 +1,87 @@
 ## [Unreleased]
 
+### Changed
+
+- Updated the downstream fork to the complete [`uxjulia/CrossInk` v1.5.0](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.0) codebase while retaining the fork's OPDS organization, Crossfish branding, Docker builder, OTA source, release-note footer, and settings-navigation behavior.
+
+## [v1.5.0] - 2026-08-08
+
+### Upstream CrossInk v1.5.0
+
+This release incorporates the complete [`uxjulia/CrossInk` v1.5.0](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.0) codebase. The features and fixes below were developed by the upstream CrossInk project.
+
+#### Added
+
+- EPUB tables now lay out a row at a time in both Incremental and Full Section indexing, keeping regular tables readable without whole-table buffering.
+- Nearby File Transfer can send EPUB, TXT, XTC, XTCH, PNG, and BMP files directly between two CrossInk devices without a Wi-Fi network.
+- Recent Books and image-file long-press actions can send files directly to a nearby CrossInk device.
+- Dictionary lookup and lookup history
+- EPUB books can use a dedicated SD-card dictionary font while keeping a different reader font.
+- EPUB books can set a dedicated dictionary font size independently of the reader font size.
+- Dictionary font and size defaults can be set globally from Settings > Reader > Font Options, with per-book choices still taking precedence.
+- Reusable dictionary SD-font builder with IPA coverage and per-family ZIP packaging
+- RTC-enabled devices can now choose the date format and numeric separator shown in headers from Settings > System > Device.
+- The web EPUB optimizer now splits oversized chapters into memory-friendlier sections before sending them to the reader.
+- Reader indexing can now use `Incremental` or `Full Section` mode globally or per book; changing modes keeps the current chapter readable and applies when the next chapter needs indexing.
+- Look Up Word can now be assigned to short- and long-press Power button shortcuts.
+- EPUB readers can now choose from five word-spacing levels, from normal through extra-wide.
+- EPUB inline-image pages on X3 now use the grayscale-aware display base before the image grayscale overlay, reducing the moment where images appear too dark before settling.
+- EPUB publisher small-caps styling now renders ASCII lowercase text as smaller capital letters without needing extra font files.
+- When incremental EPUB indexing runs out of memory at the first unindexed page, the reader now silently restarts once and resumes the book with a fresh heap.
+
+#### Changed
+
+- Reader font sizes now persist as actual point sizes, keeping the closest matching size when font families or installed files change.
+- SD-card fonts now include the built-in reader fallback stack for common symbols, emoji, and selected CJK glyphs while retaining Noto Sans fallback coverage.
+- Downloadable SD-card fonts are now rendered with the same darker anti-aliasing as the built-in reading fonts.
+- Full-section EPUB indexing now prepares one-page chapters and direct jumps to a chapter's last page, while avoiding repeated checks after the next chapter is ready.
+- EPUB grayscale rendering now reuses its 8 KB strip buffer across stable pages, reducing repeated heap allocation and release during long reading sessions.
+- Reading progress is now saved in batches during ordinary page turns, immediately after layout changes, and when leaving a book, reducing repeated SD-card writes without carrying stale pagination into the next session.
+- SD-card font discovery now waits until a custom font is selected or font settings are opened, reducing SD-card work during normal startup with built-in fonts.
+- EPUB page turns using SD-card fonts now prepare the next page's glyphs while the reader is idle.
+- Dictionary lookups now reuse open index files for stem matching, reducing repeated SD-card work after a miss.
+- The web file manager now batches directory listings into fewer network packets, improving large-folder response time.
+- Image-heavy EPUB chapters now index by reading image headers first and extract each full image only when its page is shown.
+- EPUB books with repeated byte-identical stylesheets now parse each unique stylesheet only once when building caches.
+- SD-card fonts now reuse their page-sized glyph buffers, reducing heap fragmentation during long reading sessions.
+- Firmware builds now prioritize usable heap over oversized system timer stacks and maximum WiFi throughput, leaving more memory for reading and network operations.
+- Downloaded-font size range options now show their actual point-size ranges instead of firmware build names.
+- KOReader Sync and authentication, OTA updates, and OPDS browsing now restart into a lightweight network mode that leaves reader and Home data unloaded, providing more contiguous memory for WiFi and secure connections.
+- The web file manager can now delete non-empty folders recursively and, when hidden files are shown, remove hidden or system-managed SD card items after confirmation.
+- SD-font, OPDS catalogs, and other unneeded settings now stay out of memory while reading unless their settings are open.
+- EPUB books can now keep more saved clippings without loading every clipping's text into memory while reading.
+
+#### Removed
+
+- The font download manager no longer offers a Download All action; fonts can still be downloaded individually or updated together.
+
+#### Fixed
+
+- Book menu tab navigation, popup scrolling, customized Reading Stats hints, and short button presses after low-power mode now work reliably.
+- Sleep screens now honor the current orientation, avoid X4 transition flashes, fall back to a valid wallpaper when needed, and handle low-memory image decoding without rebooting.
+- Choosing Set Cover uses the selected image in place, and Home no longer repeatedly generates missing EPUB covers.
+- Finished-book suggestions are now collected before an EPUB is moved to `/Read`.
+- Manage Fonts now opens and scans large catalogs more safely on X3/X4, reports low-memory failures instead of restarting, and returns to Font Options when cancelled.
+- Network screens refresh cleanly on X4; long errors wrap correctly; saved Wi-Fi networks and KOReader connections recover more reliably after restart or a missing address.
+- Translated Wi-Fi and clock labels no longer truncate text or time values, and clock sync no longer risks a reboot while saving settings on memory-constrained X3/X4 devices.
+- KOReader Sync no longer crashes during time setup, re-triggers while connecting, or loses precise EPUB positions; CrossPoint-only data stays on the official CrossPoint Sync server.
+- Firmware updates reject images for the wrong chip family, and saved Wi-Fi settings safely handle concurrent access and corrupted values.
+- EPUB opening, reflow, and background indexing now handle fragmented memory more safely, retry recoverable work, remain responsive to input and setting changes, and show useful errors instead of rebooting or silently returning Home.
+- Low-memory EPUB grayscale and sleep rendering now fall back safely without leaving stale display content.
+- Full-section indexing preserves more memory for large chapters and cancels speculative work on page turns, keeping the reader responsive.
+- SD-card font and clipping work now release temporary data at the right time, preserving memory for reflow, dictionary use, covers, and thumbnails on X3/X4.
+- EPUBs with book-specific built-in fonts no longer load an unnecessary global SD-card font, and custom fonts retain ligatures.
+- EPUB styling choices apply before style caches load; CSS-heavy books use less temporary memory; and disabling Embedded Style consistently skips unused stylesheet work.
+- EPUB layout now keeps CJK ruby and spaces, Russian paragraph continuations, Bionic Reading, underline/strikethrough runs, and right-to-left text correct.
+- EPUBs with flowing `<br>` elements, image-led or decorative chapter headings, unsupported images, and dense final pages now lay out without excess gaps, clipping, dropped images, or misleading low-memory warnings.
+- EPUB footnote and cross-reference previews now show complete notes, including targets in the middle of a paragraph.
+- Saved EPUB positions, clipping highlights, and selections now stay accurate after font, orientation, or indexing changes; selections also remain readable in dark mode and on memory-tight pages.
+- Dictionary misses can switch dictionaries without leaving the reader, and dictionary read failures now report an error instead of a false “not found.”
+- Reader popups, KOReader Wi-Fi labels, Lyra battery headers, and the sleep message now remain correctly oriented and positioned.
+- Manual refreshes preserve EPUB and TXT text anti-aliasing; XTC and XTCH status bars show the configured time-left estimate.
+- Watchdog resets return to the crash-report flow, and power-button wake timing no longer depends on SD-card startup.
+- The web file manager and uploads now handle simulator/device ports and stalled connections safely; unsupported settings stay hidden, and the optimizer removes empty chapter stubs without breaking table-of-contents links.
+
 ## [v1.4.4] - 2026-07-30
 
 ### Fixed
@@ -8,91 +90,49 @@
 
 ## [v1.4.3] - 2026-07-29
 
-### Updated FreeInk SDK integration
+### Changed
 
-- [`0777fa62`](https://github.com/HenryBaby/CrossInk/commit/0777fa62) ports the display-controller support released in [`uxjulia/CrossInk` v1.4.0.1](https://github.com/uxjulia/CrossInk/releases/tag/v1.4.0.1), based on upstream commit [`ae612f6f`](https://github.com/uxjulia/CrossInk/commit/ae612f6f1636a36ddc6a343e8c8cbb95155fd8cc).
-- The FreeInk SDK advances from [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca) to [`92303ba5`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba5e4d4f762bb2f9126a3e31c303d66eb28). The complete upstream SDK changes are available in the [revision comparison](https://github.com/Free-Ink/freeink-sdk/compare/ae68356de994a536dd6c45615a42ea485b3dddca...92303ba5e4d4f762bb2f9126a3e31c303d66eb28).
-- Relevant upstream FreeInk SDK changes incorporated by that update:
-  - [`66fd305`](https://github.com/Free-Ink/freeink-sdk/commit/66fd305) — add the UC8179 display driver used by newer X4 panels.
-  - [`0252c62`](https://github.com/Free-Ink/freeink-sdk/commit/0252c62) — match the UC8179 driver to the OEM 800×600 addressing geometry.
-  - [`92303ba`](https://github.com/Free-Ink/freeink-sdk/commit/92303ba) — correct UC8179 framebuffer row orientation.
-  - [`fe5fd47`](https://github.com/Free-Ink/freeink-sdk/commit/fe5fd47) — add battery power-latch configuration for newer X4 hardware.
-  - [`87b1929`](https://github.com/Free-Ink/freeink-sdk/commit/87b1929) — correct QMI8658 IMU power-down and wake sequencing.
-  - [`1e9165d`](https://github.com/Free-Ink/freeink-sdk/commit/1e9165d) and [`e514a86`](https://github.com/Free-Ink/freeink-sdk/commit/e514a86) — preserve HTTP header order and simplify header copying.
+- [`0777fa62`](https://github.com/HenryBaby/CrossInk/commit/0777fa62) — Updated FreeInk SDK display-controller support for newer X4 panels and battery-latch hardware.
 
 ## [v1.4.2] - 2026-07-28
 
-### Updated FreeInk SDK integration
+### Changed
 
-- [`0f83d454`](https://github.com/HenryBaby/CrossInk/commit/0f83d454) updates the FreeInk SDK from [`4350bc7a`](https://github.com/Free-Ink/freeink-sdk/commit/4350bc7a0e1fa7ff52c0cf7671b535d55a939535) to [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca). The complete upstream SDK changes are available in the [revision comparison](https://github.com/Free-Ink/freeink-sdk/compare/4350bc7a0e1fa7ff52c0cf7671b535d55a939535...ae68356de994a536dd6c45615a42ea485b3dddca).
-- Relevant upstream FreeInk SDK changes incorporated by that update:
-  - [`35a96df1`](https://github.com/Free-Ink/freeink-sdk/commit/35a96df1d0fcb7ae491bdd487a080097f7354832) — fix SD-card SPI pin fallback on shared buses.
-  - [`c188c9e2`](https://github.com/Free-Ink/freeink-sdk/commit/c188c9e25304131293cbcc96b2ee92760486c05c) — add IMU sleep and wake handling.
-  - [`7479aefc`](https://github.com/Free-Ink/freeink-sdk/commit/7479aefc25b8bcc34840671b439bc369265bc76a) and [`d6781be0`](https://github.com/Free-Ink/freeink-sdk/commit/d6781be0ebb75897bf8a78a11bf0ec5360587a80) — improve secondary-framebuffer ownership and prevent dual-buffer use-after-free errors.
-  - [`c3480a02`](https://github.com/Free-Ink/freeink-sdk/commit/c3480a0213b10593976065120da32b06608654c1) — add canonical X3/X4 hardware detection.
-  - [`ae68356d`](https://github.com/Free-Ink/freeink-sdk/commit/ae68356de994a536dd6c45615a42ea485b3dddca) — add support for X3 devices using the UC8279 display controller.
-- CrossInk now detects X3 versus X4 and selects the appropriate UC8253 or UC8279 X3 display profile before SPI initialization.
-
-### Downstream build maintenance
-
-- [`db733a80`](https://github.com/HenryBaby/CrossInk/commit/db733a80) synchronizes the FreeInk SDK submodule to the revision recorded by CrossInk before Docker firmware builds, preventing stale SDK API errors after switching or pulling branches.
+- [`0f83d454`](https://github.com/HenryBaby/CrossInk/commit/0f83d454) — Updated FreeInk SDK support for X3 devices using the UC8279 display controller.
+- [`db733a80`](https://github.com/HenryBaby/CrossInk/commit/db733a80) — Docker builds synchronize the recorded FreeInk SDK revision before compiling.
 
 ## [v1.4.1] - 2026-07-27
 
-### Imported CrossInk development work
+### Changed
 
-- [`79650f62`](https://github.com/HenryBaby/CrossInk/commit/79650f62) ports selected memory-management and stability improvements from the CrossInk development branch:
-  - [`a73a84d7`](https://github.com/uxjulia/CrossInk/commit/a73a84d789c804d6d564e37cfdedca6ee5e6fb22) — reduce SDK runtime memory reservations.
-  - [`9a6db70f`](https://github.com/uxjulia/CrossInk/commit/9a6db70f7e87f703324369c4e57d8edf57c52a8c) — reduce KOReader Sync TLS memory pressure.
-  - [`9498a24d`](https://github.com/uxjulia/CrossInk/commit/9498a24d30f45f7c71cced78c8ca8bb2ad04650f) — defer EPUB background builds when memory is low.
-  - [`d6617288`](https://github.com/uxjulia/CrossInk/commit/d66172889c0b6da339b869ec81130700374500a6) — reduce OPDS feed memory pressure.
-  - [`2d6ad446`](https://github.com/uxjulia/CrossInk/commit/2d6ad44689576994b374bce096bcc368c5da036b) — preserve short button presses in low-power mode.
-  - [`1d13a44c`](https://github.com/uxjulia/CrossInk/commit/1d13a44cd547a40bf1bad97c7f1bac3e5e23d7fa) — harden watchdog and asynchronous refresh fallbacks.
-  - [`3c941a6a`](https://github.com/uxjulia/CrossInk/commit/3c941a6a949bafd44502726172399bf1610f1cef) — stream the web font catalogue.
-  - [`b701ef17`](https://github.com/uxjulia/CrossInk/commit/b701ef178955feb2b520033464b09280f3b6271f) — avoid duplicate wolfSSL `User-Agent` headers.
-  - [`a02a0d99`](https://github.com/uxjulia/CrossInk/commit/a02a0d99afb26ff3a2c2977246ab47609c7b6188) — reuse SD-card font page buffers.
-  - [`97867951`](https://github.com/uxjulia/CrossInk/commit/9786795125692a02850ef814d107359bd8f342b0) — make EPUB page-element allocations fallible.
-  - [`bcd39796`](https://github.com/uxjulia/CrossInk/commit/bcd39796dfc91c8949cbb1f27cf00b7723b3924d), [`d4d29710`](https://github.com/uxjulia/CrossInk/commit/d4d29710c4c6f7cbe7e9ebefcf3b147208cbba9d), [`23aba785`](https://github.com/uxjulia/CrossInk/commit/23aba785ccbc88f67e5a736b38be91d3e4726903), and [`636126e0`](https://github.com/uxjulia/CrossInk/commit/636126e072a281fc46cc3bdcecbe55a94cb515fc) — reduce memory use and prevent out-of-memory failures while managing SD-card fonts.
-- [`1cfb09a3`](https://github.com/HenryBaby/CrossInk/commit/1cfb09a3) ports [`c5414013`](https://github.com/uxjulia/CrossInk/commit/c5414013c9686f1497c209ab84d0b863046b8bc1) — avoid an Arduino `HEX` macro collision in the streamed font catalogue.
+- [`79650f62`](https://github.com/HenryBaby/CrossInk/commit/79650f62) — Integrated selected upstream memory-management and stability improvements.
+- [`c425fcfb`](https://github.com/HenryBaby/CrossInk/commit/c425fcfb) and [`703531c3`](https://github.com/HenryBaby/CrossInk/commit/703531c3) — Restored the documented Docker firmware builder and its output permission check.
 
-### Downstream build maintenance
+## [v1.4.0.1] - 2026-07-28
 
-- [`c425fcfb`](https://github.com/HenryBaby/CrossInk/commit/c425fcfb) restores the documented Docker firmware builder.
-- [`703531c3`](https://github.com/HenryBaby/CrossInk/commit/703531c3) checks Docker output-directory permissions before starting a build.
+### Added
+
+- Updates to support Xteink device detection so the correct display panel driver is used.
 
 ## [v1.4.0] - 2026-07-10
 
-### Upstream CrossInk v1.4.0
+### Added
 
-- Based on the complete [`uxjulia/CrossInk` v1.4.0 main tree at `b7f6708f`](https://github.com/uxjulia/CrossInk/commit/b7f6708f96d05e5851f8bcfaaf57bc0e91dc0567). The upstream feature and fix details belong to CrossInk and are documented in its [v1.4.0 release](https://github.com/uxjulia/CrossInk/releases/tag/v1.4.0).
+- Dashboard UI theme for the Home screen, showing the current book cover and reading stats.
+- Nearby Position Sync for sending or applying the current EPUB position between two CrossInk devices over ESP-NOW.
+- Web EPUB optimizer support for CrossInk location metadata, so optimized EPUBs can keep better progress and stable page numbers.
+- Reading Stats support for XTC and XTCH books, including reader menus, Home and sleep screen stats, mark finished, delete stats, and preserving stats when clearing book caches.
+- Web file manager image previews, so PNG, JPEG, BMP, GIF, and WebP files can be viewed inline before downloading.
 
-### Imported wolfSSL work
+### Changed
 
-- OPDS, KOSync, and supported OTA transfers now use the CrossPoint/CrossInk wolfSSL solution from [crosspoint-reader/crosspoint-reader#2475](https://github.com/crosspoint-reader/crosspoint-reader/pull/2475), adapted for CrossInk by [`c2048f00`](https://github.com/uxjulia/CrossInk/commit/c2048f00bff5e6bb0eef55835b0060d73221f9de) and [`5ea8b68b`](https://github.com/uxjulia/CrossInk/commit/5ea8b68b).
-- CrossPoint commits incorporated by that pull request:
-  - [`14fe01c3`](https://github.com/crosspoint-reader/crosspoint-reader/commit/14fe01c344245ae9a3085e8f2f014077139f59de) — bound OPDS parser entries.
-  - [`de79969c`](https://github.com/crosspoint-reader/crosspoint-reader/commit/de79969c31d94ae22e899807b0e1fd258051f8e7) — add wolfSSL secure networking.
-  - [`c5db9877`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c5db98777c7189aace48346fcc46cf1613338fb6) — formatting follow-up.
-  - [`81b6777b`](https://github.com/crosspoint-reader/crosspoint-reader/commit/81b6777b04c9c946f6ac989dafac0cb405dc8b0d) — fix `tolower` undefined behavior.
-  - [`c5e75cc1`](https://github.com/crosspoint-reader/crosspoint-reader/commit/c5e75cc110f153149951d7069e22dff7157b9f1a) — validate wolfSSL HTTP header lengths.
-  - [`2de77329`](https://github.com/crosspoint-reader/crosspoint-reader/commit/2de77329a2d77eeb74362b01aa582644c8ea618f) — fix ports and URL encoding.
-  - [`a50c61f4`](https://github.com/crosspoint-reader/crosspoint-reader/commit/a50c61f428722f438ea9416d1b93d12385643680) — replace the ESP-IDF client with the wolfSSL wrapper.
-  - [`3c4f3476`](https://github.com/crosspoint-reader/crosspoint-reader/commit/3c4f3476b781cc04ea043c8dc6bde2a3ec745520), [`bc61717d`](https://github.com/crosspoint-reader/crosspoint-reader/commit/bc61717d0977caeda7c9acb8e09f7da5831e817f), and [`dca7bc00`](https://github.com/crosspoint-reader/crosspoint-reader/commit/dca7bc00a350da9dce70dbabafa8a75db3341e2d) — update FreeInk SDK integration.
-  - [`2867e611`](https://github.com/crosspoint-reader/crosspoint-reader/commit/2867e611150bf3d0d108f4b65d3062eb2097fb07) — add wolfSSL DH and field-size configuration.
-  - [`ef8ece58`](https://github.com/crosspoint-reader/crosspoint-reader/commit/ef8ece5862b25dc15b93182afcd8d40d366b2a80) — harden HTTP parsing and fragmentation checks.
-  - [`f36bffe9`](https://github.com/crosspoint-reader/crosspoint-reader/commit/f36bffe9892e19a8b335a66a898ea8c856ba29ea) — make ESP HTTP includes conditional.
-  - [`127e6217`](https://github.com/crosspoint-reader/crosspoint-reader/commit/127e6217974ce4ccb0536a4282f5070a4d5d2a13) — merge the then-current CrossPoint development branch.
-  - [`176a659c`](https://github.com/crosspoint-reader/crosspoint-reader/commit/176a659c591f8ca1a5ecb6ddd8a8ded65b489293) — route the downloader through `SecureHttpClient`.
-  - [`8f91b99f`](https://github.com/crosspoint-reader/crosspoint-reader/commit/8f91b99f77788e9b2a2e7c1896a8831a2ddecbbb) — increase the streaming chunk size.
-  - [`a2af4195`](https://github.com/crosspoint-reader/crosspoint-reader/commit/a2af419535ec88e2aec347a6819438e74b9d7821) — resolve compiler warnings.
+- Large EPUBs, SD-card font-heavy books, and cover thumbnails now open, index, and generate more reliably under low-memory conditions.
+- Home and sleep screens now load more cover and thumbnail data only when needed, reducing reader startup work and reusing cached cover data where possible.
+- Built-in reader font choices have been reduced to Lexend Deca and Bitter, reducing firmware size while keeping fallback glyph coverage.
 
-### Changes maintained by this downstream fork
+### Removed
 
-- [`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55), [`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1) — Per-server OPDS download folders and optional author subfolders.
-- [`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3) — Finished OPDS books retain their author folder when moved to `/Read`.
-- [`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063), [`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), and [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722) — OPDS downloads support title-only filenames and server-supplied filenames.
-
-## [v1.3.4] - 2026-06-13
+- Teensy firmware builds are no longer produced for releases or release candidates.
 
 ### Fixed
 
@@ -210,6 +250,7 @@
 ### Changed
 
 - Display, Reader, and Controls settings now open list menus instead of cycling through options one by one.
+- The X3 clock visibility setting is now phrased as `Hide Clock`, with existing `Show Clock` preferences migrated to the matching hide behavior.
 - Reading time and time-left pace tracking now ignore page intervals longer than the configured idle-time threshold.
 - Web portal pages now use shared templates, stylesheet, and logo assets, reducing on-device page size and improving browser caching.
 - Already-cached EPUBs now open directly to the first page without an extra book-loading popup refresh.

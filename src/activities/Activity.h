@@ -51,8 +51,19 @@ class Activity {
   virtual bool skipLoopDelay() { return false; }
   virtual bool preventAutoSleep() { return false; }
   virtual bool isReaderActivity() const { return false; }
+  virtual bool isHomeActivity() const { return false; }
+  // The open book uses its vertical swipe actions across the entire page;
+  // dialogs and lists retain their normal edge or scroll gestures.
+  virtual bool usesFullScreenReaderVerticalSwipes() const { return false; }
+  // Overlays can reserve the frontlight gesture for their own dismissal.
+  virtual bool allowFrontlightPanelGesture() const { return true; }
   virtual bool allowPowerAsConfirmInReaderMode() const { return false; }
+  virtual bool allowGlobalHomeGesture() const { return true; }
+  // Let overlays consume the global Home gesture as a dismiss action.
+  virtual bool handleHomeGesture() { return false; }
   virtual bool canSnapshotForSleepOverlay() const { return false; }
+  virtual bool handlesReaderPowerSettingsOverride() const { return false; }
+  virtual bool openReaderSettingsMenu() { return false; }
   virtual std::string getCurrentBookPath() const { return {}; }
   virtual ScreenshotInfo getScreenshotInfo() const { return {}; }
 
