@@ -830,7 +830,7 @@ void enterDeepSleep(bool fromTimeout) {
   powerManager.startDeepSleep(gpio);
 }
 
-void setupDisplayAndFonts(const bool seamless = false, const bool loadReaderResources = true) {
+void setupDisplayAndFonts(const bool seamless, const bool loadReaderResources, const bool useReaderRenderStack) {
 #if !defined(SIMULATOR) && !FREEINK_MCU_C3
   // C3 X3/X4 detection already runs in HalGPIO::begin() before SPI owns the
   // panel pins. S3 boards initialize display SPI inside display.begin(), so an
@@ -852,9 +852,11 @@ void setupDisplayAndFonts(const bool seamless = false, const bool loadReaderReso
 #endif
   renderer.begin();
   // FreeInkUI headers need more than 4 KB once the render loop and nested
-  // screen builders share the task stack. Every lightweight network target
-  // uses this shared 8 KB budget; reader rendering retains its 16 KB budget.
-  activityManager.begin(loadReaderResources ? READER_RENDER_TASK_STACK_BYTES : NETWORK_RENDER_TASK_STACK_BYTES);
+  // screen builders share the task stack. KOReader Sync needs the reader stack
+  // because setup can render its reader-style header before the deferred Wi-Fi
+  // child is promoted. Other lightweight network targets use 8 KB; reader
+  // rendering retains its 16 KB budget.
+  activityManager.begin(useReaderRenderStack ? READER_RENDER_TASK_STACK_BYTES : NETWORK_RENDER_TASK_STACK_BYTES);
 
   // Initialize font decompressor for compressed reader fonts
   if (!fontDecompressor.init()) {
@@ -928,6 +930,11 @@ void setup() {
   const bool cleanImageBaseOnEntry =
       snapshotTarget == SILENT_REBOOT_TARGET_READER && (snapshotPayload & SILENT_REBOOT_READER_CLEAN_IMAGE_BASE) != 0;
   const bool isNetworkResume = snapshotTarget >= static_cast<uint32_t>(NetworkBootTarget::OTA);
+  // KOReader Sync can render a reader-style header before its deferred Wi-Fi
+  // child is promoted, so keep the reader-sized render stack without loading
+  // the rest of the reader resources during its minimal network boot.
+  const bool useReaderRenderStack =
+      !isNetworkResume || snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC);
   silentRebootMagic = 0;
   silentRebootTarget = 0;
   silentRebootPayload = 0;
@@ -999,7 +1006,7 @@ void setup() {
   // We need 6 open files concurrently when parsing a new chapter
   if (!Storage.begin()) {
     LOG_ERR("MAIN", "SD card initialization failed");
-    setupDisplayAndFonts(isSilentReboot, !isNetworkResume);
+    setupDisplayAndFonts(isSilentReboot, !isNetworkResume, useReaderRenderStack);
     activityManager.goToFullScreenMessage("SD card error", EpdFontFamily::BOLD);
     return;
   }
@@ -1078,7 +1085,7 @@ void setup() {
                                                                        : BootResume::Splash;
   bool allowFastInitialReaderRefresh = false;
 
-  setupDisplayAndFonts(resume != BootResume::Splash, resume != BootResume::Network);
+  setupDisplayAndFonts(resume != BootResume::Splash, resume != BootResume::Network, useReaderRenderStack);
   logBootHeap("display and selected fonts ready");
 
   switch (resume) {

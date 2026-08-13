@@ -5,6 +5,8 @@
 #include <I18n.h>
 #include <Logging.h>
 #include <WiFi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #ifndef SIMULATOR
 #include <esp_mac.h>
 #endif
@@ -214,8 +216,11 @@ void WifiSelectionActivity::onRowEvent(const fui::ActionEvent& event, void* user
 
 void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
+  LOG_INF("WIFI", "selection enter free=%u maxAlloc=%u stack=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
+          static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
   sdFontSystem.releaseLoadedFont(renderer);
   ensureWifiEventLoggingRegistered();
+  LOG_INF("WIFI", "event logging registered free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Reset state
   selectedNetworkIndex = 0;
@@ -235,7 +240,11 @@ void WifiSelectionActivity::onEnter() {
   lastLoggedWifiStatus = -1;
   manualNetworkListRequested = false;
   autoAttemptedSsids.clear();
+  LOG_INF("WIFI", "loading credentials free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   const size_t savedCredentialCount = WIFI_STORE.getCredentialCount();
+  LOG_INF("WIFI", "credentials loaded count=%u free=%u maxAlloc=%u stack=%u",
+          static_cast<unsigned>(savedCredentialCount), ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
+          static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
   autoAttemptedSsids.reserve(savedCredentialCount);
 
   // Cache MAC address for display
@@ -245,11 +254,13 @@ void WifiSelectionActivity::onEnter() {
   visibleRows = 1;
   topIndex = 0;
   applySharedUiTheme(app, uiTarget);
+  LOG_INF("WIFI", "MAC/theme initialized free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   app.on(ACTION_ROW, &WifiSelectionActivity::onRowEvent, this);
   app.setScreen(&WifiSelectionActivity::listScreen, this);
 
   // Trigger first update to show scanning message
   requestUpdate();
+  LOG_INF("WIFI", "starting auto-connect/scan free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
   // Attempt to auto-connect to known networks. Try the last successful
   // network first for speed, then scan and try any visible saved networks by

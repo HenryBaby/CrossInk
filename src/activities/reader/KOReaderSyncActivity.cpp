@@ -6,6 +6,8 @@
 #include <Logging.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #include <algorithm>
 #include <cassert>
@@ -568,6 +570,8 @@ void KOReaderSyncActivity::onEnter() {
     return;
   }
 
+  LOG_INF("KOSync", "network entry free=%u maxAlloc=%u stack=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
+          static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
   ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
   lockInitialConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
 
@@ -597,6 +601,8 @@ void KOReaderSyncActivity::onEnter() {
   }
 
   // Launch WiFi selection subactivity
+  LOG_INF("KOSync", "launch WiFi selection free=%u maxAlloc=%u stack=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
+          static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
   startActivityForResult(std::make_unique<WifiSelectionActivity>(renderer, mappedInput, true, true),
                          [this](const ActivityResult& result) { onWifiSelectionComplete(!result.isCancelled); });
 }
