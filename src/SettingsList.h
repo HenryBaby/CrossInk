@@ -15,9 +15,11 @@
 
 #include "CrossPointSettings.h"
 #include "KOReaderCredentialStore.h"
+#include "QuickActions.h"
 #include "activities/settings/SettingsActivity.h"
 #include "util/Dictionary.h"
 #include "util/DictionaryRegistry.h"
+#include "util/FontFamilyLabel.h"
 
 inline std::string fontSizePointLabel(const uint8_t pointSize) { return std::to_string(pointSize) + " pt"; }
 
@@ -91,6 +93,10 @@ inline void removeEnumRawValue(SettingInfo& setting, const uint8_t rawValue) {
   }
 }
 
+inline bool settingKeyIs(const SettingInfo& setting, const char* key) {
+  return setting.key && std::strcmp(setting.key, key) == 0;
+}
+
 inline SettingInfo buildFontSizeSetting(const SdCardFontRegistry* registry) {
   if (registry && SETTINGS.sdFontFamilyName[0] != '\0') {
     const SdCardFontFamilyInfo* family = registry->findFamily(SETTINGS.sdFontFamilyName);
@@ -151,7 +157,7 @@ inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
     const auto& families = registry->getFamilies();
     enumStringValues.reserve(families.size());
     std::transform(families.begin(), families.end(), std::back_inserter(enumStringValues),
-                   [](const SdCardFontFamilyInfo& f) { return f.name; });
+                   [](const SdCardFontFamilyInfo& f) { return fontFamilyLabel(f.name, fontFamilyPointSizeRange(f)); });
   }
 
   // Capture the SD font count for the lambdas
@@ -163,8 +169,9 @@ inline SettingInfo buildFontFamilySetting(const SdCardFontRegistry* registry) {
   // with all options when SD fonts are present.
   std::vector<std::string> allStringValues;
   if (sdFontCount > 0) {
-    allStringValues.push_back(I18N.get(StrId::STR_LEXEND_DECA));
-    allStringValues.push_back(I18N.get(StrId::STR_BITTER));
+    constexpr FontFamilyPointSizeRange builtinRange{10, 16};
+    allStringValues.push_back(fontFamilyLabel(I18N.get(StrId::STR_LEXEND_DECA), builtinRange));
+    allStringValues.push_back(fontFamilyLabel(I18N.get(StrId::STR_BITTER), builtinRange));
     allStringValues.insert(allStringValues.end(), enumStringValues.begin(), enumStringValues.end());
   }
 
@@ -360,6 +367,62 @@ inline SettingInfo buildSleepScreenSetting() {
   return s;
 }
 
+inline SettingInfo buildHomeButtonActionSetting(const StrId nameId, uint8_t CrossPointSettings::* const valuePtr,
+                                                const char* const key) {
+  return SettingInfo::Enum(nameId, valuePtr,
+                           {StrId::STR_BACK_HOME,
+                            StrId::STR_TOGGLE_FRONTLIGHT,
+                            StrId::STR_READER_MENU,
+                            StrId::STR_IGNORE,
+                            StrId::STR_SLEEP,
+                            StrId::STR_PAGE_TURN,
+                            StrId::STR_TOGGLE_BOOKMARK,
+                            StrId::STR_READING_STATS,
+                            StrId::STR_MARK_FINISHED,
+                            StrId::STR_FORCE_REFRESH,
+                            StrId::STR_CHANGE_FONT,
+                            StrId::STR_TOGGLE_GUIDE_DOTS,
+                            StrId::STR_TOGGLE_BIONIC_READING,
+                            StrId::STR_CYCLE_PAGE_TURN,
+                            StrId::STR_SYNC_PROGRESS,
+                            StrId::STR_FILE_TRANSFER,
+                            StrId::STR_CALIBRE_WIRELESS,
+                            StrId::STR_JOIN_NETWORK,
+                            StrId::STR_CREATE_HOTSPOT,
+                            StrId::STR_SCREENSHOT_BUTTON,
+                            StrId::STR_READER_DARK_MODE,
+                            StrId::STR_FOOTNOTES,
+                            StrId::STR_BROWSE_FILES,
+                            StrId::STR_SAVE_CLIPPING,
+                            StrId::STR_LOOKUP},
+                           key, StrId::STR_CAT_CONTROLS)
+      .withEnumRawValues({CrossPointSettings::HOME_BUTTON_BACK_HOME,
+                          CrossPointSettings::HOME_BUTTON_TOGGLE_FRONTLIGHT,
+                          CrossPointSettings::HOME_BUTTON_READER_MENU,
+                          CrossPointSettings::IGNORE,
+                          CrossPointSettings::SLEEP,
+                          CrossPointSettings::PAGE_TURN,
+                          CrossPointSettings::TOGGLE_BOOKMARK,
+                          CrossPointSettings::READING_STATS,
+                          CrossPointSettings::MARK_FINISHED,
+                          CrossPointSettings::FORCE_REFRESH,
+                          CrossPointSettings::TOGGLE_FONT,
+                          CrossPointSettings::TOGGLE_GUIDE_DOTS,
+                          CrossPointSettings::TOGGLE_BIONIC_READING,
+                          CrossPointSettings::CYCLE_PAGE_TURN,
+                          CrossPointSettings::SYNC_PROGRESS,
+                          CrossPointSettings::FILE_TRANSFER,
+                          CrossPointSettings::CALIBRE_WIRELESS,
+                          CrossPointSettings::JOIN_NETWORK,
+                          CrossPointSettings::CREATE_HOTSPOT,
+                          CrossPointSettings::SCREENSHOT,
+                          CrossPointSettings::TOGGLE_DARK_MODE,
+                          CrossPointSettings::FOOTNOTES,
+                          CrossPointSettings::FILE_BROWSER,
+                          CrossPointSettings::CREATE_CLIPPING,
+                          CrossPointSettings::LOOKUP_WORD});
+}
+
 // Shared settings list used by both the device settings UI and the web settings API.
 // Each entry has a key (for JSON API) and category (for grouping).
 // ACTION-type entries and entries without a key are device-only.
@@ -413,7 +476,7 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                           {StrId::STR_LIST_VIEW, StrId::STR_GRID_VIEW}, "recentBooksView", StrId::STR_CAT_DISPLAY));
     add(SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                             StrId::STR_CAT_DISPLAY));
-#if FREEINK_CAP_FRONTLIGHT
+#if FREEINK_CAP_FRONTLIGHT && !FREEINK_DEVICE_X4PRO && !defined(SIMULATOR_DEVICE_X4_PRO)
     add(SettingInfo::Toggle(StrId::STR_RESTORE_LIGHT_ON_WAKE, &CrossPointSettings::frontlightRestoreOnWake,
                             "frontlightRestoreOnWake", StrId::STR_CAT_DISPLAY));
 #endif
@@ -487,7 +550,7 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                 CrossPointSettings::NEXT_PREV, CrossPointSettings::NEXT_NEXT}));
     add(SettingInfo::Enum(StrId::STR_ORIENTATION_AWARE, &CrossPointSettings::sideButtonOrientationAware,
                           {StrId::STR_NO, StrId::STR_YES}, "sideButtonOrientationAware", StrId::STR_CAT_CONTROLS));
-    add(SettingInfo::Enum(StrId::STR_SIDE_BTN_LONG_PRESS, &CrossPointSettings::sideButtonLongPress,
+    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::sideButtonLongPress,
                           {StrId::STR_IGNORE, StrId::STR_CHAPTER_SKIP_OPT, StrId::STR_CHANGE_FONT_SIZE,
                            StrId::STR_LONG_PRESS_BEHAVIOR_ORIENTATION},
                           "sideButtonLongPress", StrId::STR_CAT_CONTROLS)
@@ -497,7 +560,7 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
     add(SettingInfo::Enum(StrId::STR_ORIENTATION_AWARE, &CrossPointSettings::frontButtonOrientationAware,
                           {StrId::STR_NO, StrId::STR_NAV_BUTTONS, StrId::STR_ALL_BUTTONS},
                           "frontButtonOrientationAware", StrId::STR_CAT_CONTROLS));
-    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_BEHAVIOR, &CrossPointSettings::longPressButtonBehavior,
+    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPressButtonBehavior,
                           {StrId::STR_LONG_PRESS_BEHAVIOR_OFF, StrId::STR_LONG_PRESS_BEHAVIOR_SKIP,
                            StrId::STR_CHANGE_FONT_SIZE, StrId::STR_LONG_PRESS_BEHAVIOR_ORIENTATION},
                           "longPressButtonBehavior", StrId::STR_CAT_CONTROLS)
@@ -525,7 +588,11 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
                            StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP},
+                           StrId::STR_LOOKUP,
+                           StrId::STR_HOME_BUTTON_LOCK,
+                           StrId::STR_QUICK_ACTIONS,
+                           StrId::STR_TOGGLE_FRONTLIGHT,
+                           StrId::STR_TOGGLE_TOUCHSCREEN},
                           "shortPwrBtn", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::IGNORE,
                                 CrossPointSettings::SLEEP,
@@ -548,7 +615,11 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                 CrossPointSettings::FOOTNOTES,
                                 CrossPointSettings::FILE_BROWSER,
                                 CrossPointSettings::CREATE_CLIPPING,
-                                CrossPointSettings::LOOKUP_WORD}));
+                                CrossPointSettings::LOOKUP_WORD,
+                                CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER,
+                                CrossPointSettings::QUICK_ACTIONS,
+                                CrossPointSettings::TOGGLE_FRONTLIGHT,
+                                CrossPointSettings::TOGGLE_TOUCHSCREEN}));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -571,7 +642,11 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
                            StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP},
+                           StrId::STR_LOOKUP,
+                           StrId::STR_HOME_BUTTON_LOCK,
+                           StrId::STR_QUICK_ACTIONS,
+                           StrId::STR_TOGGLE_FRONTLIGHT,
+                           StrId::STR_TOGGLE_TOUCHSCREEN},
                           "longPwrBtn", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::IGNORE,
                                 CrossPointSettings::SLEEP,
@@ -594,7 +669,21 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                 CrossPointSettings::FOOTNOTES,
                                 CrossPointSettings::FILE_BROWSER,
                                 CrossPointSettings::CREATE_CLIPPING,
-                                CrossPointSettings::LOOKUP_WORD}));
+                                CrossPointSettings::LOOKUP_WORD,
+                                CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER,
+                                CrossPointSettings::QUICK_ACTIONS,
+                                CrossPointSettings::TOGGLE_FRONTLIGHT,
+                                CrossPointSettings::TOGGLE_TOUCHSCREEN}));
+    add(SettingInfo::Enum(StrId::STR_IN_READER, &CrossPointSettings::homeButtonInReaderEnabled,
+                          {StrId::STR_ENABLED, StrId::STR_DISABLED}, "homeButtonInReaderEnabled",
+                          StrId::STR_CAT_CONTROLS)
+            .withEnumRawValues({1, 0}));
+    add(buildHomeButtonActionSetting(StrId::STR_HOME_BUTTON_TAP, &CrossPointSettings::homeButtonTapAction,
+                                     "homeButtonTapAction"));
+    add(buildHomeButtonActionSetting(StrId::STR_HOME_BUTTON_DOUBLE_TAP, &CrossPointSettings::homeButtonDoubleTapAction,
+                                     "homeButtonDoubleTapAction"));
+    add(buildHomeButtonActionSetting(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::homeButtonLongPressAction,
+                                     "homeButtonLongPressAction"));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_MENU_ACTION, &CrossPointSettings::longPressMenuAction,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -616,7 +705,8 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
                            StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP},
+                           StrId::STR_LOOKUP,
+                           StrId::STR_QUICK_ACTIONS},
                           "longPressMenuAction", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
                                 CrossPointSettings::LONG_MENU_SLEEP,
@@ -638,7 +728,8 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                 CrossPointSettings::LONG_MENU_FOOTNOTES,
                                 CrossPointSettings::LONG_MENU_FILE_BROWSER,
                                 CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
-                                CrossPointSettings::LONG_MENU_LOOKUP_WORD}));
+                                CrossPointSettings::LONG_MENU_LOOKUP_WORD,
+                                CrossPointSettings::LONG_MENU_QUICK_ACTIONS}));
     add(SettingInfo::Enum(StrId::STR_LONG_PRESS_BACK_ACTION, &CrossPointSettings::longPressBackAction,
                           {StrId::STR_IGNORE,
                            StrId::STR_SLEEP,
@@ -660,7 +751,8 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                            StrId::STR_FOOTNOTES,
                            StrId::STR_BROWSE_FILES,
                            StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP},
+                           StrId::STR_LOOKUP,
+                           StrId::STR_QUICK_ACTIONS},
                           "longPressBackAction", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
                                 CrossPointSettings::LONG_MENU_SLEEP,
@@ -682,7 +774,8 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                 CrossPointSettings::LONG_MENU_FOOTNOTES,
                                 CrossPointSettings::LONG_MENU_FILE_BROWSER,
                                 CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
-                                CrossPointSettings::LONG_MENU_LOOKUP_WORD}));
+                                CrossPointSettings::LONG_MENU_LOOKUP_WORD,
+                                CrossPointSettings::LONG_MENU_QUICK_ACTIONS}));
     add(SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS));
 
@@ -828,9 +921,9 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
     add(SettingInfo::Toggle(StrId::STR_CLOCK_SYNCED, &CrossPointSettings::clockHasBeenSynced, "clockHasBeenSynced",
                             StrId::STR_CAT_SYSTEM));
     // Only show tilt page turn settings when the active device has a supported IMU.
-    if (halTiltSensor.isAvailable()) {
+    if (QuickActions::supportsTiltPageTurn()) {
       for (auto& setting : v) {
-        if (setting.nameId == StrId::STR_SHORT_PWR_BTN || setting.nameId == StrId::STR_LONG_PRESS_ACTION ||
+        if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn") ||
             setting.nameId == StrId::STR_LONG_PRESS_MENU_ACTION ||
             setting.nameId == StrId::STR_LONG_PRESS_BACK_ACTION) {
           const uint8_t rawValue =
@@ -893,6 +986,27 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     if (themeIt != v.end()) {
       removeEnumRawValue(*themeIt, static_cast<uint8_t>(CrossPointSettings::UI_THEME::CLASSIC));
       removeEnumRawValue(*themeIt, static_cast<uint8_t>(CrossPointSettings::UI_THEME::ROUNDEDRAFF));
+    }
+  }
+  if (!gpio.hasHomeKey()) {
+    v.erase(std::remove_if(v.begin(), v.end(),
+                           [](const SettingInfo& s) {
+                             return s.nameId == StrId::STR_IN_READER || s.nameId == StrId::STR_HOME_BUTTON_TAP ||
+                                    s.nameId == StrId::STR_HOME_BUTTON_DOUBLE_TAP ||
+                                    settingKeyIs(s, "homeButtonLongPressAction");
+                           }),
+            v.end());
+    for (auto& setting : v) {
+      if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn")) {
+        removeEnumRawValue(setting, CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER);
+      }
+    }
+  }
+  if (!Frontlight.present() || !gpio.hasTouch()) {
+    for (auto& setting : v) {
+      if (setting.nameId != StrId::STR_SHORT_PWR_BTN && !settingKeyIs(setting, "longPwrBtn")) continue;
+      if (!Frontlight.present()) removeEnumRawValue(setting, CrossPointSettings::TOGGLE_FRONTLIGHT);
+      if (!gpio.hasTouch()) removeEnumRawValue(setting, CrossPointSettings::TOGGLE_TOUCHSCREEN);
     }
   }
   if (registry && registry->getFamilyCount() > 0) {
@@ -1036,7 +1150,7 @@ inline std::vector<SettingInfo> buildReaderPageLayoutSettingsList(const std::vec
 inline void addSettingByKey(std::vector<SettingInfo>& target, const std::vector<SettingInfo>& allSettings,
                             const char* key) {
   const auto it = std::find_if(allSettings.begin(), allSettings.end(), [key](const auto& setting) {
-    return setting.key && std::strcmp(setting.key, key) == 0;
+    return settingKeyIs(setting, key);
   });
   if (it != allSettings.end()) {
     target.push_back(*it);
@@ -1052,17 +1166,32 @@ inline std::vector<SettingInfo> buildControlsSettingsParentList(const std::vecto
   const bool hasTiltPageTurnSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN);
   const bool hasTiltPageTurnDirectionSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
   const bool hasFrontButtons = !gpio.hasTouch();
+  const bool hasHomeKey = gpio.hasHomeKey();
 
   std::vector<SettingInfo> settings;
-  settings.reserve(2 + (hasFrontButtons ? 1u : 0u) + (hasTiltPageTurnSetting ? 1u : 0u) +
+  settings.reserve(3 + (hasHomeKey ? 1u : 0u) + (hasFrontButtons ? 1u : 0u) + (hasTiltPageTurnSetting ? 1u : 0u) +
                    (hasTiltPageTurnDirectionSetting ? 1u : 0u));
+  if (hasHomeKey) {
+    settings.push_back(SettingInfo::Submenu(StrId::STR_HOME_BUTTON, SettingAction::ControlsHomeButton));
+  }
   settings.push_back(SettingInfo::Submenu(StrId::STR_POWER_BUTTON, SettingAction::ControlsPowerButton));
   if (hasFrontButtons) {
     settings.push_back(SettingInfo::Submenu(StrId::STR_FRONT_BUTTONS, SettingAction::ControlsFrontButtons));
   }
   settings.push_back(SettingInfo::Submenu(StrId::STR_SIDE_BUTTONS, SettingAction::ControlsSideButtons));
+  settings.push_back(SettingInfo::Action(StrId::STR_QUICK_ACTIONS, SettingAction::QuickActions));
   if (hasTiltPageTurnSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN);
   if (hasTiltPageTurnDirectionSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
+  return settings;
+}
+
+inline std::vector<SettingInfo> buildControlsHomeButtonSettingsList(const std::vector<SettingInfo>& allSettings) {
+  std::vector<SettingInfo> settings;
+  settings.reserve(4);
+  addSettingByName(settings, allSettings, StrId::STR_IN_READER);
+  addSettingByName(settings, allSettings, StrId::STR_HOME_BUTTON_TAP);
+  addSettingByName(settings, allSettings, StrId::STR_HOME_BUTTON_DOUBLE_TAP);
+  addSettingByKey(settings, allSettings, "homeButtonLongPressAction");
   return settings;
 }
 
@@ -1070,7 +1199,7 @@ inline std::vector<SettingInfo> buildControlsPowerSettingsList(const std::vector
   std::vector<SettingInfo> settings;
   settings.reserve(3);
   addSettingByName(settings, allSettings, StrId::STR_SHORT_PWR_BTN);
-  addSettingByName(settings, allSettings, StrId::STR_LONG_PRESS_ACTION);
+  addSettingByKey(settings, allSettings, "longPwrBtn");
   if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES ||
       SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES ||
       SETTINGS.longPressMenuAction == CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_FOOTNOTES ||
@@ -1087,7 +1216,7 @@ inline std::vector<SettingInfo> buildControlsFrontButtonSettingsList(const std::
   settings.push_back(
       SettingInfo::Action(StrId::STR_REMAP_FRONT_BUTTONS_READER, SettingAction::RemapFrontButtonsReader));
   addSettingByKey(settings, allSettings, "frontButtonOrientationAware");
-  addSettingByName(settings, allSettings, StrId::STR_LONG_PRESS_BEHAVIOR);
+  addSettingByKey(settings, allSettings, "longPressButtonBehavior");
   addSettingByName(settings, allSettings, StrId::STR_LONG_PRESS_BACK_ACTION);
   addSettingByName(settings, allSettings, StrId::STR_LONG_PRESS_MENU_ACTION);
   return settings;
@@ -1098,7 +1227,7 @@ inline std::vector<SettingInfo> buildControlsSideButtonSettingsList(const std::v
   settings.reserve(3);
   addSettingByName(settings, allSettings, StrId::STR_SIDE_BTN_LAYOUT);
   addSettingByKey(settings, allSettings, "sideButtonOrientationAware");
-  addSettingByName(settings, allSettings, StrId::STR_SIDE_BTN_LONG_PRESS);
+  addSettingByKey(settings, allSettings, "sideButtonLongPress");
   return settings;
 }
 

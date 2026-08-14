@@ -7,6 +7,7 @@
 #include "Epub/Epub/ReaderRenderSpec.h"
 #include "activities/reader/WordRef.h"
 #include "clippings/ClipTextBuilder.h"
+#include "clippings/ClippingTextMatcher.h"
 
 TEST(ClipWordStore, StoresNullTerminatedUtf8TextWithStableOffsets) {
   ClipWordStore store;
@@ -55,6 +56,24 @@ TEST(ClipTextBuilder, JoinsInsertedHyphenAcrossParagraphBoundary) {
   const ClippingResult result = ClipTextBuilder::build(store, order, 0, 1, 2, 0, 2);
 
   EXPECT_EQ(result.text, "hyphenated");
+}
+
+TEST(ClippingTextMatcher, MatchesLayoutInsertedHyphenFragmentsAsOneToken) {
+  constexpr char token[] = "correctly";
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("cor-", true, token, sizeof(token) - 1, 0),
+            ClippingTextMatcher::TokenFragmentMatch::CONTINUES_TOKEN);
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("rectly", false, token, sizeof(token) - 1, 3),
+            ClippingTextMatcher::TokenFragmentMatch::COMPLETES_TOKEN);
+}
+
+TEST(ClippingTextMatcher, RejectsAuthoredHyphensAndMismatchedInsertedSuffixes) {
+  constexpr char token[] = "correctly";
+  constexpr char authoredHyphenToken[] = "wellknown";
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("well-known", false, authoredHyphenToken,
+                                                    sizeof(authoredHyphenToken) - 1, 0),
+            ClippingTextMatcher::TokenFragmentMatch::MISMATCH);
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("rectify", false, token, sizeof(token) - 1, 3),
+            ClippingTextMatcher::TokenFragmentMatch::MISMATCH);
 }
 
 TEST(ClippingLayout, RejectsStoredRangeWhenFontChangesWithoutChangingPageCount) {

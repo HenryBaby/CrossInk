@@ -170,7 +170,7 @@ void EpubReaderClippingListActivity::onEnter() {
   topIndex = 0;
   visibleRows = 1;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &EpubReaderClippingListActivity::onRowEvent, this);
   app.setScreen(&EpubReaderClippingListActivity::listScreen, this);
   detailText.reserve(CLIPPING_TEXT_MAX);

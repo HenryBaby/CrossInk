@@ -169,6 +169,18 @@ def inject_version(env):
         ])
         print(f'CrossInk test build version: {ci_version}{suffix}')
 
+    elif pioenv == 'x4-pro-debug':
+        branch = get_git_branch(project_dir)
+        short_hash = get_git_short_hash(project_dir)
+        ci_version = get_crossink_version(project_dir)
+        suffix = f'-{branch}+{short_hash}'
+        env.Append(CPPDEFINES=[
+            ('CROSSINK_VERSION', f'\\"{ci_version}{suffix}\\"'),
+            ('CROSSINK_BUILD_ENV', '\\"debug\\"'),
+            'CROSSINK_SHOW_SLEEP_BUILD_INFO',
+        ])
+        print(f'CrossInk test build version: {ci_version}{suffix}')
+
     elif pioenv == 'test':
         branch = get_git_branch(project_dir)
         short_hash = get_git_short_hash(project_dir)

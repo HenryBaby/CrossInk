@@ -14,8 +14,6 @@ void CrashActivity::onEnter() {
   if (panicMessage.empty()) {
     panicMessage = tr(STR_CRASH_NO_REASON);
   }
-  HalSystem::clearPanic();
-
   if (requestUpdateAndWait() != RequestUpdateResult::Rendered) {
     LOG_ERR("CRASH", "Crash screen could not be rendered synchronously");
     requestUpdate();

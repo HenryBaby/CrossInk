@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "FootnoteEntry.h"
+#include "PageCountEstimator.h"
 #include "blocks/ImageBlock.h"
 #include "blocks/TextBlock.h"
 
@@ -77,6 +78,7 @@ class PageHorizontalRule final : public PageElement {
 struct TableFragmentCell {
   static constexpr uint8_t MAX_SERIALIZED_LINES = 64;
   bool isHeader = false;
+  uint8_t colSpan = 1;
   std::vector<std::shared_ptr<TextBlock>> lines;
 
   bool serialize(FsFile& file) const;
@@ -176,6 +178,11 @@ class Page {
                                    bool foregroundBlack = true) const;
   bool serialize(FsFile& file) const;
   static std::unique_ptr<Page> deserialize(FsFile& file);
+
+  // Return the fixed-point page units protected by images on this page. Text
+  // pages return zero; image-only pages are one full page (256 units), while
+  // mixed pages contribute their visible image-height fraction.
+  uint16_t imageEstimateUnits(uint16_t viewportHeight) const;
 
   // Check if page contains any images (used to force full refresh)
   bool hasImages() const {

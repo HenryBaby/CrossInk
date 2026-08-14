@@ -235,6 +235,9 @@ class BaseTheme {
                         bool foregroundBlack = true) const;  // Right aligned (UI headers)
   virtual void fillBatteryIcon(const GfxRenderer& renderer, Rect rect, uint16_t percentage,
                                bool foregroundBlack = true) const;
+  // Button hint labels use three states: non-empty labels draw an active hint,
+  // an empty string clears an inactive slot, and nullptr preserves the existing
+  // background without drawing or registering a target.
   virtual void drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
                                const char* btn4, bool allowInvertedText = false) const;
   virtual void drawSideButtonHints(const GfxRenderer& renderer, const char* topBtn, const char* bottomBtn) const;
@@ -268,7 +271,9 @@ class BaseTheme {
                               const std::function<UIIcon(int index)>& rowIcon) const;
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message) const;
   virtual void drawOptionPopup(const GfxRenderer& renderer, const char* title, const std::vector<std::string>& options,
-                               int selectedIndex) const;
+                               int selectedIndex, bool showConfirmationFooter = false,
+                               const char* cancelLabel = nullptr, const char* saveLabel = nullptr,
+                               bool saveFocused = false, int primaryOptionIndex = -1) const;
   virtual void fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, const int progress) const;
   virtual void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
                              const int pageCount, std::string title, const int paddingBottom = 0,

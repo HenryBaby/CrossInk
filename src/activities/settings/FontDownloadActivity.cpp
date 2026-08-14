@@ -144,7 +144,7 @@ void FontDownloadActivity::onEnter() {
   uiReady_ = false;
   visibleRows_ = 1;
   topIndex_ = 0;
-  app_.setTheme(uiThemeTokens(uiTarget_));
+  applySharedUiTheme(app_, uiTarget_);
   app_.on(ACTION_ROW, &FontDownloadActivity::onRowEvent, this);
   app_.setScreen(&FontDownloadActivity::listScreen, this);
   WiFi.mode(WIFI_STA);

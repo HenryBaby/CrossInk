@@ -54,6 +54,7 @@ class ParsedText {
   // True after an intermediate flush leaves the rest of the same paragraph
   // buffered. The next layout pass must not apply first-line paragraph rules.
   bool isContinuation_ = false;
+  bool allowCharacterBreaks_ = false;
   std::vector<std::string> reorderedWordsScratch;
   std::vector<EpdFontFamily::Style> reorderedStylesScratch;
   std::vector<uint16_t> reorderedWidthsScratch;
@@ -83,7 +84,7 @@ class ParsedText {
                                    std::vector<bool>& noSpaceBeforeVec, ArenaVector<size_t>& lineBreakIndices);
   bool hyphenateWordAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                             ArenaVector<uint16_t>& wordWidths, bool allowFallbackBreaks);
-  bool splitPathologicalTokenAtIndex(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
+  bool splitTokenAtCodepointBoundary(size_t wordIndex, int availableWidth, const GfxRenderer& renderer, int fontId,
                                      ArenaVector<uint16_t>& wordWidths);
   uint32_t visibleOffsetBaseAt(size_t wordIndex) const;
   uint32_t visibleOffsetAt(size_t wordIndex) const;
@@ -134,5 +135,6 @@ class ParsedText {
                              const std::function<void(std::shared_ptr<TextBlock>, uint32_t)>& processLine,
                              bool includeLastLine = true);
   bool layoutAndExtractLinesPreservingSource(const GfxRenderer& renderer, int fontId, uint16_t viewportWidth,
-                                             const std::function<void(std::shared_ptr<TextBlock>)>& processLine) const;
+                                             const std::function<void(std::shared_ptr<TextBlock>)>& processLine,
+                                             bool allowCharacterBreaks = false) const;
 };

@@ -9,6 +9,8 @@
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "components/CompactHeader.h"
+#include "components/TouchActionButtons.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -23,19 +25,13 @@ StrId failureMessageFor(const OtaUpdater::OtaUpdaterError error) {
   return StrId::STR_UPDATE_FAILED;
 }
 
-struct OtaActionRects {
-  Rect cancel;
-  Rect update;
-};
-
-OtaActionRects getOtaActionRects(const GfxRenderer& renderer) {
-  const int top = renderer.getScreenHeight() - 80;
-  const int width = renderer.getScreenWidth() / 2;
-  return {Rect{0, top, width, 80}, Rect{width, top, renderer.getScreenWidth() - width, 80}};
-}
-
-bool contains(const Rect& rect, const int x, const int y) {
-  return x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
+TouchActionButtons::Layout getOtaActionLayout(const GfxRenderer& renderer) {
+  constexpr int sideMargin = 24;
+  constexpr int bottomMargin = 12;
+  constexpr int totalHeight = TouchActionButtons::kDefaultHeight * 2 + TouchActionButtons::kDefaultGap;
+  return TouchActionButtons::vertical(Rect{sideMargin, renderer.getScreenHeight() - bottomMargin - totalHeight,
+                                           std::max(1, renderer.getScreenWidth() - sideMargin * 2), totalHeight},
+                                      2);
 }
 }  // namespace
 
@@ -128,8 +124,12 @@ void OtaUpdateActivity::render(RenderLock&&) {
 
   const Rect header{0, metrics.topPadding, pageWidth, TouchHeaderBackButton::height(metrics, mappedInput)};
   const bool canGoBack = state == WAITING_CONFIRMATION || state == FAILED || state == NO_UPDATE;
-  if (canGoBack && mappedInput.hasTouchHardware()) {
-    TouchHeaderBackButton::draw(renderer, header, tr(STR_UPDATE), false);
+  if (mappedInput.hasTouchHardware()) {
+    if (canGoBack) {
+      TouchHeaderBackButton::draw(renderer, header, tr(STR_UPDATE), false);
+    } else {
+      CompactHeader::drawTitle(renderer, tr(STR_UPDATE));
+    }
   } else {
     GUI.drawHeader(renderer, header, tr(STR_UPDATE));
   }
@@ -156,13 +156,9 @@ void OtaUpdateActivity::render(RenderLock&&) {
                       (std::string(tr(STR_NEW_VERSION)) + updater.getLatestVersion()).c_str());
 
     if (mappedInput.hasTouch()) {
-      const auto actionRects = getOtaActionRects(renderer);
-      const int cancelTextWidth = renderer.getTextWidth(UI_10_FONT_ID, tr(STR_CANCEL));
-      renderer.drawText(UI_10_FONT_ID, actionRects.cancel.x + (actionRects.cancel.width - cancelTextWidth) / 2,
-                        actionRects.cancel.y + 28, tr(STR_CANCEL));
-      const int updateTextWidth = renderer.getTextWidth(UI_10_FONT_ID, tr(STR_UPDATE));
-      renderer.drawText(UI_10_FONT_ID, actionRects.update.x + (actionRects.update.width - updateTextWidth) / 2,
-                        actionRects.update.y + 28, tr(STR_UPDATE));
+      const auto actions = getOtaActionLayout(renderer);
+      const char* labels[] = {tr(STR_UPDATE), tr(STR_CANCEL)};
+      TouchActionButtons::draw(renderer, actions, labels, 0, -1, UI_10_FONT_ID);
     }
 
     const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_UPDATE), "", "");
@@ -262,13 +258,14 @@ void OtaUpdateActivity::loop() {
     int x = 0;
     int y = 0;
     if (mappedInput.wasScreenTapped(x, y)) {
-      const auto actionRects = getOtaActionRects(renderer);
-      if (contains(actionRects.cancel, x, y)) {
-        finish();
+      const auto actions = getOtaActionLayout(renderer);
+      const int action = TouchActionButtons::indexAt(actions, x, y);
+      if (action == 0) {
+        runUpdateInstall();
         return;
       }
-      if (contains(actionRects.update, x, y)) {
-        runUpdateInstall();
+      if (action == 1) {
+        finish();
         return;
       }
     }

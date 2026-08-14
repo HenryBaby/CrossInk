@@ -177,11 +177,15 @@ class SimulatorSmokeTest {
         break;
 
       case SmokeStep::RecentBooks:
+        if (mappedInputManager.hasHomeKey()) {
+          renderer.setOrientation(GfxRenderer::Orientation::LandscapeCounterClockwise);
+        }
         activityManager.goToSettings();
-        queueStep("Settings", SmokeStep::Settings);
+        queueStep(mappedInputManager.hasHomeKey() ? "Settings landscape" : "Settings", SmokeStep::Settings);
         break;
 
       case SmokeStep::Settings:
+        renderer.setOrientation(GfxRenderer::Orientation::Portrait);
         activityManager.replaceActivity(std::make_unique<ReaderOptionsActivity>(renderer, mappedInputManager));
         queueStep("Reader Options", SmokeStep::ReaderOptions);
         break;

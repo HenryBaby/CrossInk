@@ -1,4 +1,5 @@
 #pragma once
+#include <HalGPIO.h>
 #include <I18n.h>
 
 #include <algorithm>
@@ -8,8 +9,11 @@
 
 #include "GfxRenderer.h"
 #include "MappedInputManager.h"
+#include "components/TouchActionButtons.h"
+#include "components/UIScale.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/ButtonNavigator.h"
 
 class OptionPopup {
  public:
@@ -21,6 +25,7 @@ class OptionPopup {
       ownedStrings[i] = I18N.get(optionIds[i]);
     }
     onSelectCallback = std::move(onSelect);
+    prepareStandardShow();
     activate(currentIndex);
   }
 
@@ -32,6 +37,7 @@ class OptionPopup {
       ownedStrings[i] = options[i];
     }
     onSelectCallback = std::move(onSelect);
+    prepareStandardShow();
     activate(currentIndex);
   }
 
@@ -40,7 +46,30 @@ class OptionPopup {
     title = I18N.get(titleId);
     ownedStrings = options;
     onSelectCallback = std::move(onSelect);
+    prepareStandardShow();
     activate(currentIndex);
+  }
+
+  void showConfirmed(StrId titleId, const std::vector<std::string>& options, int currentIndex,
+                     std::function<void(int)> onActivate, std::function<void()> onSave,
+                     std::function<void()> onCancel) {
+    title = I18N.get(titleId);
+    ownedStrings = options;
+    onSelectCallback = std::move(onActivate);
+    onSaveCallback = std::move(onSave);
+    onCancelCallback = std::move(onCancel);
+    primaryOptionIndex = -1;
+    confirmationMode = true;
+    activate(currentIndex);
+  }
+
+  void setCancelCallback(std::function<void()> onCancel) { onCancelCallback = std::move(onCancel); }
+
+  // Confirmation-style option lists can mark one option as the primary action
+  // without changing the appearance of ordinary option selectors.
+  void setPrimaryOptionIndex(const int index) {
+    primaryOptionIndex = index;
+    layoutValid = false;
   }
 
   void show(const char* titleStr, const std::vector<std::string>& options, int currentIndex,
@@ -48,8 +77,11 @@ class OptionPopup {
     title = titleStr;
     ownedStrings = options;
     onSelectCallback = std::move(onSelect);
+    prepareStandardShow();
     activate(currentIndex);
   }
+
+  void setDismissOnOutsideTouchDown(bool enabled) { dismissOnOutsideTouchDown = enabled; }
 
   bool handleInput(MappedInputManager& input, const std::function<void()>& requestUpdate) {
     if (!active) return false;
@@ -63,11 +95,13 @@ class OptionPopup {
     int ty = 0;
     if (input.wasScreenTouchDown(tx, ty)) {
       touchDownOptionIndex = -1;
+      touchDownTarget = TouchTarget::None;
       const auto& hitLayout = getLayout(input.getRenderer());
       for (int i = 0; i < static_cast<int>(hitLayout.options.size()); i++) {
         if (contains(hitLayout.options[i], tx, ty)) {
           const int optionIndex = hitLayout.firstOptionIndex + i;
           touchDownOptionIndex = optionIndex;
+          touchDownTarget = TouchTarget::Option;
           if (selectedIndex != optionIndex) {
             selectedIndex = optionIndex;
             layoutValid = false;
@@ -76,56 +110,120 @@ class OptionPopup {
           break;
         }
       }
+      if (confirmationMode && contains(hitLayout.cancel, tx, ty)) {
+        touchDownTarget = TouchTarget::Cancel;
+        return true;
+      }
+      if (confirmationMode && contains(hitLayout.save, tx, ty)) {
+        touchDownTarget = TouchTarget::Save;
+        return true;
+      }
+      if ((dismissOnOutsideTouchDown || confirmationMode) && !contains(hitLayout.dialog, tx, ty)) {
+        touchDownTarget = TouchTarget::Outside;
+      }
       return true;
     }
 
     if (input.wasScreenTapped(tx, ty)) {
-      if (touchDownOptionIndex >= 0) {
-        selectedIndex = touchDownOptionIndex;
-        touchDownOptionIndex = -1;
-        active = false;
-        if (onSelectCallback) onSelectCallback(selectedIndex);
-        requestUpdate();
+      const auto& hitLayout = getLayout(input.getRenderer());
+      if (touchDownTarget == TouchTarget::Cancel && contains(hitLayout.cancel, tx, ty)) {
+        cancel(input, requestUpdate, false);
         return true;
       }
-      const auto& hitLayout = getLayout(input.getRenderer());
+      if (touchDownTarget == TouchTarget::Save && contains(hitLayout.save, tx, ty)) {
+        confirm(input, requestUpdate, false);
+        return true;
+      }
+      if (touchDownTarget == TouchTarget::Outside && !contains(hitLayout.dialog, tx, ty)) {
+        cancel(input, requestUpdate, false);
+        return true;
+      }
+      if (touchDownTarget == TouchTarget::Option && touchDownOptionIndex >= 0) {
+        selectedIndex = touchDownOptionIndex;
+        touchDownOptionIndex = -1;
+        if (confirmationMode) {
+          activateSelection(input, requestUpdate, false);
+          return true;
+        }
+        save(input, requestUpdate, false);
+        return true;
+      }
       for (int i = 0; i < static_cast<int>(hitLayout.options.size()); i++) {
         if (contains(hitLayout.options[i], tx, ty)) {
           selectedIndex = hitLayout.firstOptionIndex + i;
-          active = false;
-          if (onSelectCallback) onSelectCallback(selectedIndex);
-          requestUpdate();
+          if (confirmationMode) {
+            activateSelection(input, requestUpdate, false);
+            return true;
+          }
+          save(input, requestUpdate, false);
           return true;
         }
       }
       // Taps on the dialog chrome (title, padding) keep the popup open; taps outside dismiss it
       if (contains(hitLayout.dialog, tx, ty)) return true;
-      active = false;
-      requestUpdate();
+      cancel(input, requestUpdate, false);
       return true;
     }
 
-    if (input.wasPressed(MappedInputManager::Button::Up) || input.wasPressed(MappedInputManager::Button::Left)) {
-      selectedIndex = (selectedIndex - 1 + count) % count;
+    const auto swipe = input.wasSwipe();
+    if (swipe == MappedInputManager::SwipeDir::Up || swipe == MappedInputManager::SwipeDir::Down) {
+      const auto& hitLayout = getLayout(input.getRenderer());
+      const int visibleCount = static_cast<int>(hitLayout.options.size());
+      if (visibleCount < count) {
+        const int delta = swipe == MappedInputManager::SwipeDir::Up ? visibleCount : -visibleCount;
+        selectedIndex = std::clamp(selectedIndex + delta, 0, count - 1);
+        layoutValid = false;
+        requestUpdate();
+      }
+      touchDownOptionIndex = -1;
+      touchDownTarget = TouchTarget::None;
+      return true;
+    }
+
+    const auto& buttonLayout = getLayout(input.getRenderer());
+    const int visibleCount = static_cast<int>(buttonLayout.options.size());
+    const auto movePrevious = [&](const bool page) {
+      if (confirmationMode && footerFocused) {
+        footerFocused = false;
+        selectedIndex = count - 1;
+      } else if (confirmationMode && selectedIndex == 0) {
+        footerFocused = true;
+      } else {
+        selectedIndex = page ? ButtonNavigator::previousPageIndex(selectedIndex, count, visibleCount)
+                             : ButtonNavigator::previousIndex(selectedIndex, count);
+      }
       layoutValid = false;
       requestUpdate();
-      return true;
-    } else if (input.wasPressed(MappedInputManager::Button::Down) ||
-               input.wasPressed(MappedInputManager::Button::Right)) {
-      selectedIndex = (selectedIndex + 1) % count;
+    };
+    const auto moveNext = [&](const bool page) {
+      if (confirmationMode && footerFocused) {
+        footerFocused = false;
+        selectedIndex = 0;
+      } else if (confirmationMode && selectedIndex == count - 1) {
+        footerFocused = true;
+      } else {
+        selectedIndex = page ? ButtonNavigator::nextPageIndex(selectedIndex, count, visibleCount)
+                             : ButtonNavigator::nextIndex(selectedIndex, count);
+      }
       layoutValid = false;
       requestUpdate();
-      return true;
-    } else if (input.wasPressed(MappedInputManager::Button::Confirm)) {
-      active = false;
-      input.suppressNextConfirmRelease();
-      if (onSelectCallback) onSelectCallback(selectedIndex);
-      requestUpdate();
+    };
+    buttonNavigator.onPreviousRelease([&movePrevious] { movePrevious(false); });
+    buttonNavigator.onNextRelease([&moveNext] { moveNext(false); });
+    buttonNavigator.onPreviousContinuous([&movePrevious] { movePrevious(true); });
+    buttonNavigator.onNextContinuous([&moveNext] { moveNext(true); });
+
+    if (input.wasPressed(MappedInputManager::Button::Confirm)) {
+      if (confirmationMode && !footerFocused) {
+        activateSelection(input, requestUpdate, true);
+      } else if (confirmationMode) {
+        confirm(input, requestUpdate, true);
+      } else {
+        save(input, requestUpdate, true);
+      }
       return true;
     } else if (input.wasPressed(MappedInputManager::Button::Back)) {
-      active = false;
-      input.suppressNextBackRelease();
-      requestUpdate();
+      cancel(input, requestUpdate, true);
       return true;
     }
     return true;
@@ -133,7 +231,9 @@ class OptionPopup {
 
   bool processRender(GfxRenderer& renderer, const MappedInputManager& input) const {
     if (!active) return false;
-    const auto popupLabels = input.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    const auto popupLabels = input.mapLabels(confirmationMode ? tr(STR_CANCEL) : tr(STR_BACK),
+                                             confirmationMode && footerFocused ? tr(STR_SAVE) : tr(STR_SELECT),
+                                             tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, popupLabels.btn1, popupLabels.btn2, popupLabels.btn3, popupLabels.btn4, true);
     render(renderer);
     renderer.displayBuffer();
@@ -142,7 +242,8 @@ class OptionPopup {
 
   void render(const GfxRenderer& renderer) const {
     if (!active) return;
-    GUI.drawOptionPopup(renderer, title.c_str(), ownedStrings, selectedIndex);
+    GUI.drawOptionPopup(renderer, title.c_str(), ownedStrings, selectedIndex, confirmationMode, tr(STR_CANCEL),
+                        tr(STR_SAVE), footerFocused, primaryOptionIndex);
   }
 
   bool isActive() const { return active; }
@@ -151,8 +252,13 @@ class OptionPopup {
   struct Layout {
     Rect dialog{0, 0, 0, 0};
     std::vector<Rect> options;
+    Rect cancel{0, 0, 0, 0};
+    Rect save{0, 0, 0, 0};
+    TouchActionButtons::Layout footer;
     int firstOptionIndex = 0;
   };
+
+  enum class TouchTarget : uint8_t { None, Option, Cancel, Save, Outside };
 
   // Text measurement is expensive and wasScreenTouchDown() is level-triggered, so the
   // layout is computed once per show() and cached rather than rebuilt every loop().
@@ -162,40 +268,48 @@ class OptionPopup {
     const auto& metrics = UITheme::getInstance().getMetrics();
     const auto pageWidth = renderer.getScreenWidth();
     const auto pageHeight = renderer.getScreenHeight();
-    const int optionFontId = metrics.optionPopupUseSmallFont ? UI_10_FONT_ID : UI_12_FONT_ID;
+    const int optionFontId = uiScaleSpec().bodyFontId;
+    const bool touch = gpio.hasTouch();
     const EpdFontFamily::Style optionStyle =
         metrics.optionPopupOptionFontBold ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR;
 
-    const int itemSpacing = metrics.optionPopupItemSpacing;
+    const bool touchActionStyle = touch && primaryOptionIndex >= 0 && ownedStrings.size() == 2;
+    const int itemSpacing = touchActionStyle ? TouchActionButtons::kDefaultGap : metrics.optionPopupItemSpacing;
     const int innerPadding = metrics.optionPopupInnerPadding;
     const int selectionHPadding = metrics.optionPopupSelectionHPadding;
     const int selectionVPadding = metrics.optionPopupSelectionVPadding;
 
     const int optionLineHeight = renderer.getLineHeight(optionFontId);
     const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-    const int rowHeight = optionLineHeight + selectionVPadding * 2;
+    const int rowHeight =
+        touchActionStyle ? TouchActionButtons::kDefaultHeight : optionLineHeight + selectionVPadding * 2;
 
     int maxTextWidth = renderer.getTextWidth(UI_12_FONT_ID, title.c_str(), EpdFontFamily::BOLD);
-    for (const auto& opt : ownedStrings) {
-      const int width = renderer.getTextWidth(optionFontId, opt.c_str(), optionStyle);
+    for (size_t i = 0; i < ownedStrings.size(); ++i) {
+      const auto& opt = ownedStrings[i];
+      const auto style = primaryOptionIndex == static_cast<int>(i) ? EpdFontFamily::BOLD : optionStyle;
+      const int width = renderer.getTextWidth(optionFontId, opt.c_str(), style);
       if (width > maxTextWidth) maxTextWidth = width;
     }
 
     const int optionCount = static_cast<int>(ownedStrings.size());
-    const int maxDialogH = std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + innerPadding * 2,
-                                    pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
+    constexpr int footerHeight = 56;
+    const int footerSpace = confirmationMode ? footerHeight : 0;
+    const int maxDialogH =
+        std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + innerPadding * 2 + footerSpace,
+                 pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
     const int dialogW = std::min((maxTextWidth + innerPadding * 2 + selectionHPadding * 2 + metrics.scrollBarWidth +
                                   metrics.scrollBarRightOffset + selectionHPadding) *
                                      12 / 10,
                                  pageWidth - metrics.optionPopupDialogSideMargin * 2);
     const int titleContentWidth = std::max(1, dialogW - innerPadding * 2);
-    const int maxTitleLines =
-        std::max(1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - rowHeight) / titleLineHeight);
+    const int maxTitleLines = std::max(
+        1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - rowHeight - footerSpace) / titleLineHeight);
     const auto titleLines =
         renderer.wrappedText(UI_12_FONT_ID, title.c_str(), titleContentWidth, maxTitleLines, EpdFontFamily::BOLD);
     const int titleHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
     const int maxListHeight =
-        std::max(rowHeight, maxDialogH - innerPadding * 2 - titleHeight - metrics.optionPopupTitleGap);
+        std::max(rowHeight, maxDialogH - innerPadding * 2 - titleHeight - metrics.optionPopupTitleGap - footerSpace);
     const int rowStep = rowHeight + itemSpacing;
     const int visibleCount = std::max(1, std::min(optionCount, (maxListHeight + itemSpacing) / rowStep));
     const int safeSelectedIndex = std::clamp(selectedIndex, 0, optionCount - 1);
@@ -205,7 +319,7 @@ class OptionPopup {
     const int scrollBarGutter =
         hasHiddenOptions ? metrics.scrollBarWidth + metrics.scrollBarRightOffset + selectionHPadding : 0;
     const int contentHeight = titleHeight + metrics.optionPopupTitleGap + listHeight;
-    const int dialogH = contentHeight + innerPadding * 2;
+    const int dialogH = contentHeight + innerPadding * 2 + footerSpace;
     const int dialogX = (pageWidth - dialogW) / 2;
     const int dialogY = (pageHeight - dialogH) / 2;
     const int itemRectX = dialogX + innerPadding;
@@ -214,10 +328,31 @@ class OptionPopup {
 
     layout.dialog = Rect{dialogX, dialogY, dialogW, dialogH};
     layout.firstOptionIndex = visibleStart;
+    layout.footer = TouchActionButtons::Layout();
+    if (confirmationMode) {
+      const int footerY = dialogY + dialogH - footerSpace;
+      const bool showCancelButton = gpio.hasTouch();
+      layout.cancel = showCancelButton ? Rect{dialogX, footerY, dialogW / 2, footerHeight} : Rect();
+      layout.save = showCancelButton ? Rect{dialogX + dialogW / 2, footerY, dialogW - dialogW / 2, footerHeight}
+                                     : Rect{dialogX, footerY, dialogW, footerHeight};
+    } else {
+      layout.cancel = Rect();
+      layout.save = Rect();
+    }
     layout.options.clear();
     layout.options.reserve(visibleCount);
-    for (int i = 0; i < visibleCount; i++) {
-      layout.options.push_back(Rect{itemRectX, firstItemY + i * (rowHeight + itemSpacing), itemRectW, rowHeight});
+    if (touchActionStyle && visibleCount == 2) {
+      const auto actions =
+          TouchActionButtons::vertical(Rect{itemRectX, firstItemY, itemRectW, listHeight}, 2, rowHeight, itemSpacing);
+      const int primaryOffset = primaryOptionIndex - visibleStart;
+      const int secondaryOffset = primaryOffset == 0 ? 1 : 0;
+      layout.options.resize(2);
+      layout.options[primaryOffset] = actions.buttons[0];
+      layout.options[secondaryOffset] = actions.buttons[1];
+    } else {
+      for (int i = 0; i < visibleCount; i++) {
+        layout.options.push_back(Rect{itemRectX, firstItemY + i * (rowHeight + itemSpacing), itemRectW, rowHeight});
+      }
     }
     layoutValid = true;
     return layout;
@@ -228,17 +363,27 @@ class OptionPopup {
   }
 
   bool active = false;
+  bool dismissOnOutsideTouchDown = false;
+  bool confirmationMode = false;
+  bool footerFocused = false;
   std::string title;
   std::vector<std::string> ownedStrings;
   int selectedIndex = 0;
   int touchDownOptionIndex = -1;
+  TouchTarget touchDownTarget = TouchTarget::None;
   std::function<void(int)> onSelectCallback;
+  std::function<void()> onSaveCallback;
+  std::function<void()> onCancelCallback;
+  int primaryOptionIndex = -1;
+  ButtonNavigator buttonNavigator;
   mutable Layout layout;
   mutable bool layoutValid = false;
 
   void activate(int currentIndex) {
     layoutValid = false;
     touchDownOptionIndex = -1;
+    touchDownTarget = TouchTarget::None;
+    footerFocused = false;
     if (ownedStrings.empty()) {
       active = false;
       onSelectCallback = nullptr;
@@ -255,5 +400,42 @@ class OptionPopup {
       selectedIndex = currentIndex;
     }
     active = true;
+  }
+
+  void prepareStandardShow() {
+    confirmationMode = false;
+    footerFocused = false;
+    onSaveCallback = nullptr;
+    onCancelCallback = nullptr;
+    primaryOptionIndex = -1;
+  }
+
+  void activateSelection(MappedInputManager& input, const std::function<void()>& requestUpdate,
+                         const bool suppressRelease) {
+    active = false;
+    if (suppressRelease) input.suppressNextConfirmRelease();
+    if (onSelectCallback) onSelectCallback(selectedIndex);
+    requestUpdate();
+  }
+
+  void confirm(MappedInputManager& input, const std::function<void()>& requestUpdate, const bool suppressRelease) {
+    active = false;
+    if (suppressRelease) input.suppressNextConfirmRelease();
+    if (onSaveCallback) onSaveCallback();
+    requestUpdate();
+  }
+
+  void save(MappedInputManager& input, const std::function<void()>& requestUpdate, const bool suppressRelease) {
+    active = false;
+    if (suppressRelease) input.suppressNextConfirmRelease();
+    if (onSelectCallback) onSelectCallback(selectedIndex);
+    requestUpdate();
+  }
+
+  void cancel(MappedInputManager& input, const std::function<void()>& requestUpdate, const bool suppressRelease) {
+    active = false;
+    if (suppressRelease) input.suppressNextBackRelease();
+    if (onCancelCallback) onCancelCallback();
+    requestUpdate();
   }
 };

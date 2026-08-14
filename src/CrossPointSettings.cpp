@@ -17,6 +17,7 @@
 #include <string>
 
 #include "I18nKeys.h"
+#include "QuickActions.h"
 #include "SettingsList.h"
 #include "fontIds.h"
 
@@ -222,6 +223,12 @@ uint8_t defaultEnumRawValue(const SettingInfo& info, const uint8_t fieldDefault)
 
 bool isSleepScreenSetting(const SettingInfo& info) { return info.key && strcmp(info.key, "sleepScreen") == 0; }
 
+bool isValidQuickActionSlot(const uint8_t action) {
+  return action < CrossPointSettings::QUICK_ACTION_SLOT_ACTION_COUNT ||
+         action == CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER ||
+         action == CrossPointSettings::TOGGLE_FRONTLIGHT || action == CrossPointSettings::TOGGLE_TOUCHSCREEN;
+}
+
 uint8_t migrateTiltDirectionValue(const uint8_t direction) {
   if (direction == CrossPointSettings::TILT_LEFT_RIGHT) return CrossPointSettings::TILT_LEFT_RIGHT_INVERTED;
   if (direction == CrossPointSettings::TILT_LEFT_RIGHT_INVERTED) return CrossPointSettings::TILT_LEFT_RIGHT;
@@ -402,6 +409,11 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   if (sdFontFamilyName[0] != '\0') doc["sdFontFamilyName"] = sdFontFamilyName;
   if (dictionarySdFontFamilyName[0] != '\0') doc["dictionaryFont"] = dictionarySdFontFamilyName;
   doc["dictionaryFontSize"] = dictionaryFontPointSize;
+  JsonArray quickActionSlotsJson = doc["quickActionSlots"].to<JsonArray>();
+  for (const uint8_t action : quickActionSlots) {
+    quickActionSlotsJson.add(action);
+  }
+  doc["quickActionsTrigger"] = quickActionsTrigger;
   doc["language"] = (language < getLanguageCount()) ? LANGUAGE_CODES[language] : "EN";
   doc["tiltPageTurnDirectionSchema"] = TILT_DIRECTION_SCHEMA_CURRENT;
   doc["clockDateHasBeenSynced"] = clockDateHasBeenSynced;
@@ -502,6 +514,19 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
     this->*(info.valuePtr) = value;
   }
 
+  // The web API shares the base catalog so it can receive raw value 26 even
+  // on boards without a Home key. Never retain that reader-only action there.
+  if (!gpio.hasHomeKey()) {
+    if (shortPwrBtn == TOGGLE_HOME_BUTTON_IN_READER) {
+      shortPwrBtn = IGNORE;
+      needsResave = true;
+    }
+    if (longPwrBtn == TOGGLE_HOME_BUTTON_IN_READER) {
+      longPwrBtn = SLEEP;
+      needsResave = true;
+    }
+  }
+
   if (doc["fileBrowserDisplay"].isNull()) {
     if (!doc["fileBrowserPreview"].isNull()) {
       fileBrowserDisplay = clamp(doc["fileBrowserPreview"] | static_cast<uint8_t>(FILE_BROWSER_DISPLAY_1_LINE),
@@ -570,6 +595,26 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   strncpy(dictionarySdFontFamilyName, dictionaryFamily, sizeof(dictionarySdFontFamilyName) - 1);
   dictionarySdFontFamilyName[sizeof(dictionarySdFontFamilyName) - 1] = '\0';
   dictionaryFontPointSize = doc["dictionaryFontSize"] | static_cast<uint8_t>(0);
+  const JsonArrayConst quickActionSlotsJson = doc["quickActionSlots"].as<JsonArrayConst>();
+  if (!quickActionSlotsJson.isNull()) {
+    for (size_t i = 0; i < std::size(quickActionSlots); ++i) {
+      const uint8_t action = quickActionSlotsJson[i] | static_cast<uint8_t>(IGNORE);
+      if (isValidQuickActionSlot(action)) {
+        quickActionSlots[i] = action;
+      } else {
+        quickActionSlots[i] = IGNORE;
+        needsResave = true;
+      }
+    }
+  }
+  const uint8_t persistedQuickActionsTrigger =
+      doc["quickActionsTrigger"] | static_cast<uint8_t>(QuickActions::Trigger::None);
+  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::LongMenu)) {
+    quickActionsTrigger = persistedQuickActionsTrigger;
+  } else {
+    quickActionsTrigger = static_cast<uint8_t>(QuickActions::Trigger::None);
+    needsResave = true;
+  }
   if (storedFontFamily >= BUILTIN_FONT_COUNT) needsResave = true;
   if (doc["lineHeightPercent"].isNull() && !doc["lineSpacing"].isNull()) {
     const uint8_t legacySpacing =

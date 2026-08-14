@@ -1,5 +1,51 @@
 ## [Unreleased]
 
+### Upstream CrossInk v1.5.1-rc
+
+This development branch incorporates [`uxjulia/CrossInk` v1.5.1-rc](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc) as the basis for local X4 Pro testing. The additions and fixes below were developed by the upstream CrossInk project.
+
+#### Added
+
+- Full X4 Pro support.
+- New Quick Actions menu.
+- Power-button shortcuts and Quick Actions can toggle the frontlight or reader touchscreen when supported.
+- On one-cover Lyra, Dashboard, and Minimal Home screens, swipe left to switch between the two most recent books.
+
+#### Changed
+
+- EPUB progress calculations reuse a bounded in-memory spine-size index while reading, reducing repeated SD-card seeks.
+- Waking from deep sleep keeps the selected sleep screen visible until Home or the reader is ready, removing the boot-up splash screen.
+- Reader menu settings group Controls and Mark as Finished with the gear-tab actions in a consistent order.
+- Font Family choices identify built-in and SD-card fonts by their available point-size ranges.
+
+#### Fixed
+
+- Long-pressing Up or Down in long popup lists advances by a full page.
+- EPUB table fixes preserve final-column widths, give dense tables enough space for leading labels, and split oversized words instead of clipping them.
+- Nearby Position Sync leaves the sending device with a single Back action after sharing a position and tolerates repeated packets while the receiving reader prepares the location.
+- Clearing an EPUB's reading cache returns Home so the book can rebuild its cache safely when reopened.
+- Large EPUB tables use a bounded row-streaming grid on low-memory devices, preserving readable styled cells and falling back explicitly for unsupported table structures.
+- Dictionary definition popups no longer leave an empty white button-hint block over the reader page.
+- Recent Books and KOReader Sync settings remain intact after returning from lightweight network screens.
+- XTCH cover and thumbnail generation stays within the available memory on X3/X4 after its cache is cleared.
+- Change Font shortcuts switch away from an active SD-card font instead of reindexing with the same font.
+- Network connections no longer trigger repeated full-panel flashes.
+- Dictionary word selection follows the physical front-button direction in counter-clockwise landscape mode.
+- End-of-book suggestions can be opened by tapping them on touch devices.
+- XTC and XTCH readers ignore overlapping page turns while the display is updating, preventing corrupted pages after rapid swipes.
+- XTC and XTCH readers no longer corrupt a page when turning or opening the menu during rendering.
+- Dictionary font switches retry after releasing the reader font when memory is tight.
+- XTC table of contents includes every available page entry, so large books can jump beyond the first 128 pages.
+- Saved clipping highlights remain accurate when a font or font-size change reflows a word across an inserted hyphen.
+- Xteink readers wake faster by skipping redundant bootloader image validation after sleep.
+- Large EPUB images keep the reader responsive during decoding.
+- Full-height EPUB images no longer disappear when their container adds a top margin.
+- EPUB page estimates keep image-only and mixed image pages from being multiplied by XHTML byte density.
+- Cancelling a chapter, footnote, location, or QR screen opened from the EPUB menu returns to that menu.
+- EPUB and XTC readers retain less memory during ordinary reading by loading end-of-book suggestions only when needed.
+- Long inherited dictionary-font names no longer overlap or extend beyond Font Options rows at Large UI size.
+- KOReader Sync progress no longer remains interleaved with EPUB image pages after returning to the reader.
+
 ## [v1.5.1] - 2026-08-09
 
 ### Fixed
@@ -14,6 +60,12 @@
 This release incorporates the complete [`uxjulia/CrossInk` v1.5.0](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.0) codebase. The features and fixes below were developed by the upstream CrossInk project.
 
 #### Added
+
+- X4 Pro readers can lock the Home button while reading, with a Power-button shortcut to toggle it.
+- End-of-book suggestions can now be opened directly by tapping their rows on touch devices.
+- Quick Actions lets readers assign up to five favorite reader commands to one Power, Back, or Menu shortcut.
+
+### Fixed
 
 - EPUB tables now lay out a row at a time in both Incremental and Full Section indexing, keeping regular tables readable without whole-table buffering.
 - Nearby File Transfer can send EPUB, TXT, XTC, XTCH, PNG, and BMP files directly between two CrossInk devices without a Wi-Fi network.
@@ -34,6 +86,7 @@ This release incorporates the complete [`uxjulia/CrossInk` v1.5.0](https://githu
 
 #### Changed
 
+- PSRAM-equipped readers now keep EPUB grayscale and image-cache working buffers in external memory, preserving more internal RAM for layout and reducing repeated SD reads on image pages.
 - Reader font sizes now persist as actual point sizes, keeping the closest matching size when font families or installed files change.
 - SD-card fonts now include the built-in reader fallback stack for common symbols, emoji, and selected CJK glyphs while retaining Noto Sans fallback coverage.
 - Downloadable SD-card fonts are now rendered with the same darker anti-aliasing as the built-in reading fonts.
@@ -82,7 +135,7 @@ This release incorporates the complete [`uxjulia/CrossInk` v1.5.0](https://githu
 - Dictionary misses can switch dictionaries without leaving the reader, and dictionary read failures now report an error instead of a false “not found.”
 - Reader popups, KOReader Wi-Fi labels, Lyra battery headers, and the sleep message now remain correctly oriented and positioned.
 - Manual refreshes preserve EPUB and TXT text anti-aliasing; XTC and XTCH status bars show the configured time-left estimate.
-- Watchdog resets return to the crash-report flow, and power-button wake timing no longer depends on SD-card startup.
+- Watchdog panics with captured diagnostics open crash reporting, while reset-only events return normally; power-button wake timing no longer depends on SD-card startup.
 - The web file manager and uploads now handle simulator/device ports and stalled connections safely; unsupported settings stay hidden, and the optimizer removes empty chapter stubs without breaking table-of-contents links.
 
 ## [v1.4.4] - 2026-07-30

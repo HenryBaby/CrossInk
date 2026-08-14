@@ -25,11 +25,17 @@ class BookStatsActivity final : public Activity {
   Page page = Page::PerBook;
   int selectedEditField = 0;
   bool didChangeStats = false;
+  BookReadingStats dateEditStatsSnapshot;
+  GlobalReadingStats dateEditGlobalStatsSnapshot;
+  bool dateEditSnapshotValid = false;
+  bool didChangeStatsBeforeDateEdit = false;
 
   bool hasEditableBook() const { return !bookCachePath.empty() && halClock.isAvailable(); }
   bool usesNoRtcSingleScreenLayout() const { return !halClock.isAvailable(); }
   void refreshAllDevicesStats();
   void saveStats();
+  void beginDateEditing();
+  void finishDateEditing(bool saveChanges);
   void cycleEditField();
   void adjustSelectedDateField(int delta);
   void applyCompletedState(bool completed);

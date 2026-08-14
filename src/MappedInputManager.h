@@ -36,6 +36,7 @@ class MappedInputManager {
   void suppressNextConfirmRelease() { suppressConfirmRelease = true; }
   void suppressNextPowerRelease() { suppressPowerRelease = true; }
   void suppressNextPowerConfirmRelease() { suppressPowerConfirmRelease = true; }
+  bool isPowerReleaseSuppressed() const { return suppressPowerRelease; }
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
   bool isPressed(Button button) const;
@@ -46,11 +47,17 @@ class MappedInputManager {
   bool hasTouchHardware() const;
   // True on boards with a capacitive home key (X4 Pro), where the bottom-edge
   // up-swipe is the reader-menu gesture rather than the exit-to-home gesture.
-  bool hasHomeKey() const { return hasHomeKeyHardware(); }
+  // The capacitive Home key is part of the touch controller.  Treat it like
+  // screen touch so "Disable Touchscreen" also disables the key in readers.
+  bool hasHomeKey() const { return touchInputEnabled() && hasHomeKeyHardware(); }
+  // Capability is deliberately separate from this reader-only input gate so
+  // Home-key layouts remain available while the key is locked on reader pages.
+  bool isHomeButtonLockedInReader() const;
   bool wasScreenTapped(int& x, int& y) const;
   // Also reports how long the finger was held before release.
   bool wasScreenTapped(int& x, int& y, unsigned long& heldMs) const;
   bool isScreenTouchLongPress(int& x, int& y, unsigned long thresholdMs) const;
+  bool wasScreenLongPress(int& x, int& y) const;
   bool isInVerticalEdgeGestureZone(int y) const;
   bool wasScreenTouchDown(int& x, int& y) const;
   bool isScreenTouchTapCandidate(int& x, int& y, unsigned long& heldMs) const;
@@ -79,9 +86,15 @@ class MappedInputManager {
   SwipeDir wasSwipe() const;
   bool wasSwipeWithPoints(SwipeDir& direction, int& startX, int& startY, int& endX, int& endY) const;
   bool wasLeftEdgeGesture() const;
+  // An upward swipe that starts in the lower edge band. X4 Pro uses this for
+  // its reader menu because its capacitive key handles Home.
+  bool wasBottomEdgeUpSwipe() const;
   // Exit-to-home intent. Boards with a capacitive home key (X4 Pro) use the
   // key's press edge; everywhere else it's the bottom-edge up-swipe.
   bool wasHomeGesture() const;
+  // Deliver a delayed capacitive Home-key tap through the usual activity route.
+  void queueDeferredHomeGesture() { deferredHomeGesture = true; }
+  void clearDeferredHomeGesture() const { deferredHomeGesture = false; }
   // Contextual menu intent (the reader menu). Home-key boards move this to the
   // bottom-edge up-swipe (freed by the home key); others keep the top-edge
   // down-swipe.
@@ -100,9 +113,11 @@ class MappedInputManager {
   constexpr bool hasTouch() const { return false; }
   constexpr bool hasTouchHardware() const { return false; }
   constexpr bool hasHomeKey() const { return false; }
+  constexpr bool isHomeButtonLockedInReader() const { return false; }
   constexpr bool wasScreenTapped(int&, int&) const { return false; }
   constexpr bool wasScreenTapped(int&, int&, unsigned long&) const { return false; }
   constexpr bool isScreenTouchLongPress(int&, int&, unsigned long) const { return false; }
+  constexpr bool wasScreenLongPress(int&, int&) const { return false; }
   constexpr bool isInVerticalEdgeGestureZone(int) const { return false; }
   constexpr bool wasScreenTouchDown(int&, int&) const { return false; }
   constexpr bool isScreenTouchTapCandidate(int&, int&, unsigned long&) const { return false; }
@@ -127,7 +142,10 @@ class MappedInputManager {
     return false;
   }
   constexpr bool wasLeftEdgeGesture() const { return false; }
+  constexpr bool wasBottomEdgeUpSwipe() const { return false; }
   constexpr bool wasHomeGesture() const { return false; }
+  constexpr void queueDeferredHomeGesture() {}
+  constexpr void clearDeferredHomeGesture() const {}
   constexpr bool wasMenuGesture() const { return false; }
   constexpr bool wasLightPanelGesture() const { return false; }
   constexpr bool wasReaderMenuGesture() const { return false; }
@@ -138,6 +156,8 @@ class MappedInputManager {
   bool wasAnyPressed() const;
   bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
+  // True when reader-mode orientation handling swaps the logical front navigation buttons.
+  bool isFrontNavButtonSwapActive() const;
   Labels mapLabels(const char* back, const char* confirm, const char* previous, const char* next) const;
   // Returns the raw front button index that was pressed this frame (or -1 if none).
   int getPressedFrontButton() const;
@@ -170,6 +190,7 @@ class MappedInputManager {
   mutable bool suppressPowerConfirmRelease = false;
 #if CROSSINK_APP_CAP_TOUCH
   mutable bool suppressTouchTap = false;
+  mutable bool deferredHomeGesture = false;
 #endif
 #ifdef SIMULATOR
   std::array<bool, BUTTON_COUNT> simulatorPressed{};
@@ -181,6 +202,7 @@ class MappedInputManager {
     bool pressed = false;
     bool pressedThisFrame = false;
     bool releasedThisFrame = false;
+    bool longPressFired = false;
     int startX = 0;
     int startY = 0;
     int currentX = 0;
@@ -200,7 +222,6 @@ class MappedInputManager {
   bool hasHomeKeyHardware() const;
   bool wasBackGesture() const;
   bool wasTopEdgeDownSwipe() const;
-  bool wasBottomEdgeUpSwipe() const;
   // Fetch the pending swipe (if any) and map both endpoints to logical screen coords.
   bool decodeSwipe(int& sx, int& sy, int& ex, int& ey) const;
   bool listItemFromPoint(int x, int y, int& index, int itemCount, int selectedIndex, int listTop, int listHeight,

@@ -55,6 +55,30 @@ void BookStatsActivity::saveStats() {
   didChangeStats = false;
 }
 
+void BookStatsActivity::beginDateEditing() {
+  dateEditStatsSnapshot = stats;
+  dateEditGlobalStatsSnapshot = globalStats;
+  didChangeStatsBeforeDateEdit = didChangeStats;
+  dateEditSnapshotValid = true;
+  page = Page::EditDates;
+  requestUpdate();
+}
+
+void BookStatsActivity::finishDateEditing(const bool saveChanges) {
+  if (saveChanges) {
+    saveStats();
+  } else if (dateEditSnapshotValid) {
+    stats = dateEditStatsSnapshot;
+    globalStats = dateEditGlobalStatsSnapshot;
+    didChangeStats = didChangeStatsBeforeDateEdit;
+    setResult(ReadingStatsResult{didChangeStats});
+  }
+
+  dateEditSnapshotValid = false;
+  page = Page::PerBook;
+  requestUpdate();
+}
+
 void BookStatsActivity::cycleEditField() { selectedEditField = (selectedEditField + 1) % 6; }
 
 ReadingStatsDate BookStatsActivity::defaultDateForField(const bool finishedField) const {
@@ -287,9 +311,7 @@ bool BookStatsActivity::selectEditFieldFromTouchTarget(const int touchTarget) {
 void BookStatsActivity::loop() {
   if (TouchHeaderBackButton::wasTapped(mappedInput, TouchHeaderBackButton::compactHeaderRect(renderer))) {
     if (page == Page::EditDates) {
-      saveStats();
-      page = Page::PerBook;
-      requestUpdate();
+      finishDateEditing(true);
     } else {
       exitStatsActivity();
     }
@@ -332,11 +354,17 @@ void BookStatsActivity::loop() {
         adjustSelectedDateField(-1);
         return;
       }
+      if (tappedTarget == BookStatsTouchTarget::DateSave) {
+        finishDateEditing(true);
+        return;
+      }
+      if (tappedTarget == BookStatsTouchTarget::DateCancel) {
+        finishDateEditing(false);
+        return;
+      }
     }
     if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
-      saveStats();
-      page = Page::PerBook;
-      requestUpdate();
+      finishDateEditing(true);
       return;
     }
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -366,8 +394,7 @@ void BookStatsActivity::loop() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
     mappedInput.suppressNextConfirmRelease();
     if (page == Page::PerBook && hasEditableBook()) {
-      page = Page::EditDates;
-      requestUpdate();
+      beginDateEditing();
       return;
     }
     exitStatsActivity();
@@ -389,13 +416,11 @@ void BookStatsActivity::loop() {
     int touchedTarget = -1;
     if (hasEditableBook() && mappedInput.wasItemTapped(touchedTarget) &&
         touchedTarget == BookStatsTouchTarget::StartedDaysStat) {
-      page = Page::EditDates;
-      requestUpdate();
+      beginDateEditing();
       return;
     }
     if (hasEditableBook() && upOrLeftPressed) {
-      page = Page::EditDates;
-      requestUpdate();
+      beginDateEditing();
       return;
     }
     if (downOrRightPressed) {

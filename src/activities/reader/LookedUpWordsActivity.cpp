@@ -57,7 +57,7 @@ void LookedUpWordsActivity::onEnter() {
   topIndex = 0;
   visibleRows = 1;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &LookedUpWordsActivity::onRowEvent, this);
   app.setScreen(&LookedUpWordsActivity::historyScreen, this);
   reloadEntries();

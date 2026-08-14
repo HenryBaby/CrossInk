@@ -71,6 +71,15 @@ class GfxRenderer {
   mutable int _stripRows = 0;
   mutable bool _stripActive = false;
 
+  // Optional logical-space clip used while a TextBlock is rendered inside a
+  // table cell. Glyph bitmaps and background fills both pass through this
+  // guard, so an emergency oversized codepoint cannot paint into a neighbour.
+  mutable bool textClipActive_ = false;
+  mutable int textClipLeft_ = 0;
+  mutable int textClipTop_ = 0;
+  mutable int textClipRight_ = 0;   // half-open
+  mutable int textClipBottom_ = 0;  // half-open
+
   class BitmapScratchLock {
     const GfxRenderer& renderer_;
     bool locked_ = false;
@@ -271,6 +280,11 @@ class GfxRenderer {
   void drawText(int fontId, int x, int y, const char* text, bool black = true,
                 EpdFontFamily::Style style = EpdFontFamily::REGULAR,
                 BidiUtils::BidiBaseDir baseDir = BidiUtils::BidiBaseDir::AUTO) const;
+  // Guard text/background pixels while a table cell is rendered. The guard is
+  // intentionally single-level and scoped by the caller; nested use is a
+  // programming error caught in debug builds.
+  void beginTextClip(int x, int y, int width, int height) const;
+  void endTextClip() const;
   int getSpaceWidth(int fontId, EpdFontFamily::Style style = EpdFontFamily::REGULAR) const;
   /// Returns the total inter-word advance: fp4::toPixel(spaceAdvance + kern(leftCp,' ') + kern(' ',rightCp)).
   /// Using a single snap avoids the +/-1 px rounding error that arises when space advance and kern are

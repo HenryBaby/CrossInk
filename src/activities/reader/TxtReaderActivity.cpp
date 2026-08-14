@@ -15,6 +15,7 @@
 #include "CrossPointState.h"
 #include "GlobalActions.h"
 #include "MappedInputManager.h"
+#include "QuickActions.h"
 #include "ReaderUtils.h"
 #include "RecentBooksStore.h"
 #include "SdCardFontSystem.h"
@@ -96,6 +97,22 @@ size_t parseAndWrapLines(const uint8_t* buffer, size_t chunkSize, size_t fileOff
 int getReaderLineHeight(const GfxRenderer& renderer, const int fontId) {
   return std::max(1, static_cast<int>(renderer.getLineHeight(fontId) * SETTINGS.getReaderLineCompression() + 0.5f));
 }
+
+void drawToast(const GfxRenderer& renderer, const char* msg) {
+  constexpr int toastPadX = 20;
+  constexpr int toastPadY = 12;
+  const bool toastBackgroundBlack = ReaderUtils::readerForegroundBlack();
+  const int msgW = renderer.getTextWidth(UI_10_FONT_ID, msg);
+  const int msgH = renderer.getLineHeight(UI_10_FONT_ID);
+  const int toastW = msgW + toastPadX * 2;
+  const int toastH = msgH + toastPadY * 2;
+  const int toastX = (renderer.getScreenWidth() - toastW) / 2;
+  const int toastY = (renderer.getScreenHeight() - toastH) / 2;
+  renderer.fillRect(toastX, toastY, toastW, toastH, toastBackgroundBlack);
+  renderer.drawRect(toastX, toastY, toastW, toastH, !toastBackgroundBlack);
+  renderer.drawText(UI_10_FONT_ID, toastX + toastPadX, toastY + toastPadY, msg, !toastBackgroundBlack);
+  renderer.displayBuffer();
+}
 }  // namespace
 
 void TxtReaderActivity::onEnter() {
@@ -168,6 +185,7 @@ void TxtReaderActivity::openReaderMenu() {
 }
 
 void TxtReaderActivity::loop() {
+  if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
   if (consumeLongPowerButtonRelease()) {
     return;
   }
@@ -324,37 +342,59 @@ bool TxtReaderActivity::consumeLongPowerButtonHold() {
   return true;
 }
 
-bool TxtReaderActivity::executePowerButtonAction() {
-  auto executeAction = [this](const CrossPointSettings::SHORT_PWRBTN action) {
-    switch (action) {
-      case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
-        activityManager.goToFileTransfer(txt ? txt->getPath() : "");
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::CALIBRE_WIRELESS:
-        activityManager.goToCalibreWireless(txt ? txt->getPath() : "");
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::JOIN_NETWORK:
-        activityManager.goToJoinNetworkFileTransfer(txt ? txt->getPath() : "");
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::CREATE_HOTSPOT:
-        activityManager.goToHotspotFileTransfer(txt ? txt->getPath() : "");
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::TOGGLE_DARK_MODE:
-        toggleDarkMode();
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
-        activityManager.goToFileBrowser(txt ? txt->getPath() : "");
-        return true;
-      case CrossPointSettings::SHORT_PWRBTN::CREATE_CLIPPING:
-        return false;
-      default:
-        return false;
-    }
-  };
+bool TxtReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::SLEEP:
+    case CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH:
+    case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
+    case CrossPointSettings::SHORT_PWRBTN::CALIBRE_WIRELESS:
+    case CrossPointSettings::SHORT_PWRBTN::JOIN_NETWORK:
+    case CrossPointSettings::SHORT_PWRBTN::CREATE_HOTSPOT:
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_DARK_MODE:
+    case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FRONTLIGHT:
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_TOUCHSCREEN:
+      return true;
+    default:
+      return false;
+  }
+}
 
+bool TxtReaderActivity::executeReaderShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
+      activityManager.goToFileTransfer(txt ? txt->getPath() : "");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::CALIBRE_WIRELESS:
+      activityManager.goToCalibreWireless(txt ? txt->getPath() : "");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::JOIN_NETWORK:
+      activityManager.goToJoinNetworkFileTransfer(txt ? txt->getPath() : "");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::CREATE_HOTSPOT:
+      activityManager.goToHotspotFileTransfer(txt ? txt->getPath() : "");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_DARK_MODE:
+      toggleDarkMode();
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
+      activityManager.goToFileBrowser(txt ? txt->getPath() : "");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_HOME_BUTTON_IN_READER:
+      toggleHomeButtonInReader();
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FRONTLIGHT:
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_TOUCHSCREEN:
+      return handleGlobalPowerButtonAction(action);
+    default:
+      return false;
+  }
+}
+
+bool TxtReaderActivity::executePowerButtonAction() {
   if (mappedInput.wasReleased(MappedInputManager::Button::Power) &&
       mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration()) {
-    return executeAction(static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.shortPwrBtn));
+    return executeReaderShortcutAction(static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.shortPwrBtn));
   }
 
   const auto longPowerAction = static_cast<CrossPointSettings::SHORT_PWRBTN>(SETTINGS.longPwrBtn);
@@ -362,11 +402,23 @@ bool TxtReaderActivity::executePowerButtonAction() {
     return false;
   }
 
-  if (executeAction(longPowerAction)) {
+  if (executeReaderShortcutAction(longPowerAction)) {
     return true;
   }
 
   return false;
+}
+
+void TxtReaderActivity::toggleHomeButtonInReader() {
+  if (!mappedInput.hasHomeKey()) return;
+  SETTINGS.homeButtonInReaderEnabled = SETTINGS.homeButtonInReaderEnabled ? 0 : 1;
+  if (!SETTINGS.saveToFile()) {
+    LOG_ERR("TXT", "Failed to save Home button reader setting");
+  }
+  mappedInput.clearDeferredHomeGesture();
+  drawToast(renderer, SETTINGS.homeButtonInReaderEnabled ? tr(STR_HOME_BUTTON_ENABLED) : tr(STR_HOME_BUTTON_DISABLED));
+  delay(1000);
+  requestUpdate();
 }
 
 bool TxtReaderActivity::executeLongPressBackAction() {
@@ -375,7 +427,7 @@ bool TxtReaderActivity::executeLongPressBackAction() {
       enterDeepSleep();
       return true;
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_REFRESH_SCREEN:
-      pagesUntilFullRefresh = 1;
+      prepareManualRefresh();
       requestUpdate();
       return true;
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_FILE_TRANSFER:
@@ -403,6 +455,16 @@ bool TxtReaderActivity::executeLongPressBackAction() {
   }
 }
 
+bool TxtReaderActivity::handleShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  if (action == CrossPointSettings::SHORT_PWRBTN::QUICK_ACTIONS) {
+    QuickActions::showConfiguredPopup(
+        quickActionsPopup, [this] { requestUpdate(); }, {},
+        [](const auto quickAction) { return supportsQuickAction(quickAction); });
+    return true;
+  }
+  return executeReaderShortcutAction(action);
+}
+
 void TxtReaderActivity::initializeReader() {
   if (initialized) {
     return;
@@ -418,7 +480,7 @@ void TxtReaderActivity::initializeReader() {
                                    &cachedOrientedMarginLeft);
   cachedOrientedMarginLeft += cachedScreenMargin;
   cachedOrientedMarginRight += cachedScreenMargin;
-  const int topStatusBarReservedHeight = ReaderUtils::getTopClockStatusBarReservedHeight();
+  const int topStatusBarReservedHeight = ReaderUtils::getTopClockStatusBarReservedHeight(renderer);
   if (topStatusBarReservedHeight > 0) {
     cachedOrientedMarginTop += std::max(static_cast<int>(cachedScreenMargin),
                                         topStatusBarReservedHeight + ReaderUtils::TOP_CLOCK_TEXT_PADDING);
@@ -529,6 +591,9 @@ bool TxtReaderActivity::loadPageAtOffset(size_t offset, std::vector<std::string>
 
 void TxtReaderActivity::render(RenderLock&&) {
   if (!txt) {
+    return;
+  }
+  if (quickActionsPopup.processRender(renderer, mappedInput)) {
     return;
   }
 
@@ -851,7 +916,7 @@ bool TxtReaderActivity::drawCurrentPageToBuffer(const std::string& filePath, Gfx
   renderer.getOrientedViewableTRBL(&marginTop, &marginRight, &marginBottom, &marginLeft);
   marginLeft += screenMargin;
   marginRight += screenMargin;
-  const int topStatusBarReservedHeight = ReaderUtils::getTopClockStatusBarReservedHeight();
+  const int topStatusBarReservedHeight = ReaderUtils::getTopClockStatusBarReservedHeight(renderer);
   if (topStatusBarReservedHeight > 0) {
     marginTop +=
         std::max(static_cast<int>(screenMargin), topStatusBarReservedHeight + ReaderUtils::TOP_CLOCK_TEXT_PADDING);

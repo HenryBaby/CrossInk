@@ -69,7 +69,7 @@ void OpdsServerListActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = 0;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &OpdsServerListActivity::onRowEvent, this);
   app.setScreen(&OpdsServerListActivity::listScreen, this);
   requestUpdate();

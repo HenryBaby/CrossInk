@@ -194,8 +194,11 @@ bool WordSelectNavigator::handleNavigation(const MappedInputManager& input, cons
     wordPrevPressed = input.wasReleased(MappedInputManager::Button::Down);
     wordNextPressed = input.wasReleased(MappedInputManager::Button::Up);
   } else if (landscape) {
-    rowPrevPressed = input.wasReleased(MappedInputManager::Button::Right);
-    rowNextPressed = input.wasReleased(MappedInputManager::Button::Left);
+    const bool frontNavSwapped = input.isFrontNavButtonSwapActive();
+    rowPrevPressed =
+        input.wasReleased(frontNavSwapped ? MappedInputManager::Button::Left : MappedInputManager::Button::Right);
+    rowNextPressed =
+        input.wasReleased(frontNavSwapped ? MappedInputManager::Button::Right : MappedInputManager::Button::Left);
     wordPrevPressed = input.wasReleased(MappedInputManager::Button::Up);
     wordNextPressed = input.wasReleased(MappedInputManager::Button::Down);
   } else if (isInverted) {

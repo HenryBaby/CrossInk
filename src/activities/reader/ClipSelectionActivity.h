@@ -34,6 +34,7 @@ class ClipSelectionActivity final : public Activity {
   void render(RenderLock&&) override;
   bool isReaderActivity() const override { return true; }
   bool allowPowerAsConfirmInReaderMode() const override { return true; }
+  bool handleHomeGesture() override;
 
  private:
   static constexpr size_t BUFFER_CHUNK_SIZE = 4096;

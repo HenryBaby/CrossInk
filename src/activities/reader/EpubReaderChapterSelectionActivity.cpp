@@ -40,7 +40,7 @@ void EpubReaderChapterSelectionActivity::onEnter() {
   visibleRows = 1;
   initialViewportPending = true;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &EpubReaderChapterSelectionActivity::onRowEvent, this);
   app.setScreen(&EpubReaderChapterSelectionActivity::chapterScreen, this);
   requestUpdate();

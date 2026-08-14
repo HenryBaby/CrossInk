@@ -59,6 +59,8 @@ void RecentBooksStore::addBook(const std::string& path, const std::string& title
 
 void RecentBooksStore::addOrUpdateBook(const std::string& path, const std::string& title, const std::string& author,
                                        const std::string& coverBmpPath, const RecentBook::CoverState coverState) {
+  ensureLoaded();
+
   // Drop stale entries first so a new add can't evict a valid book in their stead.
   pruneMissing();
 
@@ -86,6 +88,8 @@ void RecentBooksStore::addOrUpdateBook(const std::string& path, const std::strin
 
 bool RecentBooksStore::updateBook(const std::string& path, const std::string& title, const std::string& author,
                                   const std::string& coverBmpPath, const RecentBook::CoverState coverState) {
+  ensureLoaded();
+
   auto it =
       std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
   if (it == recentBooks.end()) {
@@ -101,6 +105,8 @@ bool RecentBooksStore::updateBook(const std::string& path, const std::string& ti
 }
 
 bool RecentBooksStore::removeByPath(const std::string& path) {
+  ensureLoaded();
+
   auto it =
       std::find_if(recentBooks.begin(), recentBooks.end(), [&](const RecentBook& book) { return book.path == path; });
   if (it == recentBooks.end()) {
@@ -115,6 +121,8 @@ bool RecentBooksStore::removeByPath(const std::string& path) {
 
 void RecentBooksStore::updatePath(const std::string& oldPath, const std::string& newPath,
                                   const std::string& oldCachePath, const std::string& newCachePath) {
+  ensureLoaded();
+
   auto it = std::find_if(recentBooks.begin(), recentBooks.end(),
                          [&](const RecentBook& book) { return book.path == oldPath; });
   if (it == recentBooks.end()) {
@@ -130,6 +138,8 @@ void RecentBooksStore::updatePath(const std::string& oldPath, const std::string&
 bool RecentBooksStore::isMissing(const RecentBook& book) { return !Storage.exists(book.path.c_str()); }
 
 bool RecentBooksStore::pruneMissing() {
+  ensureLoaded();
+
   const size_t before = recentBooks.size();
   recentBooks.erase(std::remove_if(recentBooks.begin(), recentBooks.end(), &isMissing), recentBooks.end());
   return recentBooks.size() != before;

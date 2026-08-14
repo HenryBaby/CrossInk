@@ -33,7 +33,7 @@ void LanguageSelectActivity::onEnter() {
   visibleRows = 1;
   initialViewportPending = true;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &LanguageSelectActivity::onRowEvent, this);
   app.setScreen(&LanguageSelectActivity::languageScreen, this);
   requestUpdate();

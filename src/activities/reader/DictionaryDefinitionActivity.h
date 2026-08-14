@@ -175,6 +175,7 @@ class DictionaryDefinitionActivity final : public Activity {
 
   // Word-select mode (activated by pressing Look Up Word in view mode)
   bool isWordSelectMode = false;
+  bool wordSelectHintsVisible_ = false;
   WordSelectNavigator navigator;
   // History-launched definitions have no parent snapshot to borrow. Allocate
   // the same bounded storage only if the user enters definition word-select.
@@ -206,6 +207,7 @@ class DictionaryDefinitionActivity final : public Activity {
 #if CROSSINK_APP_CAP_TOUCH
   bool showTouchDictionarySwitch() const;
   bool dictionarySwitchButtonContains(int x, int y) const;
+  bool modalContains(int x, int y) const;
 #endif
   int dictionaryFooterHeight() const;
   bool hasModalBackground() const { return backgroundContext_ && backgroundRender_; }

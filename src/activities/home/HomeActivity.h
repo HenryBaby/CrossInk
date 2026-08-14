@@ -5,9 +5,11 @@
 #include <vector>
 
 #include "./FileBrowserActivity.h"
+#include "QuickActions.h"
 #include "activities/Activity.h"
 #include "activities/reader/BookReadingStats.h"
 #include "activities/reader/GlobalReadingStats.h"
+#include "components/OptionPopup.h"
 #include "util/ButtonNavigator.h"
 
 struct RecentBook;
@@ -47,6 +49,7 @@ class HomeActivity final : public Activity {
   // Home can be entered while Back is still held (e.g. leaving Settings with
   // Back): ignore that stale release until a fresh press is seen here.
   bool backPressSeen = false;
+  OptionPopup quickActionsPopup;
   uint8_t* coverBuffer = nullptr;  // HomeActivity's own buffer for cover image
   size_t coverBufferSize = 0;      // Bytes allocated to coverBuffer
   // Logical rect last passed to drawRecentBookCover. The cover snapshot only
@@ -122,5 +125,7 @@ class HomeActivity final : public Activity {
   void loop() override;
   void render(RenderLock&&) override;
   bool isHomeActivity() const override { return true; }
+  bool allowPowerAsConfirmInReaderMode() const override { return quickActionsPopup.isActive(); }
+  bool handleShortcutAction(CrossPointSettings::SHORT_PWRBTN action) override;
   std::string getCurrentBookPath() const override;
 };

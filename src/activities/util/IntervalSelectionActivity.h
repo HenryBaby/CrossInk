@@ -61,5 +61,6 @@ class IntervalSelectionActivity final : public Activity {
 
   void adjustValue(int delta);
   int clampedValue(int candidate) const;
+  bool usesTextTouchStepControls() const;
   void drawStepHintLine(int y, StrId labelId, int step);
 };

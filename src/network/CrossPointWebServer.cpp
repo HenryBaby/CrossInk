@@ -25,6 +25,7 @@
 #include "CrossPointSettings.h"
 #include "FontInstaller.h"
 #include "OpdsServerStore.h"
+#include "QuickActions.h"
 #include "SdCardFontSystem.h"
 #include "SettingsList.h"
 #include "WebDAVHandler.h"
@@ -37,6 +38,7 @@
 #include "html/StyleCss.generated.h"
 #include "html/js/jszip_minJs.generated.h"
 #include "util/BookCacheUtils.h"
+#include "util/FontFamilyLabel.h"
 #include "util/StringUtils.h"
 
 namespace {
@@ -1314,10 +1316,11 @@ void CrossPointWebServer::handleGetSettings() const {
         }
         JsonArray options = doc["options"].to<JsonArray>();
         if (s.nameId == StrId::STR_FONT_FAMILY && !fontFamilies.empty()) {
-          options.add(I18N.get(StrId::STR_LEXEND_DECA));
-          options.add(I18N.get(StrId::STR_BITTER));
+          constexpr FontFamilyPointSizeRange builtinRange{10, 16};
+          options.add(fontFamilyLabel(I18N.get(StrId::STR_LEXEND_DECA), builtinRange));
+          options.add(fontFamilyLabel(I18N.get(StrId::STR_BITTER), builtinRange));
           for (const auto& family : fontFamilies) {
-            options.add(family.name);
+            options.add(fontFamilyLabel(family.name, fontFamilyPointSizeRange(family)));
           }
         } else if (s.nameId == StrId::STR_FONT_SIZE && selectedSdFamily) {
           const auto sizes = selectedSdFamily->availableSizes();
@@ -1416,6 +1419,7 @@ void CrossPointWebServer::handlePostSettings() {
         if (val >= 0 && val < maxVal) {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = enumRawValueForDisplayIndex(s, static_cast<uint8_t>(val));
+            QuickActions::settingChanged(SETTINGS, s.valuePtr);
           } else if (s.valueSetter) {
             s.valueSetter(static_cast<uint8_t>(val));
           }

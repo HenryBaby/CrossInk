@@ -112,7 +112,7 @@ class Epub {
   static bool hasCache(const std::string& filepath, const std::string& cacheDir);
   std::string& getBasePath() { return contentBasePath; }
   bool load(bool buildIfMissing = true, bool skipLoadingCss = false,
-            XLocationLoadMode xLocationLoadMode = XLocationLoadMode::Immediate);
+            XLocationLoadMode xLocationLoadMode = XLocationLoadMode::Immediate, bool cacheCumulativeSpineSizes = false);
   // Loads optional stable-page and source-spine metadata after a Skip-mode open.
   // Failure leaves normal size-based progress available.
   bool loadXLocations();

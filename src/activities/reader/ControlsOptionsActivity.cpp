@@ -9,8 +9,10 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "QuickActions.h"
 #include "SettingsList.h"
 #include "activities/settings/ButtonRemapActivity.h"
+#include "activities/settings/QuickActionsActivity.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 
@@ -48,7 +50,7 @@ void ControlsOptionsActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = 0;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &ControlsOptionsActivity::onRowEvent, this);
   app.setScreen(&ControlsOptionsActivity::optionsScreen, this);
   requestUpdate();
@@ -59,12 +61,14 @@ void ControlsOptionsActivity::onExit() { Activity::onExit(); }
 void ControlsOptionsActivity::rebuildSettingsList() {
   settings.clear();
   powerSettings.clear();
+  homeButtonSettings.clear();
   frontButtonSettings.clear();
   sideButtonSettings.clear();
 
   const auto allSettings = getSettingsList();
   settings = buildControlsSettingsParentList(allSettings);
   powerSettings = buildControlsPowerSettingsList(allSettings);
+  homeButtonSettings = buildControlsHomeButtonSettingsList(allSettings);
 #if CROSSINK_APP_CAP_TOUCH
   if (!gpio.hasTouch()) {
     frontButtonSettings = buildControlsFrontButtonSettingsList(allSettings);
@@ -83,6 +87,9 @@ void ControlsOptionsActivity::setCurrentSettings() {
     case SettingAction::ControlsPowerButton:
       currentSettings = &powerSettings;
       break;
+    case SettingAction::ControlsHomeButton:
+      currentSettings = &homeButtonSettings;
+      break;
     case SettingAction::ControlsFrontButtons:
       currentSettings = &frontButtonSettings;
       break;
@@ -100,6 +107,8 @@ StrId ControlsOptionsActivity::activeSubmenuTitleId() const {
   switch (activeSubmenu) {
     case SettingAction::ControlsPowerButton:
       return StrId::STR_POWER_BUTTON;
+    case SettingAction::ControlsHomeButton:
+      return StrId::STR_HOME_BUTTON;
     case SettingAction::ControlsFrontButtons:
       return StrId::STR_FRONT_BUTTONS;
     case SettingAction::ControlsSideButtons:
@@ -161,6 +170,7 @@ void ControlsOptionsActivity::openEnumOptionPicker(const SettingInfo& setting) {
     if (selectedSetting.valuePtr != nullptr) {
       SETTINGS.*(selectedSetting.valuePtr) =
           enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
+      QuickActions::settingChanged(SETTINGS, selectedSetting.valuePtr);
       SETTINGS.saveToFile();
     }
   });
@@ -186,6 +196,7 @@ void ControlsOptionsActivity::toggleCurrentSetting() {
     if (optionCount == 0) return;
     const uint8_t nextIndex = (currentIndex + 1) % static_cast<uint8_t>(optionCount);
     SETTINGS.*(setting.valuePtr) = enumRawValueForDisplayIndex(setting, nextIndex);
+    QuickActions::settingChanged(SETTINGS, setting.valuePtr);
     SETTINGS.saveToFile();
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     const int8_t cur = SETTINGS.*(setting.valuePtr);
@@ -196,6 +207,11 @@ void ControlsOptionsActivity::toggleCurrentSetting() {
     }
     SETTINGS.saveToFile();
   } else if (setting.type == SettingType::ACTION) {
+    if (setting.action == SettingAction::QuickActions) {
+      startActivityForResult(std::make_unique<QuickActionsActivity>(renderer, mappedInput),
+                             [](const ActivityResult&) { SETTINGS.saveToFile(); });
+      return;
+    }
     if (setting.action == SettingAction::RemapFrontButtons) {
       startActivityForResult(std::make_unique<ButtonRemapActivity>(renderer, mappedInput, false, true),
                              [](const ActivityResult&) { SETTINGS.saveToFile(); });

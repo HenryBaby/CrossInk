@@ -56,7 +56,7 @@ void OptionSelectionActivity::onEnter() {
   visibleRows_ = 1;
   initialViewportPending_ = true;
   uiReady_ = false;
-  app_.setTheme(uiThemeTokens(uiTarget_));
+  applySharedUiTheme(app_, uiTarget_);
   app_.on(ACTION_ROW, &OptionSelectionActivity::onRowEvent, this);
   app_.setScreen(&OptionSelectionActivity::optionsScreen, this);
   requestUpdate();

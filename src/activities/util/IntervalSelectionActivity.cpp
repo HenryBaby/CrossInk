@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "DeviceCapabilities.h"
+#include "components/TouchActionButtons.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -16,8 +17,7 @@
 namespace {
 constexpr int TOUCH_STEP_BUTTON_SIZE = 56;
 constexpr int TOUCH_STEP_BUTTON_GAP = 32;
-constexpr int TOUCH_ACTION_BUTTON_WIDTH = 120;
-constexpr int TOUCH_ACTION_BUTTON_HEIGHT = 48;
+constexpr int TOUCH_STEP_LABEL_HEIGHT = 56;
 
 Rect touchStepButtonRect(const Rect& screen, const int index) {
   const int totalWidth = TOUCH_STEP_BUTTON_SIZE * 4 + TOUCH_STEP_BUTTON_GAP * 3;
@@ -25,11 +25,21 @@ Rect touchStepButtonRect(const Rect& screen, const int index) {
   return Rect{x, 220, TOUCH_STEP_BUTTON_SIZE, TOUCH_STEP_BUTTON_SIZE};
 }
 
-Rect touchActionButtonRect(const Rect& screen, const bool confirm) {
-  constexpr int sideMargin = 46;
-  return Rect{confirm ? screen.x + screen.width - sideMargin - TOUCH_ACTION_BUTTON_WIDTH : screen.x + sideMargin,
-              screen.y + screen.height - TOUCH_ACTION_BUTTON_HEIGHT - 28, TOUCH_ACTION_BUTTON_WIDTH,
-              TOUCH_ACTION_BUTTON_HEIGHT};
+Rect touchStepLabelRect(const Rect& screen, const int index) {
+  constexpr int top = 176;
+  const int width = screen.width / 4;
+  const int x = screen.x + index * width;
+  const int right = index == 3 ? screen.x + screen.width : x + width;
+  return Rect{x, top, right - x, TOUCH_STEP_LABEL_HEIGHT};
+}
+
+TouchActionButtons::Layout touchActionLayout(const Rect& screen) {
+  constexpr int sideMargin = 24;
+  constexpr int bottomMargin = 12;
+  constexpr int totalHeight = TouchActionButtons::kDefaultHeight * 2 + TouchActionButtons::kDefaultGap;
+  return TouchActionButtons::vertical(Rect{screen.x + sideMargin, screen.y + screen.height - bottomMargin - totalHeight,
+                                           std::max(1, screen.width - sideMargin * 2), totalHeight},
+                                      2);
 }
 
 bool contains(const Rect& rect, const int x, const int y) {
@@ -49,6 +59,11 @@ void formatCompactSeconds(const int seconds, char* buf, const size_t len) {
 
 int IntervalSelectionActivity::clampedValue(const int candidate) const {
   return std::clamp(candidate, minValue, maxValue);
+}
+
+bool IntervalSelectionActivity::usesTextTouchStepControls() const {
+  return titleId == StrId::STR_TIME_TO_SLEEP || titleId == StrId::STR_AUTO_TURN_INTERVAL_SECONDS ||
+         titleId == StrId::STR_LINE_SPACING;
 }
 
 void IntervalSelectionActivity::onEnter() {
@@ -136,15 +151,17 @@ void IntervalSelectionActivity::loop() {
   // are terminal actions, so waiting for a release can make a perfectly still
   // tap feel ignored while the controller settles its release event.
   if (mappedInput.hasTouch() && mappedInput.wasScreenTouchDown(tx, ty)) {
-    if (contains(touchActionButtonRect(touchScreen, false), tx, ty)) {
-      ActivityResult result;
-      result.isCancelled = true;
-      setResult(std::move(result));
+    const auto actions = touchActionLayout(touchScreen);
+    const int touchedAction = TouchActionButtons::indexAt(actions, tx, ty);
+    if (touchedAction == 0) {
+      setResult(IntervalResult{static_cast<uint32_t>(value)});
       finish();
       return;
     }
-    if (contains(touchActionButtonRect(touchScreen, true), tx, ty)) {
-      setResult(IntervalResult{static_cast<uint32_t>(value)});
+    if (touchedAction == 1) {
+      ActivityResult result;
+      result.isCancelled = true;
+      setResult(std::move(result));
       finish();
       return;
     }
@@ -174,7 +191,9 @@ void IntervalSelectionActivity::loop() {
 
     if (mappedInput.hasTouch()) {
       for (int index = 0; index < 4; ++index) {
-        if (!contains(touchStepButtonRect(touchScreen, index), tx, ty)) continue;
+        const Rect stepRect = usesTextTouchStepControls() ? touchStepLabelRect(touchScreen, index)
+                                                          : touchStepButtonRect(touchScreen, index);
+        if (!contains(stepRect, tx, ty)) continue;
         constexpr int deltas[] = {-1, -1, 1, 1};
         const int step = (index == 0 || index == 3) ? largeStep : smallStep;
         adjustValue(deltas[index] * step);
@@ -263,45 +282,51 @@ void IntervalSelectionActivity::render(RenderLock&&) {
   renderer.fillRect(knobX, barY - 4, 4, barHeight + 8, true);
 
   if (mappedInput.hasTouch()) {
-    auto drawButton = [&](const Rect& rect) {
-      renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::White);
-      renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
-    };
-    auto drawChevron = [&](const Rect& rect, const bool pointsRight, const bool doubleChevron) {
-      const int centreY = rect.y + rect.height / 2;
-      const int halfHeight = 12;
-      const int firstX = rect.x + (doubleChevron ? 13 : 20);
-      const int spacing = 14;
-      const int chevronCount = doubleChevron ? 2 : 1;
-      for (int i = 0; i < chevronCount; ++i) {
-        const int x = firstX + i * spacing;
-        if (pointsRight) {
-          renderer.drawLine(x, centreY - halfHeight, x + 12, centreY, 2, true);
-          renderer.drawLine(x + 12, centreY, x, centreY + halfHeight, 2, true);
-        } else {
-          renderer.drawLine(x + 12, centreY - halfHeight, x, centreY, 2, true);
-          renderer.drawLine(x, centreY, x + 12, centreY + halfHeight, 2, true);
-        }
+    if (usesTextTouchStepControls()) {
+      char labels[4][12];
+      snprintf(labels[0], sizeof(labels[0]), "%+d", -largeStep);
+      snprintf(labels[1], sizeof(labels[1]), "%+d", -smallStep);
+      snprintf(labels[2], sizeof(labels[2]), "%+d", smallStep);
+      snprintf(labels[3], sizeof(labels[3]), "%+d", largeStep);
+      for (int index = 0; index < 4; ++index) {
+        const Rect rect = touchStepLabelRect(touchScreen, index);
+        const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, labels[index]);
+        const int textY = rect.y + (rect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+        renderer.drawText(UI_10_FONT_ID, rect.x + (rect.width - textWidth) / 2, textY, labels[index]);
       }
-    };
+    } else {
+      auto drawButton = [&](const Rect& rect) {
+        renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::White);
+        renderer.drawRect(rect.x, rect.y, rect.width, rect.height, true);
+      };
+      auto drawChevron = [&](const Rect& rect, const bool pointsRight, const bool doubleChevron) {
+        const int centreY = rect.y + rect.height / 2;
+        const int halfHeight = 12;
+        const int firstX = rect.x + (doubleChevron ? 13 : 20);
+        const int spacing = 14;
+        const int chevronCount = doubleChevron ? 2 : 1;
+        for (int i = 0; i < chevronCount; ++i) {
+          const int x = firstX + i * spacing;
+          if (pointsRight) {
+            renderer.drawLine(x, centreY - halfHeight, x + 12, centreY, 2, true);
+            renderer.drawLine(x + 12, centreY, x, centreY + halfHeight, 2, true);
+          } else {
+            renderer.drawLine(x + 12, centreY - halfHeight, x, centreY, 2, true);
+            renderer.drawLine(x, centreY, x + 12, centreY + halfHeight, 2, true);
+          }
+        }
+      };
 
-    for (int index = 0; index < 4; ++index) {
-      const Rect rect = touchStepButtonRect(touchScreen, index);
-      drawButton(rect);
-      drawChevron(rect, index >= 2, index == 0 || index == 3);
+      for (int index = 0; index < 4; ++index) {
+        const Rect rect = touchStepButtonRect(touchScreen, index);
+        drawButton(rect);
+        drawChevron(rect, index >= 2, index == 0 || index == 3);
+      }
     }
 
-    const Rect cancelRect = touchActionButtonRect(touchScreen, false);
-    const Rect confirmRect = touchActionButtonRect(touchScreen, true);
-    drawButton(cancelRect);
-    drawButton(confirmRect);
-    auto drawButtonLabel = [&](const Rect& rect, const char* label) {
-      const int x = rect.x + (rect.width - renderer.getTextWidth(UI_10_FONT_ID, label)) / 2;
-      const int y = rect.y + (rect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
-      renderer.drawText(UI_10_FONT_ID, x, y, label);
-    };
-    drawButtonLabel(cancelRect, tr(STR_CANCEL));
-    drawButtonLabel(confirmRect, tr(STR_CONFIRM));
+    const auto actions = touchActionLayout(touchScreen);
+    const char* labels[] = {tr(STR_CONFIRM), tr(STR_CANCEL)};
+    TouchActionButtons::draw(renderer, actions, labels, 0, -1, UI_10_FONT_ID);
   } else {
     // Two-line step hint: front buttons do the small step, side buttons the large step. Built from
     // separate label + value strings (rather than splitting one localized sentence) so the layout

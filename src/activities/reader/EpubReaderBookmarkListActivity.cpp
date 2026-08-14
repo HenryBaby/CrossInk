@@ -30,7 +30,7 @@ void EpubReaderBookmarkListActivity::onEnter() {
   topIndex = 0;
   visibleRows = 1;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &EpubReaderBookmarkListActivity::onRowEvent, this);
   app.setScreen(&EpubReaderBookmarkListActivity::listScreen, this);
   requestUpdate();
@@ -59,6 +59,7 @@ void EpubReaderBookmarkListActivity::showBookmarkDeletePopup() {
     if (optionIndex == 1) deleteSelectedBookmark();
     requestUpdate();
   });
+  confirmPopup.setPrimaryOptionIndex(1);
   requestUpdate();
 }
 

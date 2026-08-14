@@ -6,16 +6,11 @@
 #include "MappedInputManager.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
+#include "components/UIThemeTokens.h"
 #include "components/icons/listIcons.h"
 
 // Shared glue for activities hosting a FreeInkApp: the font-bound render
 // target and the touch snapshot FreeInkApp routing consumes.
-
-// Held duration past which a stationary touch release routes as a long-press
-// (InputSnapshot::longPress). Mirrors the physical-button hold-to-act
-// convention but shorter, since a finger hold has no button travel to absorb.
-// Rows must opt in via InputLongPress to receive it.
-inline constexpr unsigned long UI_TOUCH_LONG_PRESS_MS = 500;
 
 // Bind the uiScale fonts before FreeInkApp's constructor derives its theme
 // metrics from the body font's line height.
@@ -26,6 +21,21 @@ inline freeink::ui::GfxRendererTarget makeUiTarget(const GfxRenderer& renderer) 
   target.setFont(freeink::ui::GfxRendererTarget::FONT_BODY, spec.bodyFontId);
   target.setFont(freeink::ui::GfxRendererTarget::FONT_TITLE, spec.titleFontId);
   return target;
+}
+
+// Activities share one refreshed token block rather than each retaining an
+// identical ~1.5KB copy. The token object outlives stacked activities.
+inline freeink::ui::ThemeTokens& sharedUiThemeTokens() {
+  static freeink::ui::ThemeTokens tokens;
+  return tokens;
+}
+
+template <size_t MaxInteractions, size_t MaxHandlers>
+inline void applySharedUiTheme(freeink::ui::FreeInkApp<MaxInteractions, MaxHandlers>& app,
+                               const freeink::ui::GfxRendererTarget& target) {
+  auto& tokens = sharedUiThemeTokens();
+  tokens = uiThemeTokens(target);
+  app.setThemeRef(&tokens);
 }
 
 // Tap release with coords, plus the raw release the tap classifier never
@@ -155,6 +165,13 @@ inline freeink::ui::InputSnapshot touchSnapshotFrom(const MappedInputManager& ma
   freeink::ui::InputSnapshot snap{};
   int tx = 0;
   int ty = 0;
+  if (mappedInput.wasScreenLongPress(tx, ty)) {
+    snap.touchReleased = true;
+    snap.longPress = true;
+    snap.touchX = static_cast<int16_t>(tx);
+    snap.touchY = static_cast<int16_t>(ty);
+    return snap;
+  }
   // Live contact position: only InputDrag-masked elements (sliders) react, so
   // carrying it in every snapshot is free for ordinary screens.
   if (mappedInput.isScreenTouchHeld(tx, ty)) {
@@ -167,12 +184,8 @@ inline freeink::ui::InputSnapshot touchSnapshotFrom(const MappedInputManager& ma
     snap.touchX = static_cast<int16_t>(tx);
     snap.touchY = static_cast<int16_t>(ty);
   }
-  unsigned long heldMs = 0;
-  if (mappedInput.wasScreenTapped(tx, ty, heldMs)) {
+  if (mappedInput.wasScreenTapped(tx, ty)) {
     snap.touchReleased = true;
-    // A stationary press held past the threshold routes as a long-press so
-    // rows masked InputLongPress can offer a hold action (delete / forget).
-    snap.longPress = heldMs >= UI_TOUCH_LONG_PRESS_MS;
     snap.touchX = static_cast<int16_t>(tx);
     snap.touchY = static_cast<int16_t>(ty);
   } else if (mappedInput.wasScreenTouchReleased()) {

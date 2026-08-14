@@ -91,6 +91,7 @@ bool KOReaderCredentialStore::fromJson(JsonVariantConst doc) {
 }
 
 void KOReaderCredentialStore::setCredentials(const std::string& user, const std::string& pass) {
+  ensureLoaded();
   username = user;
   password = pass;
 }
@@ -112,12 +113,16 @@ std::string KOReaderCredentialStore::getMd5Password() const {
 bool KOReaderCredentialStore::hasCredentials() const { return !username.empty() && !password.empty(); }
 
 void KOReaderCredentialStore::clearCredentials() {
+  ensureLoaded();
   username.clear();
   password.clear();
   saveToFile();
 }
 
-void KOReaderCredentialStore::setServerUrl(const std::string& url) { serverUrl = url; }
+void KOReaderCredentialStore::setServerUrl(const std::string& url) {
+  ensureLoaded();
+  serverUrl = url;
+}
 
 std::string KOReaderCredentialStore::getBaseUrl() const {
   std::string url;
@@ -140,11 +145,18 @@ std::string KOReaderCredentialStore::getBaseUrl() const {
 
 bool KOReaderCredentialStore::usesCrossPointSyncServer() const { return getBaseUrl() == DEFAULT_SERVER_URL; }
 
-void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) { matchMethod = method; }
+void KOReaderCredentialStore::setMatchMethod(DocumentMatchMethod method) {
+  ensureLoaded();
+  matchMethod = method;
+}
 
-void KOReaderCredentialStore::setSendMetadata(bool enabled) { sendMetadata = enabled; }
+void KOReaderCredentialStore::setSendMetadata(bool enabled) {
+  ensureLoaded();
+  sendMetadata = enabled;
+}
 
 void KOReaderCredentialStore::setSyncBehavior(KOReaderSyncBehavior behavior) {
+  ensureLoaded();
   if (static_cast<uint8_t>(behavior) > static_cast<uint8_t>(KOReaderSyncBehavior::SMART)) {
     behavior = KOReaderSyncBehavior::ASK_EVERY_TIME;
   }

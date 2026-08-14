@@ -92,7 +92,7 @@ void SavedItemsHomeActivity::onEnter() {
   topIndex = 0;
   visibleRows = 1;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &SavedItemsHomeActivity::onRowEvent, this);
   app.setScreen(&SavedItemsHomeActivity::listScreen, this);
   requestUpdate();

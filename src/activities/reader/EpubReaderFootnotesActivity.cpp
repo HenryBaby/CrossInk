@@ -27,7 +27,7 @@ void EpubReaderFootnotesActivity::onEnter() {
   topIndex = 0;
   visibleRows = 1;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &EpubReaderFootnotesActivity::onRowEvent, this);
   app.setScreen(&EpubReaderFootnotesActivity::listScreen, this);
   requestUpdate();

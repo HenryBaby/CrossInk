@@ -141,11 +141,11 @@ Rect readerMenuHeaderActionRect(const Rect& header, const ThemeMetrics& metrics)
 
 Rect readerMenuHeaderActionTouchRect(const Rect& header, const Rect& actionRect) {
   const int touchWidth = std::min(headerActionTouchSize, header.width);
-  const int touchHeight = std::min(headerActionTouchSize, header.height);
-  // Keep the expanded target clear of the right-side battery reserve. The
-  // visual icon stays centered in actionRect; only the tappable area grows.
-  return Rect{actionRect.x + actionRect.width - touchWidth, actionRect.y + actionRect.height - touchHeight, touchWidth,
-              touchHeight};
+  const int touchX = actionRect.x + actionRect.width - touchWidth;
+  // The title reserves the space left of touchX. Treat the remaining header
+  // corner—including the non-interactive battery area—as Home so the icon is
+  // easy to hit without changing its visual placement.
+  return Rect{touchX, header.y, header.x + header.width - touchX, header.height};
 }
 
 void drawSdkIcon(fui::GfxRendererTarget& target, const freeink::Icon& icon, const int x, const int y,
@@ -213,7 +213,7 @@ EpubReaderMenuActivity::TabMenuItems EpubReaderMenuActivity::buildMenuItems(
 
   mainItems.reserve(9 + (hasFootnotes ? 1u : 0u) + (hasDictionary ? 2u : 0u));
   bookmarkItems.reserve(9 + (hasBookmarks ? 2u : 0u) + (hasClippings ? 1u : 0u));
-  settingsItems.reserve(3 + (showReadingPaceReset ? 1u : 0u));
+  settingsItems.reserve(6);
 
   if (hasFootnotes) {
     mainItems.push_back({MenuAction::FOOTNOTES, StrId::STR_FOOTNOTES});
@@ -224,12 +224,9 @@ EpubReaderMenuActivity::TabMenuItems EpubReaderMenuActivity::buildMenuItems(
   }
   mainItems.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
   mainItems.push_back({MenuAction::READER_OPTIONS, StrId::STR_READER_OPTIONS});
-  mainItems.push_back({MenuAction::CONTROLS_OPTIONS, StrId::STR_CAT_CONTROLS});
   mainItems.push_back({MenuAction::GO_TO_PERCENT, StrId::STR_GO_TO_PERCENT});
   mainItems.push_back({MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_INTERVAL_SECONDS});
   mainItems.push_back({MenuAction::READING_STATS, StrId::STR_READING_STATS});
-  mainItems.push_back(
-      {MenuAction::TOGGLE_COMPLETED, isBookCompleted ? StrId::STR_MARK_UNFINISHED : StrId::STR_MARK_FINISHED});
   bookmarkItems.push_back({MenuAction::SAVE_CLIPPING, StrId::STR_SAVE_CLIPPING});
   if (hasClippings) {
     bookmarkItems.push_back({MenuAction::VIEW_CLIPPINGS, StrId::STR_VIEW_CLIPPINGS});
@@ -246,12 +243,15 @@ EpubReaderMenuActivity::TabMenuItems EpubReaderMenuActivity::buildMenuItems(
   bookmarkItems.push_back({MenuAction::SCREENSHOT, StrId::STR_SCREENSHOT_BUTTON});
   bookmarkItems.push_back({MenuAction::DISPLAY_QR, StrId::STR_DISPLAY_QR});
 
-  settingsItems.push_back({MenuAction::DELETE_STATS, StrId::STR_DELETE_BOOK_STATS});
-  settingsItems.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
   settingsItems.push_back({MenuAction::SET_BOOK_DICTIONARY, StrId::STR_BOOK_DICTIONARY});
+  settingsItems.push_back({MenuAction::DELETE_CACHE, StrId::STR_DELETE_CACHE});
+  settingsItems.push_back({MenuAction::DELETE_STATS, StrId::STR_DELETE_BOOK_STATS});
   if (showReadingPaceReset) {
     settingsItems.push_back({MenuAction::RESET_READING_PACE, StrId::STR_RESET_READING_PACE});
   }
+  settingsItems.push_back({MenuAction::CONTROLS_OPTIONS, StrId::STR_CAT_CONTROLS});
+  settingsItems.push_back(
+      {MenuAction::TOGGLE_COMPLETED, isBookCompleted ? StrId::STR_MARK_UNFINISHED : StrId::STR_MARK_FINISHED});
   return items;
 }
 
@@ -481,7 +481,7 @@ void EpubReaderMenuActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = 0;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &EpubReaderMenuActivity::onRowEvent, this);
   app.setScreen(&EpubReaderMenuActivity::menuScreen, this);
   requestUpdate();

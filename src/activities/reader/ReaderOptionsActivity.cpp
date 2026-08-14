@@ -90,7 +90,7 @@ void ReaderOptionsActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = 0;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &ReaderOptionsActivity::onRowEvent, this);
   app.setScreen(&ReaderOptionsActivity::optionsScreen, this);
   requestUpdate();
@@ -538,7 +538,7 @@ void ReaderOptionsActivity::openLineHeightPicker() {
   startActivityForResult(
       std::make_unique<IntervalSelectionActivity>(
           renderer, mappedInput, "ReaderOptionsLineHeightInterval", StrId::STR_LINE_SPACING, SETTINGS.lineHeightPercent,
-          CrossPointSettings::MIN_LINE_HEIGHT_PERCENT, CrossPointSettings::MAX_LINE_HEIGHT_PERCENT, 1, 10,
+          CrossPointSettings::MIN_LINE_HEIGHT_PERCENT, CrossPointSettings::MAX_LINE_HEIGHT_PERCENT, 1, 5,
           StrId::STR_NONE_OPT, /*readerActivity=*/true,
           /*allowPowerAsConfirm=*/true, /*ignoreInitialConfirmRelease=*/false, /*showPercentValue=*/true,
           StrId::STR_NONE_OPT, /*overrideDisabledReaderTouchscreen=*/false, /*showTouchHeaderBackButton=*/true),

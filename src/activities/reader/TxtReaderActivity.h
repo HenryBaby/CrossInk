@@ -7,8 +7,10 @@
 #include "CrossPointSettings.h"
 #include "ReaderProgressSaveDebouncer.h"
 #include "activities/Activity.h"
+#include "components/OptionPopup.h"
 
 class TxtReaderActivity final : public Activity {
+  OptionPopup quickActionsPopup;
   std::unique_ptr<Txt> txt;
 
   int currentPage = 0;
@@ -49,8 +51,11 @@ class TxtReaderActivity final : public Activity {
   bool flushQueuedProgress();
   void loadProgress();
   void toggleDarkMode();
+  void toggleHomeButtonInReader();
   bool consumeLongPowerButtonRelease();
   bool consumeLongPowerButtonHold();
+  static bool supportsQuickAction(CrossPointSettings::SHORT_PWRBTN action);
+  bool executeReaderShortcutAction(CrossPointSettings::SHORT_PWRBTN action);
   bool executePowerButtonAction();
   bool executeLongPressBackAction();
   void openReaderMenu();
@@ -66,12 +71,14 @@ class TxtReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&&) override;
   bool prepareManualRefresh() override {
-    pagesUntilFullRefresh = 1;
+    pagesUntilFullRefresh = -1;
     return true;
   }
   bool isReaderActivity() const override { return true; }
   bool canSnapshotForSleepOverlay() const override { return true; }
   bool handlesReaderPowerSettingsOverride() const override { return true; }
+  bool allowPowerAsConfirmInReaderMode() const override { return quickActionsPopup.isActive(); }
+  bool handleShortcutAction(CrossPointSettings::SHORT_PWRBTN action) override;
   std::string getCurrentBookPath() const override { return txt ? txt->getPath() : std::string{}; }
 
   // Renders the last saved page to the frame buffer without flushing to display.

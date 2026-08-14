@@ -131,7 +131,7 @@ void DictionarySelectActivity::onEnter() {
   visibleRows = 1;
   initialViewportPending = true;
   uiReady = false;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &DictionarySelectActivity::onRowEvent, this);
   app.setScreen(&DictionarySelectActivity::listScreen, this);
   requestUpdate();

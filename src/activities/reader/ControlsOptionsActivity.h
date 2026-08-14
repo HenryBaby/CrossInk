@@ -19,6 +19,7 @@ class ControlsOptionsActivity final : public Activity {
   int settingsCount = 0;
   std::vector<SettingInfo> settings;
   std::vector<SettingInfo> powerSettings;
+  std::vector<SettingInfo> homeButtonSettings;
   std::vector<SettingInfo> frontButtonSettings;
   std::vector<SettingInfo> sideButtonSettings;
   const std::vector<SettingInfo>* currentSettings = nullptr;

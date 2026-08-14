@@ -68,7 +68,7 @@ void OpdsSettingsActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = 0;
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &OpdsSettingsActivity::onRowEvent, this);
   app.setScreen(&OpdsSettingsActivity::listScreen, this);
   requestUpdate();

@@ -374,7 +374,7 @@ void FileBrowserActivity::onEnter() {
   uiReady = false;
   visibleRows = 1;
   topIndex = followListSelection(static_cast<int>(selectorIndex), 0, visibleRows, static_cast<int>(entryCount()));
-  app.setTheme(uiThemeTokens(uiTarget));
+  applySharedUiTheme(app, uiTarget);
   app.on(ACTION_ROW, &FileBrowserActivity::onRowEvent, this);
   app.setScreen(&FileBrowserActivity::listScreen, this);
   requestUpdate();

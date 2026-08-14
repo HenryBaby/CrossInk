@@ -881,8 +881,9 @@ bool ParsedText::layoutAndExtractLines(const GfxRenderer& renderer, const int fo
 
 bool ParsedText::layoutAndExtractLinesPreservingSource(
     const GfxRenderer& renderer, const int fontId, const uint16_t viewportWidth,
-    const std::function<void(std::shared_ptr<TextBlock>)>& processLine) const {
+    const std::function<void(std::shared_ptr<TextBlock>)>& processLine, const bool allowCharacterBreaks) const {
   ParsedText layoutProbe(*this);
+  layoutProbe.allowCharacterBreaks_ = allowCharacterBreaks;
   return layoutProbe.layoutAndExtractLines(
       renderer, fontId, viewportWidth,
       [&processLine](std::shared_ptr<TextBlock> line, const uint32_t) { processLine(std::move(line)); });
@@ -1291,12 +1292,15 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   const auto style = wordStyles[wordIndex];
 
   if (allowFallbackBreaks && isPathologicalUnbrokenToken(word)) {
-    return splitPathologicalTokenAtIndex(wordIndex, availableWidth, renderer, fontId, wordWidths);
+    return splitTokenAtCodepointBoundary(wordIndex, availableWidth, renderer, fontId, wordWidths);
   }
 
   // Collect candidate breakpoints (byte offsets and hyphen requirements).
   auto breakInfos = Hyphenator::breakOffsets(word, allowFallbackBreaks);
   if (breakInfos.empty()) {
+    if (allowFallbackBreaks && allowCharacterBreaks_) {
+      return splitTokenAtCodepointBoundary(wordIndex, availableWidth, renderer, fontId, wordWidths);
+    }
     return false;
   }
 
@@ -1329,6 +1333,9 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   }
 
   if (chosenWidth < 0) {
+    if (allowFallbackBreaks && allowCharacterBreaks_) {
+      return splitTokenAtCodepointBoundary(wordIndex, availableWidth, renderer, fontId, wordWidths);
+    }
     // No hyphenation point produced a prefix that fits in the remaining space.
     return false;
   }
@@ -1402,7 +1409,7 @@ bool ParsedText::hyphenateWordAtIndex(const size_t wordIndex, const int availabl
   return true;
 }
 
-bool ParsedText::splitPathologicalTokenAtIndex(const size_t wordIndex, const int availableWidth,
+bool ParsedText::splitTokenAtCodepointBoundary(const size_t wordIndex, const int availableWidth,
                                                const GfxRenderer& renderer, const int fontId,
                                                ArenaVector<uint16_t>& wordWidths) {
   if (availableWidth <= 0 || wordIndex >= words.size() || wordIndex >= wordWidths.size()) {
@@ -1415,25 +1422,33 @@ bool ParsedText::splitPathologicalTokenAtIndex(const size_t wordIndex, const int
   }
 
   const auto style = wordStyles[wordIndex];
-  size_t low = 1;
-  size_t high = std::min(word.size() - 1, PATHOLOGICAL_TOKEN_SCAN_BYTES);
   size_t chosenOffset = 0;
   int chosenWidth = -1;
   std::string prefix;
-  prefix.reserve(high);
+  prefix.reserve(std::min(word.size(), PATHOLOGICAL_TOKEN_SCAN_BYTES));
+  const auto* const wordStart = reinterpret_cast<const unsigned char*>(word.data());
+  const auto* cursor = wordStart;
+  const auto* const wordEnd = wordStart + word.size();
+  while (cursor < wordEnd) {
+    const auto* next = cursor;
+    if (utf8NextCodepoint(&next) == 0 || next <= cursor || next >= wordEnd) break;
 
-  while (low <= high) {
-    const size_t mid = low + (high - low) / 2;
-    prefix.assign(word.data(), mid);
+    // Keep combining marks attached to their base codepoint.
+    const auto* following = next;
+    if (utf8IsCombiningMark(utf8NextCodepoint(&following))) {
+      cursor = next;
+      continue;
+    }
+
+    const size_t candidateOffset = static_cast<size_t>(next - wordStart);
+    prefix.assign(word.data(), candidateOffset);
     const BionicTokenMetadata prefixBionic = computeBionicMetadata(prefix, style, bionicReadingEnabled);
     const int prefixWidth = measureTokenWidth(renderer, fontId, prefix, prefixBionic.style, prefixBionic.boundary);
     if (prefixWidth <= availableWidth) {
-      chosenOffset = mid;
+      chosenOffset = candidateOffset;
       chosenWidth = prefixWidth;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
     }
+    cursor = next;
   }
 
   if (chosenOffset == 0) {
@@ -1453,6 +1468,7 @@ bool ParsedText::splitPathologicalTokenAtIndex(const size_t wordIndex, const int
   wordStyles[wordIndex] = prefixBionic.style;
   wordBionicBoundary[wordIndex] = prefixBionic.boundary;
   const BionicTokenMetadata remainderBionic = computeBionicMetadata(remainder, style, bionicReadingEnabled);
+  reserveTokenCapacity(1);
   words.insert(words.begin() + wordIndex + 1, remainder);
   insertVisibleOffset(wordIndex + 1, remainderOffset);
   wordStyles.insert(wordStyles.begin() + wordIndex + 1, remainderBionic.style);
@@ -1461,7 +1477,7 @@ bool ParsedText::splitPathologicalTokenAtIndex(const size_t wordIndex, const int
   wordGuideDotBefore.insert(wordGuideDotBefore.begin() + wordIndex + 1, false);
   wordBackgroundBlack[wordIndex + 1] &= static_cast<uint8_t>(~TextBlock::WORD_FLAG_INSERTED_HYPHEN);
   wordContinues.insert(wordContinues.begin() + wordIndex + 1, false);
-  wordNoSpaceBefore.insert(wordNoSpaceBefore.begin() + wordIndex + 1, false);
+  wordNoSpaceBefore.insert(wordNoSpaceBefore.begin() + wordIndex + 1, true);
 
   wordWidths[wordIndex] = static_cast<uint16_t>(chosenWidth);
   const uint16_t remainderWidth =

@@ -127,7 +127,7 @@ DictionaryLookupController::LookupEvent DictionaryLookupController::handleInput(
         state = LookupState::AltFormPrompt;
 #if CROSSINK_APP_CAP_TOUCH
         altFormUiReady = false;
-        altFormUiApp.setTheme(uiThemeTokens(altFormUiTarget));
+        applySharedUiTheme(altFormUiApp, altFormUiTarget);
         altFormUiApp.setScreen(&DictionaryLookupController::altFormPromptScreen, this);
 #endif
         owner.requestUpdate();

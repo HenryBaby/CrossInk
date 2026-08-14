@@ -105,8 +105,9 @@ void normalizeThumbDimensions(int& width, int& height) {
   }
 }
 
-std::unique_ptr<BookMetadataCache> makeBookMetadataCacheNoThrow(const std::string& cachePath) {
-  auto cache = makeUniqueNoThrow<BookMetadataCache>(cachePath);
+std::unique_ptr<BookMetadataCache> makeBookMetadataCacheNoThrow(const std::string& cachePath,
+                                                                const bool cacheCumulativeSpineSizes) {
+  auto cache = makeUniqueNoThrow<BookMetadataCache>(cachePath, cacheCumulativeSpineSizes);
   if (!cache) {
     LOG_ERR("EBP", "OOM: BookMetadataCache (%u free, %u max alloc)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
   }
@@ -651,10 +652,11 @@ Epub::CssParseStatus Epub::parseCssFiles(const bool forceRebuild) const {
 }
 
 // load in the meta data for the epub file
-bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const XLocationLoadMode xLocationLoadMode) {
+bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const XLocationLoadMode xLocationLoadMode,
+                const bool cacheCumulativeSpineSizes) {
   lastLoadFailure = OpenFailure::InvalidOrUnreadable;
   // Initialize spine/TOC cache
-  bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath);
+  bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath, cacheCumulativeSpineSizes);
   if (!bookMetadataCache) {
     lastLoadFailure = OpenFailure::OutOfMemory;
     return false;
@@ -705,7 +707,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const XLoc
         bookMetadataCache.reset();
         const CssParseStatus cssStatus = parseCssFiles(forceCssRebuild);
         releaseCssFileList();
-        bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath);
+        bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath, cacheCumulativeSpineSizes);
         if (!bookMetadataCache) {
           lastLoadFailure = OpenFailure::OutOfMemory;
           return false;
@@ -835,7 +837,7 @@ bool Epub::load(const bool buildIfMissing, const bool skipLoadingCss, const XLoc
   }
 
   // Reload the cache from disk so it's in the correct state
-  bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath);
+  bookMetadataCache = makeBookMetadataCacheNoThrow(cachePath, cacheCumulativeSpineSizes);
   if (!bookMetadataCache) {
     lastLoadFailure = OpenFailure::OutOfMemory;
     return false;

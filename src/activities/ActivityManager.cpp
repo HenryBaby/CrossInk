@@ -139,6 +139,20 @@ void ActivityManager::loop() {
       } else {
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
+
+        if (openReaderMenuAfterPop) {
+          openReaderMenuAfterPop = false;
+          // Reader menu implementations may acquire RenderLock.
+          lock.unlock();
+          if (currentActivity->openReaderSettingsMenu()) {
+            continue;
+          }
+          // TXT is a reader without a settings menu; retain the icon's
+          // existing Global Settings fallback for that case.
+          goToSettings(true);
+          continue;
+        }
+
         // Handle result if necessary
         if (currentActivity->resultHandler) {
           // Move it here to avoid the case where handler calling another startActivityForResult()
@@ -214,12 +228,39 @@ bool ActivityManager::handleGlobalHomeGesture() {
     return false;
   }
 
+  return handleHomeButtonBackOrHome();
+}
+
+bool ActivityManager::handleHomeButtonBackOrHome() {
+  if (!currentActivity || pendingAction != PendingAction::None || currentActivity->isHomeActivity()) {
+    return false;
+  }
+
   if (currentActivity->handleHomeGesture()) {
     return true;
   }
 
   goHome();
   return true;
+}
+
+bool ActivityManager::openReaderMenuFromShortcut() {
+  return currentActivity && pendingAction == PendingAction::None && currentActivity->openReaderSettingsMenu();
+}
+
+bool ActivityManager::openReaderMenuAfterClosingOverlay() {
+  if (!currentActivity || pendingAction != PendingAction::None || stackActivities.empty() ||
+      !stackActivities.back()->isReaderActivity()) {
+    return false;
+  }
+
+  openReaderMenuAfterPop = true;
+  popActivity();
+  return true;
+}
+
+bool ActivityManager::handleShortcutAction(const uint8_t action) {
+  return currentActivity && pendingAction == PendingAction::None && currentActivity->handleShortcutAction(action);
 }
 
 bool ActivityManager::handleReaderPowerButtonSettingsOverride() {
@@ -501,6 +542,11 @@ bool ActivityManager::requestManualReaderRefresh() {
   lock.unlock();
   requestUpdate(true);
   return true;
+}
+
+bool ActivityManager::handleShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  return currentActivity && (currentActivity->isReaderActivity() || currentActivity->isHomeActivity()) &&
+         currentActivity->handleShortcutAction(action);
 }
 
 bool ActivityManager::skipLoopDelay() const { return currentActivity && currentActivity->skipLoopDelay(); }

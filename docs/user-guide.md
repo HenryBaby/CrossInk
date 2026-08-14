@@ -5,10 +5,7 @@ nav_order: 1.5
 
 # CrossInk User Guide
 
-Welcome to the **CrossInk** firmware. This guide covers day-to-day device use.
-For focused reference material, see [Reader Features](./reader-features.md),
-[Controls](./controls.md), [SD Card Fonts](./sd-card-fonts.md),
-[File Transfer](./webserver.md), and [Troubleshooting](./troubleshooting.md).
+This guide covers day-to-day device use. For focused reference material, see [Reader Features](./reader-features.md), [Controls](./controls.md), [SD Card Fonts](./sd-card-fonts.md), [File Transfer](./webserver.md), and [Troubleshooting](./troubleshooting.md). For Dashboard and Minimal Home-screen gestures, see [Touch Navigation](./touch-navigation.md).
 
 - [CrossInk User Guide](#crossink-user-guide)
   - [1. Hardware Overview](#1-hardware-overview)
