@@ -1,59 +1,27 @@
 ## [Unreleased]
 
-### Changed
-
-- OPDS download folders are configured per server, with legacy global folder settings migrated automatically.
-
-### Fixed
-
-- Long values such as server URLs are truncated within their settings column instead of overlapping row labels.
-- OPDS filename formats use readable translated labels on the device instead of persistence tokens.
+## [v1.5.2] - 2026-08-14
 
 ### Upstream CrossInk v1.5.1-rc
 
-This development branch incorporates [`uxjulia/CrossInk` v1.5.1-rc](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc) as the basis for local X4 Pro testing. The additions and fixes below were developed by the upstream CrossInk project.
+This release incorporates [`uxjulia/CrossInk v1.5.1-rc`](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc), and adds X4 Pro support as published by the upstream CrossInk project.
 
-#### Added
-
-- Full X4 Pro support.
-- New Quick Actions menu.
-- Power-button shortcuts and Quick Actions can toggle the frontlight or reader touchscreen when supported.
-- On one-cover Lyra, Dashboard, and Minimal Home screens, swipe left to switch between the two most recent books.
-
-#### Changed
-
-- EPUB progress calculations reuse a bounded in-memory spine-size index while reading, reducing repeated SD-card seeks.
-- Waking from deep sleep keeps the selected sleep screen visible until Home or the reader is ready, removing the boot-up splash screen.
-- Reader menu settings group Controls and Mark as Finished with the gear-tab actions in a consistent order.
-- Font Family choices identify built-in and SD-card fonts by their available point-size ranges.
+### Additional upstream fix
 
 #### Fixed
 
-- Long-pressing Up or Down in long popup lists advances by a full page.
-- EPUB table fixes preserve final-column widths, give dense tables enough space for leading labels, and split oversized words instead of clipping them.
-- Nearby Position Sync leaves the sending device with a single Back action after sharing a position and tolerates repeated packets while the receiving reader prepares the location.
-- Clearing an EPUB's reading cache returns Home so the book can rebuild its cache safely when reopened.
-- Large EPUB tables use a bounded row-streaming grid on low-memory devices, preserving readable styled cells and falling back explicitly for unsupported table structures.
-- Dictionary definition popups no longer leave an empty white button-hint block over the reader page.
-- Recent Books and KOReader Sync settings remain intact after returning from lightweight network screens.
-- XTCH cover and thumbnail generation stays within the available memory on X3/X4 after its cache is cleared.
-- Change Font shortcuts switch away from an active SD-card font instead of reindexing with the same font.
-- Network connections no longer trigger repeated full-panel flashes.
-- Dictionary word selection follows the physical front-button direction in counter-clockwise landscape mode.
-- End-of-book suggestions can be opened by tapping them on touch devices.
-- XTC and XTCH readers ignore overlapping page turns while the display is updating, preventing corrupted pages after rapid swipes.
-- XTC and XTCH readers no longer corrupt a page when turning or opening the menu during rendering.
-- Dictionary font switches retry after releasing the reader font when memory is tight.
-- XTC table of contents includes every available page entry, so large books can jump beyond the first 128 pages.
-- Saved clipping highlights remain accurate when a font or font-size change reflows a word across an inserted hyphen.
-- Xteink readers wake faster by skipping redundant bootloader image validation after sleep.
-- Large EPUB images keep the reader responsive during decoding.
-- Full-height EPUB images no longer disappear when their container adds a top margin.
-- EPUB page estimates keep image-only and mixed image pages from being multiplied by XHTML byte density.
-- Cancelling a chapter, footnote, location, or QR screen opened from the EPUB menu returns to that menu.
-- EPUB and XTC readers retain less memory during ordinary reading by loading end-of-book suggestions only when needed.
-- Long inherited dictionary-font names no longer overlap or extend beyond Font Options rows at Large UI size.
-- KOReader Sync progress no longer remains interleaved with EPUB image pages after returning to the reader.
+- [`e80051a2`](https://github.com/HenryBaby/CrossInk/commit/e80051a2) — Applied the fix from [`uxjulia/CrossInk#529`](https://github.com/uxjulia/CrossInk/issues/529), preventing X4 Pro KOReader Sync from exhausting the render-task stack during network setup.
+
+### Changes maintained by this downstream fork
+
+#### Changed
+
+- [`e2f6c6bb`](https://github.com/HenryBaby/CrossInk/commit/e2f6c6bb) — Consolidated OPDS download folders around the per-server setting, with automatic migration from the legacy global folder.
+
+#### Fixed
+
+- [`333a7c58`](https://github.com/HenryBaby/CrossInk/commit/333a7c58) — Preserved OPDS author folders when finished books are moved to `/Read` with the updated reader implementation.
+- [`e2f6c6bb`](https://github.com/HenryBaby/CrossInk/commit/e2f6c6bb) — Kept long settings values inside their value column and replaced OPDS persistence tokens with readable filename labels.
 
 ## [v1.5.1] - 2026-08-09
 

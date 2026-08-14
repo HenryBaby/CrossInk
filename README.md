@@ -11,6 +11,8 @@
 - [`3e99be55`](https://github.com/HenryBaby/CrossInk/commit/3e99be55), [`301880e1`](https://github.com/HenryBaby/CrossInk/commit/301880e1) — Per-server OPDS download folders and optional author subfolders.
 - [`f06148c3`](https://github.com/HenryBaby/CrossInk/commit/f06148c3) — Finished OPDS books retain their author folder when moved to `/Read`.
 - [`38ae3063`](https://github.com/HenryBaby/CrossInk/commit/38ae3063), [`6844a8ce`](https://github.com/HenryBaby/CrossInk/commit/6844a8ce), and [`d0302722`](https://github.com/HenryBaby/CrossInk/commit/d0302722) — OPDS downloads support title-only filenames and server-supplied filenames.
+- [`333a7c58`](https://github.com/HenryBaby/CrossInk/commit/333a7c58) — Finished OPDS books continue to retain their author folder with the X4 Pro-capable reader implementation.
+- [`e2f6c6bb`](https://github.com/HenryBaby/CrossInk/commit/e2f6c6bb) — OPDS settings use one per-server download folder, readable filename choices, and bounded values that cannot overlap their labels.
 
 Everything below describes upstream CrossInk.
 
@@ -18,6 +20,7 @@ Everything below describes upstream CrossInk.
 
 - Xteink X3
 - Xteink X4
+- Xteink X4 Pro
 
 ## What's different in this fork
 
