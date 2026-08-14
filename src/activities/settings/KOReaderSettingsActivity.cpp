@@ -234,6 +234,7 @@ void KOReaderSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
   props.action = ACTION_ROW;
   props.inputMask = fui::InputTouch;  // physical buttons stay in loop()
   props.valueInset = 8;               // air between the value and the row edge
+  fitUiListValues(renderer, items, values, screen.body());
   const auto rows = configureUiList(props, screen.theme(), screen.body());
   visibleRows = rows > 0 ? rows : 1;
   topIndex = scrollListBy(topIndex, 0, visibleRows, MENU_ITEMS);  // clamp to range

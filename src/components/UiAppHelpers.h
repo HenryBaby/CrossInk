@@ -3,6 +3,10 @@
 #include <FreeInkUIGfxRenderer.h>
 #include <FreeInkUIIcon.h>
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 #include "MappedInputManager.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
@@ -21,6 +25,22 @@ inline freeink::ui::GfxRendererTarget makeUiTarget(const GfxRenderer& renderer) 
   target.setFont(freeink::ui::GfxRendererTarget::FONT_BODY, spec.bodyFontId);
   target.setFont(freeink::ui::GfxRendererTarget::FONT_TITLE, spec.titleFontId);
   return target;
+}
+
+// Keep trailing list values inside their own column. FreeInkUI right-aligns
+// values, so an unbounded URL can otherwise extend left across the row label.
+// Callers retain the strings for the duration of the immediate-mode draw.
+inline void fitUiListValues(const GfxRenderer& renderer, std::vector<freeink::ui::ListItem>& items,
+                            std::vector<std::string>& values, const freeink::ui::Rect rowBand) {
+  constexpr int maxValuePercent = 45;
+  const int maxValueWidth = static_cast<int>(rowBand.width) * maxValuePercent / 100;
+  const int fontId = uiScaleSpec().smallFontId;
+  const size_t count = std::min(items.size(), values.size());
+  for (size_t i = 0; i < count; ++i) {
+    if (items[i].value == nullptr) continue;
+    values[i] = renderer.truncatedText(fontId, values[i].c_str(), maxValueWidth);
+    items[i].value = values[i].c_str();
+  }
 }
 
 // Activities share one refreshed token block rather than each retaining an

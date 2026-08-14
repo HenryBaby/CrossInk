@@ -119,7 +119,14 @@ bool OpdsServerStore::fromJson(JsonVariantConst doc) {
     server.name = obj["name"] | "";
     server.url = obj["url"] | "";
     server.username = obj["username"] | "";
-    server.downloadFolder = normalizeOpdsDownloadFolder(obj["downloadFolder"] | std::string("/"));
+    if (obj["downloadFolder"].is<const char*>() || obj["downloadFolder"].is<std::string>()) {
+      server.downloadFolder = normalizeOpdsDownloadFolder(obj["downloadFolder"] | std::string("/"));
+    } else {
+      // Older upstream configurations only had one global folder. Import it
+      // once into each server; subsequent saves persist the per-server value.
+      server.downloadFolder = normalizeOpdsDownloadFolder(SETTINGS.opdsDownloadFolder);
+      needsResave = true;
+    }
     server.folderOrganization = opdsFolderOrganizationFromJson(obj["folderOrganization"] | "");
     server.filenameFormat = opdsFilenameFormatFromJson(obj["filenameFormat"] | "");
     obfuscation::DecodeStatus status = obfuscation::DecodeStatus::INVALID;
@@ -185,6 +192,7 @@ bool OpdsServerStore::migrateFromSettings() {
   server.url = SETTINGS.opdsServerUrl;
   server.username = SETTINGS.opdsUsername;
   server.password = SETTINGS.opdsPassword;
+  server.downloadFolder = normalizeOpdsDownloadFolder(SETTINGS.opdsDownloadFolder);
   servers.push_back(std::move(server));
 
   if (saveToFile()) {

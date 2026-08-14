@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Changed
+
+- OPDS download folders are configured per server, with legacy global folder settings migrated automatically.
+
+### Fixed
+
+- Long values such as server URLs are truncated within their settings column instead of overlapping row labels.
+- OPDS filename formats use readable translated labels on the device instead of persistence tokens.
+
 ### Upstream CrossInk v1.5.1-rc
 
 This development branch incorporates [`uxjulia/CrossInk` v1.5.1-rc](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc) as the basis for local X4 Pro testing. The additions and fixes below were developed by the upstream CrossInk project.

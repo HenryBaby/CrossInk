@@ -1280,6 +1280,7 @@ void SettingsActivity::buildSettingsScreen(UiApp::ScreenType& screen) {
   // File Browser, reader menus, and the other list-style screens.
   props.labelText = screen.theme().bodyText;
   props.labelText.maxLines = 2;
+  fitUiListValues(renderer, items, values, screen.body());
   configureUiListSectionHeaders(props, screen.theme());
   const auto rows = configureUiList(props, screen.theme(), screen.body());
   visibleRows = rows > 0 ? rows : 1;

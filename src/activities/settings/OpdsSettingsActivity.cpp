@@ -201,9 +201,17 @@ void OpdsSettingsActivity::handleSelection() {
                                                                    editServer.password, 63, InputType::Password),
                            handler);
   } else if (selectedIndex == 4) {
-    editServer.downloadFolder = editServer.downloadFolder == "/" ? "/Books" : "/";
-    saveServer();
-    requestUpdate();
+    auto handler = [this](const ActivityResult& result) {
+      if (!result.isCancelled) {
+        const auto& kb = std::get<KeyboardResult>(result.data);
+        editServer.downloadFolder = normalizeOpdsDownloadFolder(kb.text);
+        saveServer();
+        requestUpdate();
+      }
+    };
+    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_DOWNLOAD_FOLDER),
+                                                                   editServer.downloadFolder, 127, InputType::Text),
+                           handler);
   } else if (selectedIndex == 5) {
     editServer.folderOrganization = editServer.folderOrganization == OpdsFolderOrganization::FLAT
                                         ? OpdsFolderOrganization::AUTHOR
@@ -247,22 +255,40 @@ void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
                               StrId::STR_PASSWORD,    StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
                               StrId::STR_FILENAME};
   const int menuItems = getMenuItemCount();
-  const char* values[BASE_ITEMS] = {
+  const char* filenameFormat = tr(STR_AUTHOR_TITLE);
+  switch (editServer.filenameFormat) {
+    case OpdsFilenameFormat::TITLE_AUTHOR:
+      filenameFormat = tr(STR_TITLE_AUTHOR);
+      break;
+    case OpdsFilenameFormat::TITLE:
+      filenameFormat = tr(STR_TITLE);
+      break;
+    case OpdsFilenameFormat::SERVER_FILENAME:
+      filenameFormat = tr(STR_SERVER_FILENAME);
+      break;
+    case OpdsFilenameFormat::AUTHOR_TITLE:
+    default:
+      break;
+  }
+
+  std::vector<std::string> values(BASE_ITEMS);
+  const char* rawValues[BASE_ITEMS] = {
       editServer.name.empty() ? tr(STR_NOT_SET) : editServer.name.c_str(),
       editServer.url.empty() ? tr(STR_NOT_SET) : editServer.url.c_str(),
       editServer.username.empty() ? tr(STR_NOT_SET) : editServer.username.c_str(),
       editServer.password.empty() ? tr(STR_NOT_SET) : "******",
       editServer.downloadFolder.c_str(),
       editServer.folderOrganization == OpdsFolderOrganization::AUTHOR ? tr(STR_AUTHOR_FOLDERS) : tr(STR_SINGLE_FOLDER),
-      opdsFilenameFormatToJson(editServer.filenameFormat),
+      filenameFormat,
   };
+  for (int i = 0; i < BASE_ITEMS; ++i) values[i] = rawValues[i];
 
   std::vector<fui::ListItem> items;
   items.reserve(menuItems);
   for (int i = 0; i < menuItems; i++) {
     fui::ListItem item;
     item.label = i < BASE_ITEMS ? I18N.get(fieldNames[i]) : tr(STR_DELETE_SERVER);
-    if (i < BASE_ITEMS) item.value = values[i];
+    if (i < BASE_ITEMS) item.value = values[i].c_str();
     item.actionValue = static_cast<int16_t>(i);
     items.push_back(item);
   }
@@ -274,6 +300,7 @@ void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
   props.action = ACTION_ROW;
   props.inputMask = fui::InputTouch;  // physical buttons stay in loop()
   props.valueInset = 8;               // air between the value and the row edge
+  fitUiListValues(renderer, items, values, screen.body());
   const auto rows = configureUiList(props, screen.theme(), screen.body());
   visibleRows = rows > 0 ? rows : 1;
   topIndex = scrollListBy(topIndex, 0, visibleRows, menuItems);  // clamp to range
