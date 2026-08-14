@@ -1149,9 +1149,8 @@ inline std::vector<SettingInfo> buildReaderPageLayoutSettingsList(const std::vec
 
 inline void addSettingByKey(std::vector<SettingInfo>& target, const std::vector<SettingInfo>& allSettings,
                             const char* key) {
-  const auto it = std::find_if(allSettings.begin(), allSettings.end(), [key](const auto& setting) {
-    return settingKeyIs(setting, key);
-  });
+  const auto it = std::find_if(allSettings.begin(), allSettings.end(),
+                               [key](const auto& setting) { return settingKeyIs(setting, key); });
   if (it != allSettings.end()) {
     target.push_back(*it);
   }
