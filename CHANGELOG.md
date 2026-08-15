@@ -1,25 +1,10 @@
 ## [Unreleased]
 
+## [v1.5.3] - 2026-08-15
+
 ### Upstream CrossInk v1.5.1-rc-2
 
-This development branch incorporates [`uxjulia/CrossInk v1.5.1-rc-2`](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc-2), including its X4 Pro USB Drive support, page-turn gesture controls, Quick Lock, touch-input fixes, and memory protections for large EPUBs.
-
-#### Added
-
-- X4 Pro USB Drive and direct Inky USB file-transfer support.
-- Configurable touchscreen page-turn gestures and the Quick Lock shortcut.
-- Additional Power + Up and X4 Pro Home-button Quick Action triggers.
-
-#### Changed
-
-- Wi-Fi passwords remain visible while they are entered.
-- Custom sleep-image folders use a compact cached index and rebuild it after folder changes.
-
-#### Fixed
-
-- Quick Resume, TOC footnote return positions, touch context menus, option-popup releases, Quick Actions, Nearby Sync, and X4 Pro crash reporting now include the RC-2 upstream corrections.
-- Large EPUB manifest indexes are bounded on X3/X4, and ESP32-S3 OPDS network setup uses a render stack large enough to avoid overflow.
-- Reader dark mode remains active after long Power presses and keeps dictionary selection visible.
+This release incorporates [`uxjulia/CrossInk v1.5.1-rc-2`](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc-2), including X4 Pro USB Drive support, page-turn gesture controls, Quick Lock, touch-input fixes, and memory protections for large EPUBs.
 
 ## [v1.5.2] - 2026-08-14
 
