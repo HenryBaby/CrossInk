@@ -321,6 +321,14 @@ class SimulatorSmokeTest {
         inputScript.push_back(render("Reader restored after top-edge swipe dismisses Reader Menu", 4));
         inputScript.push_back(assertActivity("EpubReader"));
         inputScript.push_back(disableReaderTouch());
+        inputScript.push_back(homeLongPress());
+        inputScript.push_back(render("Reader Menu opened from Home key hold with touch disabled", 4));
+        inputScript.push_back(assertActivity("EpubReaderMenu"));
+        inputScript.push_back(touchDown(width / 2, 8));
+        inputScript.push_back(touchMove(width / 2, height / 4));
+        inputScript.push_back(touchRelease(width / 2, height / 4));
+        inputScript.push_back(render("Reader restored after Home key menu with touch disabled", 4));
+        inputScript.push_back(assertActivity("EpubReader"));
         inputScript.push_back(homeTap());
         inputScript.push_back(render("Home opened from simulated Home key tap", 4));
         inputScript.push_back(assertActivity("Home"));

@@ -10,9 +10,20 @@
 
 class HalFile;
 
+enum class UsbDriveState : uint8_t {
+  Unsupported,
+  WaitingForHost,
+  Connected,
+  Accessed,
+  Ejected,
+  Disconnected,
+  IoError,
+};
+
 class HalStorage {
  public:
   HalStorage();
+  ~HalStorage();
   bool begin();
   bool ready() const;
   uint64_t totalBytes() const;
@@ -34,6 +45,10 @@ class HalStorage {
   // Install SdFat timestamp support when an RTC-backed clock is available.
   void installDateTimeCallback(const uint8_t* utcOffsetQuarterHoursBiased);
 
+  bool beginUsbDrive();
+  void endUsbDrive();
+  UsbDriveState usbDriveState() const;
+
   HalFile open(const char* path, const oflag_t oflag = O_RDONLY);
   bool mkdir(const char* path, const bool pFlag = true);
   bool exists(const char* path);
@@ -54,10 +69,12 @@ class HalStorage {
   class StorageLock;  // private class, used internally
 
  private:
+  class UsbDriveContext;
   static HalStorage instance;
 
   bool initialized = false;
   SemaphoreHandle_t storageMutex = nullptr;
+  std::unique_ptr<UsbDriveContext> usbDriveContext;
 };
 
 #define Storage HalStorage::getInstance()

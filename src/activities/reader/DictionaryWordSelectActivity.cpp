@@ -20,6 +20,7 @@
 #include "DictionaryDefinitionActivity.h"
 #include "MappedInputManager.h"
 #include "Memory.h"
+#include "ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "util/Dictionary.h"
@@ -353,16 +354,17 @@ void DictionaryWordSelectActivity::renderDefinitionBackground() {
     LOG_ERR("DICT", "Cannot redraw dictionary background without a reader page");
     return;
   }
-  renderer.clearScreen();
+  const bool foregroundBlack = ReaderUtils::readerForegroundBlack();
+  renderer.clearScreen(ReaderUtils::readerBackgroundColor());
 
   // Dictionary layout can evict the reader font's bitmap glyph cache. Rebuild
   // it before redrawing the page behind the modal; the persistent advance
   // table only preserves glyph widths, not the bitmaps themselves.
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop);  // scan pass
+  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);  // scan pass
   scope.endScanAndPrewarm();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop);
+  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);
 }
 
 void DictionaryWordSelectActivity::renderDefinitionBackgroundCallback(void* context) {
@@ -931,6 +933,7 @@ void DictionaryWordSelectActivity::loop() {
 void DictionaryWordSelectActivity::render(RenderLock&&) {
   const int lineHeight = renderer.getLineHeight(SETTINGS.getReaderFontId());
   const int currIdx = navigator.getCurrentFlatIndex();
+  const bool foregroundBlack = ReaderUtils::readerForegroundBlack();
 
   // Differential fast path. Only valid when:
   //   - we set it up on the previous frame (RenderMode::Differential),
@@ -938,7 +941,8 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   //   - we have a current selection.
   if (nextRenderMode_ == RenderMode::Differential && !controller.isActive() && currIdx >= 0) {
     prewarmHighlightGlyphs(currIdx);
-    auto dirty = navigator.renderHighlightDifferential(renderer, lineHeight, prevHighlightIdx_, currIdx);
+    auto dirty =
+        navigator.renderHighlightDifferential(renderer, lineHeight, prevHighlightIdx_, currIdx, foregroundBlack);
     if (dirty.has_value()) {
       // Push full panel — the SDK's windowed-refresh path produces alternating black→white
       // transition failures on consecutive fast partial refreshes, so it's intentionally not
@@ -979,7 +983,8 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
 
       prewarmHighlightGlyphs(currIdx);
 
-      auto setup = navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx);
+      auto setup =
+          navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx, foregroundBlack);
       bool snapshotPrimed = setup.has_value();
       if (!snapshotPrimed) {
         // Hyphenated wrap or oversize capture. The framebuffer still holds
@@ -989,7 +994,7 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
         // repaint so the renderer state is consistent. The user just pays
         // for one regular page render on the next cursor move instead of
         // on entry.
-        navigator.renderHighlight(renderer, lineHeight);
+        navigator.renderHighlight(renderer, lineHeight, foregroundBlack);
       }
       clearFrontButtonHintArea();
       DictUtils::drawWordSelectButtonHints(renderer, mappedInput, navigator);
@@ -1003,7 +1008,7 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   }
 
   // Full repaint path.
-  renderer.clearScreen();
+  renderer.clearScreen(ReaderUtils::readerBackgroundColor());
   if (controller.render()) {
     // Controller drew an overlay; framebuffer state is unknown.
     nextRenderMode_ = RenderMode::FullPage;
@@ -1017,9 +1022,9 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   // Same pattern as EpubReaderActivity::renderContents().
   auto* fcm = renderer.getFontCacheManager();
   auto scope = fcm->createPrewarmScope();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop);  // scan pass
+  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);  // scan pass
   scope.endScanAndPrewarm();
-  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop);
+  page->render(renderer, SETTINGS.getReaderFontId(), marginLeft, marginTop, foregroundBlack);
 
   // Set up snapshot AND draw the highlight via the differential entry point with
   // prevWordIdx = -1 (no previous highlight to wipe). This both draws the highlight
@@ -1034,11 +1039,12 @@ void DictionaryWordSelectActivity::render(RenderLock&&) {
   // it's also the only call site that must pass -1.
   bool snapshotPrimed = false;
   if (currIdx >= 0) {
-    auto setup = navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx);
+    auto setup =
+        navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx, foregroundBlack);
     snapshotPrimed = setup.has_value();
   }
   if (!snapshotPrimed) {
-    navigator.renderHighlight(renderer, lineHeight);
+    navigator.renderHighlight(renderer, lineHeight, foregroundBlack);
   }
 
   clearFrontButtonHintArea();

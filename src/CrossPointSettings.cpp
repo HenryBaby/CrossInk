@@ -525,6 +525,18 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
       longPwrBtn = SLEEP;
       needsResave = true;
     }
+    if (homeButtonTapAction == QUICK_ACTIONS) {
+      homeButtonTapAction = HOME_BUTTON_BACK_HOME;
+      needsResave = true;
+    }
+    if (homeButtonLongPressAction == QUICK_ACTIONS) {
+      homeButtonLongPressAction = HOME_BUTTON_READER_MENU;
+      needsResave = true;
+    }
+    if (homeButtonDoubleTapAction == QUICK_ACTIONS) {
+      homeButtonDoubleTapAction = HOME_BUTTON_TOGGLE_FRONTLIGHT;
+      needsResave = true;
+    }
   }
 
   if (doc["fileBrowserDisplay"].isNull()) {
@@ -609,7 +621,10 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
   const uint8_t persistedQuickActionsTrigger =
       doc["quickActionsTrigger"] | static_cast<uint8_t>(QuickActions::Trigger::None);
-  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::LongMenu)) {
+  const bool unavailableHomeTrigger =
+      !gpio.hasHomeKey() && persistedQuickActionsTrigger >= static_cast<uint8_t>(QuickActions::Trigger::TapHome);
+  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::DoubleTapHome) &&
+      !unavailableHomeTrigger) {
     quickActionsTrigger = persistedQuickActionsTrigger;
   } else {
     quickActionsTrigger = static_cast<uint8_t>(QuickActions::Trigger::None);

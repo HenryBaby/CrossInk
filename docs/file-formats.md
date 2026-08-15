@@ -5,6 +5,43 @@ All POD fields are written in the ESP32 little-endian representation used by
 `Serialization.h`; strings are length-prefixed UTF-8 unless a format notes a
 fixed-size char buffer.
 
+## `/.crosspoint/sleep-image-index/<directory-hash>-{bmp,all}.idx`
+
+### Version 1
+
+Sleep screens keep a compact, rebuildable index for the selected sleep-image
+folder. The index avoids walking the directory during every sleep while using
+only one fixed-size record at a time in RAM. `bmp` contains BMP files and
+`all` contains BMP and PNG files for Page Overlay mode. The `validated` header
+flag means BMP headers were checked while rebuilding after a failed render.
+
+The index is disposable: a missing, malformed, or stale selected entry causes
+one rebuild and then the sleep renderer falls back to its directory scan. File
+transfer, file-browser, and preferred-folder changes invalidate affected
+indexes. Files added or changed directly on the SD card have no notification
+path; they are picked up when a cached entry is found missing or when an index
+is otherwise rebuilt.
+
+```c++
+struct SleepImageIndexHeader {
+    char magic[4];       // "CSIX"
+    u8 version;          // 1
+    u8 flags;            // bit 0: BMP+PNG, bit 1: BMP headers validated
+    u16 pathLength;
+    u16 recordCount;
+    u16 recordSize;      // sizeof(SleepImageIndexRecord)
+    u32 recordsOffset;   // sizeof(header) + pathLength
+    char directory[pathLength];
+};
+
+struct SleepImageIndexRecord {
+    u16 nameLength;
+    u8 flags;             // bit 0: PNG (otherwise BMP)
+    u8 reserved;
+    char name[256];      // zero-padded UTF-8 filename, max 255 bytes
+};
+```
+
 ## `book.bin`
 
 ### Version 9

@@ -65,21 +65,6 @@ inline SettingInfo buildSdFontSizeSetting(const SdCardFontFamilyInfo& family) {
   return s;
 }
 
-inline void insertEnumOptionAfter(SettingInfo& setting, const StrId after, const StrId option, const uint8_t rawValue) {
-  const auto it = std::find(setting.enumValues.begin(), setting.enumValues.end(), after);
-  if (it == setting.enumValues.end()) {
-    setting.enumValues.push_back(option);
-    if (!setting.enumRawValues.empty()) setting.enumRawValues.push_back(rawValue);
-    return;
-  }
-
-  const auto insertIndex = static_cast<size_t>(std::distance(setting.enumValues.begin(), it) + 1);
-  setting.enumValues.insert(it + 1, option);
-  if (!setting.enumRawValues.empty()) {
-    setting.enumRawValues.insert(setting.enumRawValues.begin() + insertIndex, rawValue);
-  }
-}
-
 inline void removeEnumRawValue(SettingInfo& setting, const uint8_t rawValue) {
   const auto it = std::find(setting.enumRawValues.begin(), setting.enumRawValues.end(), rawValue);
   if (it == setting.enumRawValues.end()) {
@@ -367,60 +352,189 @@ inline SettingInfo buildSleepScreenSetting() {
   return s;
 }
 
+enum class ShortcutOptionCatalog { PowerButton, PowerChord, LongPress, HomeButton };
+
+constexpr uint8_t SHORTCUT_OPTION_UNAVAILABLE = UINT8_MAX;
+
+inline uint8_t shortcutRawValue(const ShortcutOptionCatalog catalog, const CrossPointSettings::SHORT_PWRBTN action) {
+  using Action = CrossPointSettings::SHORT_PWRBTN;
+  using LongPress = CrossPointSettings::LONG_PRESS_MENU_ACTION;
+  using Chord = CrossPointSettings::POWER_CHORD_ACTION;
+
+  switch (catalog) {
+    case ShortcutOptionCatalog::PowerButton:
+      return static_cast<uint8_t>(action);
+    case ShortcutOptionCatalog::PowerChord:
+      switch (action) {
+        case Action::IGNORE:
+          return Chord::CHORD_DISABLED;
+        case Action::SLEEP:
+          return Chord::CHORD_SLEEP;
+        case Action::PAGE_TURN:
+          return Chord::CHORD_PAGE_TURN;
+        case Action::TOGGLE_BOOKMARK:
+          return Chord::CHORD_TOGGLE_BOOKMARK;
+        case Action::READING_STATS:
+          return Chord::CHORD_READING_STATS;
+        case Action::MARK_FINISHED:
+          return Chord::CHORD_MARK_FINISHED;
+        case Action::FORCE_REFRESH:
+          return Chord::CHORD_FORCE_REFRESH;
+        case Action::TOGGLE_FONT:
+          return Chord::CHORD_TOGGLE_FONT;
+        case Action::TOGGLE_GUIDE_DOTS:
+          return Chord::CHORD_TOGGLE_GUIDE_DOTS;
+        case Action::TOGGLE_BIONIC_READING:
+          return Chord::CHORD_TOGGLE_BIONIC_READING;
+        case Action::CYCLE_PAGE_TURN:
+          return Chord::CHORD_CYCLE_PAGE_TURN;
+        case Action::SYNC_PROGRESS:
+          return Chord::CHORD_SYNC_PROGRESS;
+        case Action::FILE_TRANSFER:
+          return Chord::CHORD_FILE_TRANSFER;
+        case Action::CALIBRE_WIRELESS:
+          return Chord::CHORD_CALIBRE_WIRELESS;
+        case Action::JOIN_NETWORK:
+          return Chord::CHORD_JOIN_NETWORK;
+        case Action::CREATE_HOTSPOT:
+          return Chord::CHORD_CREATE_HOTSPOT;
+        case Action::SCREENSHOT:
+          return Chord::CHORD_SCREENSHOT;
+        case Action::TOGGLE_DARK_MODE:
+          return Chord::CHORD_TOGGLE_DARK_MODE;
+        case Action::FOOTNOTES:
+          return Chord::CHORD_FOOTNOTES;
+        case Action::FILE_BROWSER:
+          return Chord::CHORD_FILE_BROWSER;
+        case Action::CREATE_CLIPPING:
+          return Chord::CHORD_CREATE_CLIPPING;
+        case Action::LOOKUP_WORD:
+          return Chord::CHORD_LOOKUP_WORD;
+        case Action::TOGGLE_HOME_BUTTON_IN_READER:
+          return Chord::CHORD_TOGGLE_HOME_BUTTON;
+        case Action::QUICK_ACTIONS:
+          return Chord::CHORD_QUICK_ACTIONS;
+        case Action::TOGGLE_FRONTLIGHT:
+          return Chord::CHORD_TOGGLE_FRONTLIGHT;
+        case Action::TOGGLE_TOUCHSCREEN:
+          return Chord::CHORD_TOGGLE_TOUCHSCREEN;
+        case Action::QUICK_LOCK:
+          return Chord::CHORD_QUICK_LOCK;
+        case Action::TOGGLE_TILT_PAGE_TURN:
+          return SHORTCUT_OPTION_UNAVAILABLE;
+        default:
+          return SHORTCUT_OPTION_UNAVAILABLE;
+      }
+      break;
+    case ShortcutOptionCatalog::LongPress:
+      switch (action) {
+        case Action::IGNORE:
+          return LongPress::LONG_MENU_OFF;
+        case Action::SLEEP:
+          return LongPress::LONG_MENU_SLEEP;
+        case Action::TOGGLE_BOOKMARK:
+          return LongPress::LONG_MENU_TOGGLE_BOOKMARK;
+        case Action::READING_STATS:
+          return LongPress::LONG_MENU_READING_STATS;
+        case Action::MARK_FINISHED:
+          return LongPress::LONG_MENU_MARK_FINISHED;
+        case Action::FORCE_REFRESH:
+          return LongPress::LONG_MENU_REFRESH_SCREEN;
+        case Action::TOGGLE_FONT:
+          return LongPress::LONG_MENU_CHANGE_FONT;
+        case Action::TOGGLE_GUIDE_DOTS:
+          return LongPress::LONG_MENU_TOGGLE_GUIDE_DOTS;
+        case Action::TOGGLE_BIONIC_READING:
+          return LongPress::LONG_MENU_TOGGLE_BIONIC;
+        case Action::CYCLE_PAGE_TURN:
+          return LongPress::LONG_MENU_CYCLE_PAGE_TURN;
+        case Action::TOGGLE_TILT_PAGE_TURN:
+          return LongPress::LONG_MENU_TOGGLE_TILT_PAGE_TURN;
+        case Action::SYNC_PROGRESS:
+          return LongPress::LONG_MENU_SYNC_PROGRESS;
+        case Action::FILE_TRANSFER:
+          return LongPress::LONG_MENU_FILE_TRANSFER;
+        case Action::CALIBRE_WIRELESS:
+          return LongPress::LONG_MENU_CALIBRE_WIRELESS;
+        case Action::JOIN_NETWORK:
+          return LongPress::LONG_MENU_JOIN_NETWORK;
+        case Action::CREATE_HOTSPOT:
+          return LongPress::LONG_MENU_CREATE_HOTSPOT;
+        case Action::SCREENSHOT:
+          return LongPress::LONG_MENU_SCREENSHOT;
+        case Action::TOGGLE_DARK_MODE:
+          return LongPress::LONG_MENU_TOGGLE_DARK_MODE;
+        case Action::FOOTNOTES:
+          return LongPress::LONG_MENU_FOOTNOTES;
+        case Action::FILE_BROWSER:
+          return LongPress::LONG_MENU_FILE_BROWSER;
+        case Action::CREATE_CLIPPING:
+          return LongPress::LONG_MENU_CREATE_CLIPPING;
+        case Action::LOOKUP_WORD:
+          return LongPress::LONG_MENU_LOOKUP_WORD;
+        case Action::QUICK_ACTIONS:
+          return LongPress::LONG_MENU_QUICK_ACTIONS;
+        case Action::QUICK_LOCK:
+          return LongPress::LONG_MENU_QUICK_LOCK;
+        case Action::PAGE_TURN:
+        case Action::TOGGLE_HOME_BUTTON_IN_READER:
+        case Action::TOGGLE_FRONTLIGHT:
+        case Action::TOGGLE_TOUCHSCREEN:
+          return SHORTCUT_OPTION_UNAVAILABLE;
+        default:
+          return SHORTCUT_OPTION_UNAVAILABLE;
+      }
+      break;
+    case ShortcutOptionCatalog::HomeButton:
+      switch (action) {
+        case Action::TOGGLE_TILT_PAGE_TURN:
+        case Action::TOGGLE_HOME_BUTTON_IN_READER:
+        case Action::TOGGLE_FRONTLIGHT:
+        case Action::TOGGLE_TOUCHSCREEN:
+        case Action::QUICK_LOCK:
+          return SHORTCUT_OPTION_UNAVAILABLE;
+        default:
+          return static_cast<uint8_t>(action);
+      }
+  }
+
+  return SHORTCUT_OPTION_UNAVAILABLE;
+}
+
+inline void appendShortcutOptions(SettingInfo& setting, const ShortcutOptionCatalog catalog) {
+  setting.enumValues.reserve(QuickActions::shortcutActionOrder.size() + 3);
+  setting.enumRawValues.reserve(QuickActions::shortcutActionOrder.size() + 3);
+
+  if (catalog == ShortcutOptionCatalog::HomeButton) {
+    setting.enumValues.push_back(StrId::STR_BACK_HOME);
+    setting.enumRawValues.push_back(CrossPointSettings::HOME_BUTTON_BACK_HOME);
+    if (Frontlight.present()) {
+      setting.enumValues.push_back(StrId::STR_TOGGLE_FRONTLIGHT);
+      setting.enumRawValues.push_back(CrossPointSettings::HOME_BUTTON_TOGGLE_FRONTLIGHT);
+    }
+    setting.enumValues.push_back(StrId::STR_READER_MENU);
+    setting.enumRawValues.push_back(CrossPointSettings::HOME_BUTTON_READER_MENU);
+  }
+
+  for (const auto action : QuickActions::shortcutActionOrder) {
+    if (!QuickActions::isActionAvailable(static_cast<uint8_t>(action))) continue;
+    const uint8_t rawValue = shortcutRawValue(catalog, action);
+    if (rawValue == SHORTCUT_OPTION_UNAVAILABLE) continue;
+    setting.enumValues.push_back(QuickActions::actionLabel(static_cast<uint8_t>(action)));
+    setting.enumRawValues.push_back(rawValue);
+  }
+}
+
+inline SettingInfo buildShortcutSetting(const StrId nameId, uint8_t CrossPointSettings::* const valuePtr,
+                                        const char* const key, const ShortcutOptionCatalog catalog) {
+  SettingInfo setting = SettingInfo::Enum(nameId, valuePtr, std::vector<StrId>{}, key, StrId::STR_CAT_CONTROLS);
+  appendShortcutOptions(setting, catalog);
+  return setting;
+}
+
 inline SettingInfo buildHomeButtonActionSetting(const StrId nameId, uint8_t CrossPointSettings::* const valuePtr,
                                                 const char* const key) {
-  return SettingInfo::Enum(nameId, valuePtr,
-                           {StrId::STR_BACK_HOME,
-                            StrId::STR_TOGGLE_FRONTLIGHT,
-                            StrId::STR_READER_MENU,
-                            StrId::STR_IGNORE,
-                            StrId::STR_SLEEP,
-                            StrId::STR_PAGE_TURN,
-                            StrId::STR_TOGGLE_BOOKMARK,
-                            StrId::STR_READING_STATS,
-                            StrId::STR_MARK_FINISHED,
-                            StrId::STR_FORCE_REFRESH,
-                            StrId::STR_CHANGE_FONT,
-                            StrId::STR_TOGGLE_GUIDE_DOTS,
-                            StrId::STR_TOGGLE_BIONIC_READING,
-                            StrId::STR_CYCLE_PAGE_TURN,
-                            StrId::STR_SYNC_PROGRESS,
-                            StrId::STR_FILE_TRANSFER,
-                            StrId::STR_CALIBRE_WIRELESS,
-                            StrId::STR_JOIN_NETWORK,
-                            StrId::STR_CREATE_HOTSPOT,
-                            StrId::STR_SCREENSHOT_BUTTON,
-                            StrId::STR_READER_DARK_MODE,
-                            StrId::STR_FOOTNOTES,
-                            StrId::STR_BROWSE_FILES,
-                            StrId::STR_SAVE_CLIPPING,
-                            StrId::STR_LOOKUP},
-                           key, StrId::STR_CAT_CONTROLS)
-      .withEnumRawValues({CrossPointSettings::HOME_BUTTON_BACK_HOME,
-                          CrossPointSettings::HOME_BUTTON_TOGGLE_FRONTLIGHT,
-                          CrossPointSettings::HOME_BUTTON_READER_MENU,
-                          CrossPointSettings::IGNORE,
-                          CrossPointSettings::SLEEP,
-                          CrossPointSettings::PAGE_TURN,
-                          CrossPointSettings::TOGGLE_BOOKMARK,
-                          CrossPointSettings::READING_STATS,
-                          CrossPointSettings::MARK_FINISHED,
-                          CrossPointSettings::FORCE_REFRESH,
-                          CrossPointSettings::TOGGLE_FONT,
-                          CrossPointSettings::TOGGLE_GUIDE_DOTS,
-                          CrossPointSettings::TOGGLE_BIONIC_READING,
-                          CrossPointSettings::CYCLE_PAGE_TURN,
-                          CrossPointSettings::SYNC_PROGRESS,
-                          CrossPointSettings::FILE_TRANSFER,
-                          CrossPointSettings::CALIBRE_WIRELESS,
-                          CrossPointSettings::JOIN_NETWORK,
-                          CrossPointSettings::CREATE_HOTSPOT,
-                          CrossPointSettings::SCREENSHOT,
-                          CrossPointSettings::TOGGLE_DARK_MODE,
-                          CrossPointSettings::FOOTNOTES,
-                          CrossPointSettings::FILE_BROWSER,
-                          CrossPointSettings::CREATE_CLIPPING,
-                          CrossPointSettings::LOOKUP_WORD});
+  return buildShortcutSetting(nameId, valuePtr, key, ShortcutOptionCatalog::HomeButton);
 }
 
 // Shared settings list used by both the device settings UI and the web settings API.
@@ -434,7 +548,7 @@ inline SettingInfo buildHomeButtonActionSetting(const StrId nameId, uint8_t Cros
 inline const std::vector<SettingInfo>& getBaseSettingsList() {
   static const std::vector<SettingInfo> baseList = [] {
     std::vector<SettingInfo> v;
-    v.reserve(72);
+    v.reserve(73);
     auto add = [&v](SettingInfo setting) { v.push_back(std::move(setting)); };
 
     // --- Display ---
@@ -566,114 +680,12 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                           "longPressButtonBehavior", StrId::STR_CAT_CONTROLS)
             .withEnumRawValues({CrossPointSettings::OFF, CrossPointSettings::CHAPTER_SKIP,
                                 CrossPointSettings::FONT_SIZE_CHANGE, CrossPointSettings::ORIENTATION_CHANGE}));
-    add(SettingInfo::Enum(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn,
-                          {StrId::STR_IGNORE,
-                           StrId::STR_SLEEP,
-                           StrId::STR_PAGE_TURN,
-                           StrId::STR_TOGGLE_BOOKMARK,
-                           StrId::STR_READING_STATS,
-                           StrId::STR_MARK_FINISHED,
-                           StrId::STR_FORCE_REFRESH,
-                           StrId::STR_CHANGE_FONT,
-                           StrId::STR_TOGGLE_GUIDE_DOTS,
-                           StrId::STR_TOGGLE_BIONIC_READING,
-                           StrId::STR_CYCLE_PAGE_TURN,
-                           StrId::STR_SYNC_PROGRESS,
-                           StrId::STR_FILE_TRANSFER,
-                           StrId::STR_CALIBRE_WIRELESS,
-                           StrId::STR_JOIN_NETWORK,
-                           StrId::STR_CREATE_HOTSPOT,
-                           StrId::STR_SCREENSHOT_BUTTON,
-                           StrId::STR_READER_DARK_MODE,
-                           StrId::STR_FOOTNOTES,
-                           StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP,
-                           StrId::STR_HOME_BUTTON_LOCK,
-                           StrId::STR_QUICK_ACTIONS,
-                           StrId::STR_TOGGLE_FRONTLIGHT,
-                           StrId::STR_TOGGLE_TOUCHSCREEN},
-                          "shortPwrBtn", StrId::STR_CAT_CONTROLS)
-            .withEnumRawValues({CrossPointSettings::IGNORE,
-                                CrossPointSettings::SLEEP,
-                                CrossPointSettings::PAGE_TURN,
-                                CrossPointSettings::TOGGLE_BOOKMARK,
-                                CrossPointSettings::READING_STATS,
-                                CrossPointSettings::MARK_FINISHED,
-                                CrossPointSettings::FORCE_REFRESH,
-                                CrossPointSettings::TOGGLE_FONT,
-                                CrossPointSettings::TOGGLE_GUIDE_DOTS,
-                                CrossPointSettings::TOGGLE_BIONIC_READING,
-                                CrossPointSettings::CYCLE_PAGE_TURN,
-                                CrossPointSettings::SYNC_PROGRESS,
-                                CrossPointSettings::FILE_TRANSFER,
-                                CrossPointSettings::CALIBRE_WIRELESS,
-                                CrossPointSettings::JOIN_NETWORK,
-                                CrossPointSettings::CREATE_HOTSPOT,
-                                CrossPointSettings::SCREENSHOT,
-                                CrossPointSettings::TOGGLE_DARK_MODE,
-                                CrossPointSettings::FOOTNOTES,
-                                CrossPointSettings::FILE_BROWSER,
-                                CrossPointSettings::CREATE_CLIPPING,
-                                CrossPointSettings::LOOKUP_WORD,
-                                CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER,
-                                CrossPointSettings::QUICK_ACTIONS,
-                                CrossPointSettings::TOGGLE_FRONTLIGHT,
-                                CrossPointSettings::TOGGLE_TOUCHSCREEN}));
-    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn,
-                          {StrId::STR_IGNORE,
-                           StrId::STR_SLEEP,
-                           StrId::STR_PAGE_TURN,
-                           StrId::STR_TOGGLE_BOOKMARK,
-                           StrId::STR_READING_STATS,
-                           StrId::STR_MARK_FINISHED,
-                           StrId::STR_FORCE_REFRESH,
-                           StrId::STR_CHANGE_FONT,
-                           StrId::STR_TOGGLE_GUIDE_DOTS,
-                           StrId::STR_TOGGLE_BIONIC_READING,
-                           StrId::STR_CYCLE_PAGE_TURN,
-                           StrId::STR_SYNC_PROGRESS,
-                           StrId::STR_FILE_TRANSFER,
-                           StrId::STR_CALIBRE_WIRELESS,
-                           StrId::STR_JOIN_NETWORK,
-                           StrId::STR_CREATE_HOTSPOT,
-                           StrId::STR_SCREENSHOT_BUTTON,
-                           StrId::STR_READER_DARK_MODE,
-                           StrId::STR_FOOTNOTES,
-                           StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP,
-                           StrId::STR_HOME_BUTTON_LOCK,
-                           StrId::STR_QUICK_ACTIONS,
-                           StrId::STR_TOGGLE_FRONTLIGHT,
-                           StrId::STR_TOGGLE_TOUCHSCREEN},
-                          "longPwrBtn", StrId::STR_CAT_CONTROLS)
-            .withEnumRawValues({CrossPointSettings::IGNORE,
-                                CrossPointSettings::SLEEP,
-                                CrossPointSettings::PAGE_TURN,
-                                CrossPointSettings::TOGGLE_BOOKMARK,
-                                CrossPointSettings::READING_STATS,
-                                CrossPointSettings::MARK_FINISHED,
-                                CrossPointSettings::FORCE_REFRESH,
-                                CrossPointSettings::TOGGLE_FONT,
-                                CrossPointSettings::TOGGLE_GUIDE_DOTS,
-                                CrossPointSettings::TOGGLE_BIONIC_READING,
-                                CrossPointSettings::CYCLE_PAGE_TURN,
-                                CrossPointSettings::SYNC_PROGRESS,
-                                CrossPointSettings::FILE_TRANSFER,
-                                CrossPointSettings::CALIBRE_WIRELESS,
-                                CrossPointSettings::JOIN_NETWORK,
-                                CrossPointSettings::CREATE_HOTSPOT,
-                                CrossPointSettings::SCREENSHOT,
-                                CrossPointSettings::TOGGLE_DARK_MODE,
-                                CrossPointSettings::FOOTNOTES,
-                                CrossPointSettings::FILE_BROWSER,
-                                CrossPointSettings::CREATE_CLIPPING,
-                                CrossPointSettings::LOOKUP_WORD,
-                                CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER,
-                                CrossPointSettings::QUICK_ACTIONS,
-                                CrossPointSettings::TOGGLE_FRONTLIGHT,
-                                CrossPointSettings::TOGGLE_TOUCHSCREEN}));
+    add(buildShortcutSetting(StrId::STR_SHORT_PWR_BTN, &CrossPointSettings::shortPwrBtn, "shortPwrBtn",
+                             ShortcutOptionCatalog::PowerButton));
+    add(buildShortcutSetting(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::longPwrBtn, "longPwrBtn",
+                             ShortcutOptionCatalog::PowerButton));
+    add(buildShortcutSetting(StrId::STR_POWER_BUTTON_CHORD, &CrossPointSettings::powerChordAction, "powerChordAction",
+                             ShortcutOptionCatalog::PowerChord));
     add(SettingInfo::Enum(StrId::STR_IN_READER, &CrossPointSettings::homeButtonInReaderEnabled,
                           {StrId::STR_ENABLED, StrId::STR_DISABLED}, "homeButtonInReaderEnabled",
                           StrId::STR_CAT_CONTROLS)
@@ -684,100 +696,16 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                                      "homeButtonDoubleTapAction"));
     add(buildHomeButtonActionSetting(StrId::STR_LONG_PRESS_ACTION, &CrossPointSettings::homeButtonLongPressAction,
                                      "homeButtonLongPressAction"));
-    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_MENU_ACTION, &CrossPointSettings::longPressMenuAction,
-                          {StrId::STR_IGNORE,
-                           StrId::STR_SLEEP,
-                           StrId::STR_TOGGLE_BOOKMARK,
-                           StrId::STR_READING_STATS,
-                           StrId::STR_MARK_FINISHED,
-                           StrId::STR_FORCE_REFRESH,
-                           StrId::STR_CHANGE_FONT,
-                           StrId::STR_TOGGLE_GUIDE_DOTS,
-                           StrId::STR_TOGGLE_BIONIC_READING,
-                           StrId::STR_CYCLE_PAGE_TURN,
-                           StrId::STR_SYNC_PROGRESS,
-                           StrId::STR_FILE_TRANSFER,
-                           StrId::STR_CALIBRE_WIRELESS,
-                           StrId::STR_JOIN_NETWORK,
-                           StrId::STR_CREATE_HOTSPOT,
-                           StrId::STR_SCREENSHOT_BUTTON,
-                           StrId::STR_READER_DARK_MODE,
-                           StrId::STR_FOOTNOTES,
-                           StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP,
-                           StrId::STR_QUICK_ACTIONS},
-                          "longPressMenuAction", StrId::STR_CAT_CONTROLS)
-            .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
-                                CrossPointSettings::LONG_MENU_SLEEP,
-                                CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK,
-                                CrossPointSettings::LONG_MENU_READING_STATS,
-                                CrossPointSettings::LONG_MENU_MARK_FINISHED,
-                                CrossPointSettings::LONG_MENU_REFRESH_SCREEN,
-                                CrossPointSettings::LONG_MENU_CHANGE_FONT,
-                                CrossPointSettings::LONG_MENU_TOGGLE_GUIDE_DOTS,
-                                CrossPointSettings::LONG_MENU_TOGGLE_BIONIC,
-                                CrossPointSettings::LONG_MENU_CYCLE_PAGE_TURN,
-                                CrossPointSettings::LONG_MENU_SYNC_PROGRESS,
-                                CrossPointSettings::LONG_MENU_FILE_TRANSFER,
-                                CrossPointSettings::LONG_MENU_CALIBRE_WIRELESS,
-                                CrossPointSettings::LONG_MENU_JOIN_NETWORK,
-                                CrossPointSettings::LONG_MENU_CREATE_HOTSPOT,
-                                CrossPointSettings::LONG_MENU_SCREENSHOT,
-                                CrossPointSettings::LONG_MENU_TOGGLE_DARK_MODE,
-                                CrossPointSettings::LONG_MENU_FOOTNOTES,
-                                CrossPointSettings::LONG_MENU_FILE_BROWSER,
-                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
-                                CrossPointSettings::LONG_MENU_LOOKUP_WORD,
-                                CrossPointSettings::LONG_MENU_QUICK_ACTIONS}));
-    add(SettingInfo::Enum(StrId::STR_LONG_PRESS_BACK_ACTION, &CrossPointSettings::longPressBackAction,
-                          {StrId::STR_IGNORE,
-                           StrId::STR_SLEEP,
-                           StrId::STR_TOGGLE_BOOKMARK,
-                           StrId::STR_READING_STATS,
-                           StrId::STR_MARK_FINISHED,
-                           StrId::STR_FORCE_REFRESH,
-                           StrId::STR_CHANGE_FONT,
-                           StrId::STR_TOGGLE_GUIDE_DOTS,
-                           StrId::STR_TOGGLE_BIONIC_READING,
-                           StrId::STR_CYCLE_PAGE_TURN,
-                           StrId::STR_SYNC_PROGRESS,
-                           StrId::STR_FILE_TRANSFER,
-                           StrId::STR_CALIBRE_WIRELESS,
-                           StrId::STR_JOIN_NETWORK,
-                           StrId::STR_CREATE_HOTSPOT,
-                           StrId::STR_SCREENSHOT_BUTTON,
-                           StrId::STR_READER_DARK_MODE,
-                           StrId::STR_FOOTNOTES,
-                           StrId::STR_BROWSE_FILES,
-                           StrId::STR_SAVE_CLIPPING,
-                           StrId::STR_LOOKUP,
-                           StrId::STR_QUICK_ACTIONS},
-                          "longPressBackAction", StrId::STR_CAT_CONTROLS)
-            .withEnumRawValues({CrossPointSettings::LONG_MENU_OFF,
-                                CrossPointSettings::LONG_MENU_SLEEP,
-                                CrossPointSettings::LONG_MENU_TOGGLE_BOOKMARK,
-                                CrossPointSettings::LONG_MENU_READING_STATS,
-                                CrossPointSettings::LONG_MENU_MARK_FINISHED,
-                                CrossPointSettings::LONG_MENU_REFRESH_SCREEN,
-                                CrossPointSettings::LONG_MENU_CHANGE_FONT,
-                                CrossPointSettings::LONG_MENU_TOGGLE_GUIDE_DOTS,
-                                CrossPointSettings::LONG_MENU_TOGGLE_BIONIC,
-                                CrossPointSettings::LONG_MENU_CYCLE_PAGE_TURN,
-                                CrossPointSettings::LONG_MENU_SYNC_PROGRESS,
-                                CrossPointSettings::LONG_MENU_FILE_TRANSFER,
-                                CrossPointSettings::LONG_MENU_CALIBRE_WIRELESS,
-                                CrossPointSettings::LONG_MENU_JOIN_NETWORK,
-                                CrossPointSettings::LONG_MENU_CREATE_HOTSPOT,
-                                CrossPointSettings::LONG_MENU_SCREENSHOT,
-                                CrossPointSettings::LONG_MENU_TOGGLE_DARK_MODE,
-                                CrossPointSettings::LONG_MENU_FOOTNOTES,
-                                CrossPointSettings::LONG_MENU_FILE_BROWSER,
-                                CrossPointSettings::LONG_MENU_CREATE_CLIPPING,
-                                CrossPointSettings::LONG_MENU_LOOKUP_WORD,
-                                CrossPointSettings::LONG_MENU_QUICK_ACTIONS}));
+    add(buildShortcutSetting(StrId::STR_LONG_PRESS_MENU_ACTION, &CrossPointSettings::longPressMenuAction,
+                             "longPressMenuAction", ShortcutOptionCatalog::LongPress));
+    add(buildShortcutSetting(StrId::STR_LONG_PRESS_BACK_ACTION, &CrossPointSettings::longPressBackAction,
+                             "longPressBackAction", ShortcutOptionCatalog::LongPress));
     add(SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS));
+    add(SettingInfo::Enum(StrId::STR_PAGE_TURN_GESTURE, &CrossPointSettings::pageTurnGesture,
+                          {StrId::STR_TAP_AND_SWIPE, StrId::STR_TAP_ONLY, StrId::STR_SWIPE_ONLY,
+                           StrId::STR_INVERTED_TAP, StrId::STR_DISABLED},
+                          "pageTurnGesture", StrId::STR_CAT_CONTROLS));
 
     // --- System ---
     add(SettingInfo::String(StrId::STR_DEVICE_NAME, SETTINGS.deviceName, sizeof(SETTINGS.deviceName), "deviceName",
@@ -922,17 +850,6 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                             StrId::STR_CAT_SYSTEM));
     // Only show tilt page turn settings when the active device has a supported IMU.
     if (QuickActions::supportsTiltPageTurn()) {
-      for (auto& setting : v) {
-        if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn") ||
-            setting.nameId == StrId::STR_LONG_PRESS_MENU_ACTION ||
-            setting.nameId == StrId::STR_LONG_PRESS_BACK_ACTION) {
-          const uint8_t rawValue =
-              setting.nameId == StrId::STR_LONG_PRESS_MENU_ACTION || setting.nameId == StrId::STR_LONG_PRESS_BACK_ACTION
-                  ? static_cast<uint8_t>(CrossPointSettings::LONG_MENU_TOGGLE_TILT_PAGE_TURN)
-                  : static_cast<uint8_t>(CrossPointSettings::TOGGLE_TILT_PAGE_TURN);
-          insertEnumOptionAfter(setting, StrId::STR_CYCLE_PAGE_TURN, StrId::STR_TILT_PAGE_TURN, rawValue);
-        }
-      }
       auto shortPowerButtonIt = std::find_if(
           v.begin(), v.end(), [](const SettingInfo& setting) { return setting.nameId == StrId::STR_SHORT_PWR_BTN; });
       if (shortPowerButtonIt != v.end()) {
@@ -945,6 +862,15 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                               {StrId::STR_TILT_DIRECTION_LEFT_RIGHT, StrId::STR_TILT_DIRECTION_LEFT_RIGHT_INVERTED,
                                StrId::STR_TILT_DIRECTION_FORWARD_BACK, StrId::STR_TILT_DIRECTION_FORWARD_BACK_INVERTED},
                               "tiltPageTurnDirection", StrId::STR_CAT_CONTROLS));
+      }
+    } else {
+      for (auto& setting : v) {
+        if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn")) {
+          removeEnumRawValue(setting, static_cast<uint8_t>(CrossPointSettings::TOGGLE_TILT_PAGE_TURN));
+        } else if (setting.nameId == StrId::STR_LONG_PRESS_MENU_ACTION ||
+                   setting.nameId == StrId::STR_LONG_PRESS_BACK_ACTION) {
+          removeEnumRawValue(setting, static_cast<uint8_t>(CrossPointSettings::LONG_MENU_TOGGLE_TILT_PAGE_TURN));
+        }
       }
     }
 
@@ -969,7 +895,8 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     v.erase(std::remove_if(v.begin(), v.end(),
                            [](const SettingInfo& s) {
                              return s.nameId == StrId::STR_TOUCH_READER_CONTROLS ||
-                                    s.nameId == StrId::STR_DISABLE_TOUCHSCREEN;
+                                    s.nameId == StrId::STR_DISABLE_TOUCHSCREEN ||
+                                    s.nameId == StrId::STR_PAGE_TURN_GESTURE;
                            }),
             v.end());
   }
@@ -997,14 +924,18 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
                            }),
             v.end());
     for (auto& setting : v) {
-      if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn")) {
+      if (setting.nameId == StrId::STR_SHORT_PWR_BTN || settingKeyIs(setting, "longPwrBtn") ||
+          settingKeyIs(setting, "powerChordAction")) {
         removeEnumRawValue(setting, CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER);
       }
     }
   }
   if (!Frontlight.present() || !gpio.hasTouch()) {
     for (auto& setting : v) {
-      if (setting.nameId != StrId::STR_SHORT_PWR_BTN && !settingKeyIs(setting, "longPwrBtn")) continue;
+      if (setting.nameId != StrId::STR_SHORT_PWR_BTN && !settingKeyIs(setting, "longPwrBtn") &&
+          !settingKeyIs(setting, "powerChordAction")) {
+        continue;
+      }
       if (!Frontlight.present()) removeEnumRawValue(setting, CrossPointSettings::TOGGLE_FRONTLIGHT);
       if (!gpio.hasTouch()) removeEnumRawValue(setting, CrossPointSettings::TOGGLE_TOUCHSCREEN);
     }
@@ -1054,7 +985,7 @@ inline std::vector<SettingInfo> buildGroupedReaderSettingsList(const std::vector
   addReaderSetting(StrId::STR_FONT_SIZE);
   addReaderSetting(StrId::STR_DICTIONARY_FONT);
   addReaderSetting(StrId::STR_DICTIONARY_FONT_SIZE);
-  readerSettings.push_back(SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts));
+  readerSettings.push_back(SettingInfo::Action(StrId::STR_DOWNLOAD_FONTS, SettingAction::DownloadFonts));
   addReaderSetting(StrId::STR_SD_FONT_SIZE_RANGE);
 
   readerSettings.push_back(SettingInfo::SectionHeader(StrId::STR_READER_PAGE_LAYOUT));
@@ -1130,7 +1061,7 @@ inline std::vector<SettingInfo> buildReaderFontSettingsList(const std::vector<Se
   addSettingByName(settings, allSettings, StrId::STR_LINE_SPACING);
   addSettingByName(settings, allSettings, StrId::STR_WORD_SPACING);
   addSettingByName(settings, allSettings, StrId::STR_TEXT_AA);
-  settings.push_back(SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts));
+  settings.push_back(SettingInfo::Action(StrId::STR_DOWNLOAD_FONTS, SettingAction::DownloadFonts));
   addSettingByName(settings, allSettings, StrId::STR_SD_FONT_SIZE_RANGE);
   return settings;
 }
@@ -1164,12 +1095,13 @@ inline bool hasSettingByName(const std::vector<SettingInfo>& allSettings, StrId 
 inline std::vector<SettingInfo> buildControlsSettingsParentList(const std::vector<SettingInfo>& allSettings) {
   const bool hasTiltPageTurnSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN);
   const bool hasTiltPageTurnDirectionSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
+  const bool hasPageTurnGestureSetting = hasSettingByName(allSettings, StrId::STR_PAGE_TURN_GESTURE);
   const bool hasFrontButtons = !gpio.hasTouch();
   const bool hasHomeKey = gpio.hasHomeKey();
 
   std::vector<SettingInfo> settings;
   settings.reserve(3 + (hasHomeKey ? 1u : 0u) + (hasFrontButtons ? 1u : 0u) + (hasTiltPageTurnSetting ? 1u : 0u) +
-                   (hasTiltPageTurnDirectionSetting ? 1u : 0u));
+                   (hasTiltPageTurnDirectionSetting ? 1u : 0u) + (hasPageTurnGestureSetting ? 1u : 0u));
   if (hasHomeKey) {
     settings.push_back(SettingInfo::Submenu(StrId::STR_HOME_BUTTON, SettingAction::ControlsHomeButton));
   }
@@ -1181,6 +1113,7 @@ inline std::vector<SettingInfo> buildControlsSettingsParentList(const std::vecto
   settings.push_back(SettingInfo::Action(StrId::STR_QUICK_ACTIONS, SettingAction::QuickActions));
   if (hasTiltPageTurnSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN);
   if (hasTiltPageTurnDirectionSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
+  if (hasPageTurnGestureSetting) addSettingByName(settings, allSettings, StrId::STR_PAGE_TURN_GESTURE);
   return settings;
 }
 
@@ -1196,8 +1129,9 @@ inline std::vector<SettingInfo> buildControlsHomeButtonSettingsList(const std::v
 
 inline std::vector<SettingInfo> buildControlsPowerSettingsList(const std::vector<SettingInfo>& allSettings) {
   std::vector<SettingInfo> settings;
-  settings.reserve(3);
+  settings.reserve(4);
   addSettingByName(settings, allSettings, StrId::STR_SHORT_PWR_BTN);
+  addSettingByName(settings, allSettings, StrId::STR_POWER_BUTTON_CHORD);
   addSettingByKey(settings, allSettings, "longPwrBtn");
   if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES ||
       SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::FOOTNOTES ||

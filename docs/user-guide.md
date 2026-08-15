@@ -134,6 +134,11 @@ book or image directly from another nearby CrossInk reader without joining a
 Wi-Fi network. See [Nearby File Transfer](./nearby-file-transfer.md) for the
 complete sender and receiver workflow.
 
+On X4 Pro, the screen also includes **USB Drive**. This exposes the reader's SD
+card to a computer over USB for direct file management. See the
+[USB Drive instructions](./installation.md#usb-drive) for the safe-eject and
+disconnect behavior.
+
 > [!TIP]
 > Advanced users can manage files programmatically with the same HTTP endpoints
 > used by the web interface. The browser interface is the supported path for
@@ -580,20 +585,26 @@ On the **Xteink X3** and **Sticky**, the gyroscope can be used to turn pages by 
 ### Touch Reader Controls
 
 On supported touchscreen devices, **Touch Reader Controls** is enabled by
-default. In an open EPUB, tap the left third of the page to go back; tap the
-rest of the page to go forward. You can also swipe right for the previous page
-or left for the next page. The top and bottom gesture bands are reserved for
-vertical gestures, so taps in those bands do not turn pages.
+default. **Page Turn Gesture**, in **Settings > Controls**, is set to **Tap &
+Swipe** by default: tap the left third of the page to go back, tap the rest of
+the page to go forward, swipe right for the previous page, or swipe left for
+the next page. Choose **Tap Only**, **Swipe Only**, **Inverted Tap**, or
+**Disabled** to change only page turns. **Inverted Tap** uses the left
+two-thirds of the page to go forward and the right third to go back. The top
+and bottom gesture bands are reserved for vertical gestures, so taps in those
+bands do not turn pages.
 
 Swipe down to open the reader menu and swipe up to return Home. On an X4 Pro,
 which has a capacitive Home key, the vertical gestures are reversed: swipe up
 to open the reader menu, and use a short press of the Home key to return Home.
 A long press of that key also opens the reader menu.
 
-Turn **Touch Reader Controls** off in **Reader Options** to disable these
-page-turn and gesture controls. **Disable Touchscreen** prevents touch input
-while a book is open but keeps it available in reader menus. For the different
-touch selection gestures used by [dictionary lookup](./dictionary.md#looking-up-a-word)
+Choose **Disabled** in **Page Turn Gesture** to stop touch page turns without
+disabling the touchscreen's vertical reader-menu or frontlight gestures. Turn
+**Touch Reader Controls** off in **Reader Options** to disable these page-turn
+and reader gesture controls. **Disable Touchscreen** prevents touch input while
+a book is open but keeps it available in reader menus. For the different touch
+selection gestures used by [dictionary lookup](./dictionary.md#looking-up-a-word)
 and [clippings](./reader-features.md#clippings-and-highlights), see those
 feature guides.
 

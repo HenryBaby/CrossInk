@@ -6,6 +6,7 @@
 #include <HalClock.h>
 #include <Logging.h>
 #include <SDCardManager.h>
+#include <UsbMassStorage.h>
 
 #include <cassert>
 #include <cstdlib>
@@ -16,6 +17,11 @@
 #define SDCard SDCardManager::getInstance()
 
 HalStorage HalStorage::instance;
+
+class HalStorage::UsbDriveContext {
+ public:
+  freeink::UsbMassStorage massStorage;
+};
 
 namespace {
 constexpr uint16_t kFallbackYear = 2024;
@@ -107,10 +113,12 @@ void storageDateTimeCallback(uint16_t* date, uint16_t* time) {
 }
 }  // namespace
 
-HalStorage::HalStorage() {
+HalStorage::HalStorage() : usbDriveContext(new (std::nothrow) UsbDriveContext()) {
   storageMutex = xSemaphoreCreateMutex();
   assert(storageMutex != nullptr);
 }
+
+HalStorage::~HalStorage() = default;
 
 // begin() and ready() are only called from setup, no need to acquire mutex for them
 
@@ -120,6 +128,58 @@ bool HalStorage::begin() {
 }
 
 bool HalStorage::ready() const { return SDCard.ready(); }
+
+bool HalStorage::beginUsbDrive() {
+#if FREEINK_CAP_USB_MSC && FREEINK_SD_SDMMC
+  if (!usbDriveContext) {
+    LOG_ERR("USB", "USB Drive context allocation failed");
+    return false;
+  }
+  auto* const blockDevice = SDCard.detachFilesystemForRawAccess();
+  if (!blockDevice) {
+    LOG_ERR("USB", "USB Drive requires a mounted SDMMC filesystem");
+    return false;
+  }
+  if (!usbDriveContext->massStorage.begin(blockDevice)) {
+    LOG_ERR("USB", "USB Drive MSC initialization failed");
+    return false;
+  }
+  return true;
+#elif defined(SIMULATOR) && CROSSINK_APP_CAP_USB_DRIVE
+  return true;
+#else
+  return false;
+#endif
+}
+
+void HalStorage::endUsbDrive() {
+#if FREEINK_CAP_USB_MSC
+  if (usbDriveContext) usbDriveContext->massStorage.end();
+#endif
+}
+
+UsbDriveState HalStorage::usbDriveState() const {
+  if (!usbDriveContext) return UsbDriveState::Unsupported;
+#if FREEINK_CAP_USB_MSC || (defined(SIMULATOR) && CROSSINK_APP_CAP_USB_DRIVE)
+  switch (usbDriveContext->massStorage.state()) {
+    case freeink::UsbMassStorageState::WaitingForHost:
+      return UsbDriveState::WaitingForHost;
+    case freeink::UsbMassStorageState::Connected:
+      return UsbDriveState::Connected;
+    case freeink::UsbMassStorageState::Accessed:
+      return UsbDriveState::Accessed;
+    case freeink::UsbMassStorageState::Ejected:
+      return UsbDriveState::Ejected;
+    case freeink::UsbMassStorageState::Disconnected:
+      return UsbDriveState::Disconnected;
+    case freeink::UsbMassStorageState::IoError:
+      return UsbDriveState::IoError;
+    case freeink::UsbMassStorageState::Idle:
+      break;
+  }
+#endif
+  return UsbDriveState::Unsupported;
+}
 
 // For the rest of the methods, we acquire the mutex to ensure thread safety
 

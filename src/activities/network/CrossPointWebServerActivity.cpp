@@ -153,6 +153,11 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
   }
   LOG_DBG("WEBACT", "Network mode selected: %s", modeName);
 
+  if (mode == NetworkMode::USB_DRIVE) {
+    activityManager.goToUsbDrive();
+    return;
+  }
+
   networkMode = mode;
   isApMode = (mode == NetworkMode::CREATE_HOTSPOT);
 
@@ -175,6 +180,9 @@ void CrossPointWebServerActivity::onNetworkModeSelected(const NetworkMode mode) 
         break;
       case NetworkMode::CREATE_HOTSPOT:
         activityManager.goToHotspotFileTransfer(returnBookPath);
+        break;
+      case NetworkMode::USB_DRIVE:
+        activityManager.goToUsbDrive();
         break;
       case NetworkMode::NEARBY_STATS_SYNC:
       case NetworkMode::NEARBY_BOOK_RECEIVE:

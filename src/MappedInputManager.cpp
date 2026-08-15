@@ -265,6 +265,7 @@ bool MappedInputManager::isScreenTouchLongPress(int& x, int& y, const unsigned l
 bool MappedInputManager::wasScreenLongPress(int& x, int& y) const {
   if (!touchInputEnabled()) return false;
 #ifdef SIMULATOR
+  if (suppressSimulatedTouchContact) return false;
   if (simulatorTouch.pressed && !simulatorTouch.longPressFired && millis() - simulatorTouch.startedAt >= 500UL) {
     simulatorTouch.longPressFired = true;
     x = simulatorTouch.startX;
@@ -291,6 +292,7 @@ bool MappedInputManager::isInVerticalEdgeGestureZone(const int y) const {
 bool MappedInputManager::wasScreenTouchDown(int& x, int& y) const {
   if (!touchInputEnabled()) return false;
 #ifdef SIMULATOR
+  if (suppressSimulatedTouchContact) return false;
   if (simulatorTouch.pressedThisFrame) {
     x = simulatorTouch.startX;
     y = simulatorTouch.startY;
@@ -307,6 +309,7 @@ bool MappedInputManager::wasScreenTouchDown(int& x, int& y) const {
 bool MappedInputManager::isScreenTouchTapCandidate(int& x, int& y, unsigned long& heldMs) const {
   if (!touchInputEnabled()) return false;
 #ifdef SIMULATOR
+  if (suppressSimulatedTouchContact) return false;
   if (simulatorTouch.pressed) {
     x = simulatorTouch.startX;
     y = simulatorTouch.startY;
@@ -324,6 +327,7 @@ bool MappedInputManager::isScreenTouchTapCandidate(int& x, int& y, unsigned long
 bool MappedInputManager::isScreenTouchHeld(int& x, int& y) const {
   if (!touchInputEnabled()) return false;
 #ifdef SIMULATOR
+  if (suppressSimulatedTouchContact) return false;
   if (simulatorTouch.pressed) {
     x = simulatorTouch.currentX;
     y = simulatorTouch.currentY;
@@ -486,6 +490,7 @@ MappedInputManager::RowTouch MappedInputManager::colTouch(int& col, const int le
 bool MappedInputManager::decodeSwipe(int& sx, int& sy, int& ex, int& ey) const {
   if (!touchInputEnabled()) return false;
 #ifdef SIMULATOR
+  if (suppressSimulatedTouchContact) return false;
   if (simulatorTouch.releasedThisFrame) {
     sx = simulatorTouch.startX;
     sy = simulatorTouch.startY;
@@ -532,6 +537,11 @@ MappedInputManager::SwipeDir MappedInputManager::wasSwipe() const {
 
 bool MappedInputManager::wasBackGesture() const {
   if (!touchInputEnabled()) return false;
+  // Tap-only page-turn mode must not let a right swipe from the left edge
+  // become the reader's Back/Home action.
+  if (readerMode && SETTINGS.pageTurnGesture == CrossPointSettings::TAP_ONLY) {
+    return false;
+  }
   // Back = left-to-right swipe starting near the left edge. Edge-anchored so that
   // mid-screen horizontal swipes stay available to activities that consume
   // SwipeDir::Left/Right (e.g. percent selection, image viewer).
@@ -605,7 +615,10 @@ bool MappedInputManager::wasReaderHomeGesture() const {
   // X4 Pro's capacitive Home key remains the reader's Home action. Only the
   // touch gesture changes in reader mode: other touch boards use an upward
   // swipe across the page.
-  return hasHomeKeyHardware() ? wasHomeGesture() : wasSwipe() == SwipeDir::Up;
+  if (hasHomeKeyHardware()) {
+    return wasHomeGesture();
+  }
+  return wasSwipe() == SwipeDir::Up;
 }
 
 bool MappedInputManager::wasReaderLightPanelGesture() const {
@@ -614,7 +627,6 @@ bool MappedInputManager::wasReaderLightPanelGesture() const {
 
 bool MappedInputManager::wasHomeGesture() const {
   if (!hasHomeKeyHardware()) return wasBottomEdgeUpSwipe();
-  if (!touchInputEnabled()) return false;
   if (isHomeButtonLockedInReader()) {
     clearDeferredHomeGesture();
     return false;
@@ -636,7 +648,7 @@ bool MappedInputManager::wasHomeGesture() const {
 }
 
 bool MappedInputManager::wasReaderMenuHold() const {
-  if (!hasHomeKeyHardware() || !touchInputEnabled()) return false;
+  if (!hasHomeKeyHardware()) return false;
   if (isHomeButtonLockedInReader()) return false;
   if (SETTINGS.homeButtonLongPressAction != CrossPointSettings::HOME_BUTTON_READER_MENU) return false;
 #ifdef SIMULATOR
@@ -687,6 +699,9 @@ bool MappedInputManager::wasPressed(const Button button) const {
 }
 
 bool MappedInputManager::wasReleased(const Button button) const {
+  if (injectedReleases[static_cast<size_t>(button)]) {
+    return true;
+  }
 #ifdef SIMULATOR
   if (simulatorReleased[buttonIndex(button)]) {
     return true;
@@ -939,9 +954,14 @@ void MappedInputManager::simulatorClearInputFrame() {
   simulatorPressed.fill(false);
   simulatorReleased.fill(false);
 #if CROSSINK_APP_CAP_TOUCH
+  const bool suppressedContactReleased = suppressSimulatedTouchContact && simulatorTouch.releasedThisFrame;
   simulatorTouch.pressedThisFrame = false;
   simulatorTouch.releasedThisFrame = false;
   simulatorTouch.longPressFired = false;
+  if (suppressedContactReleased) {
+    suppressSimulatedTouchContact = false;
+    suppressTouchTap = false;
+  }
 #endif
 }
 

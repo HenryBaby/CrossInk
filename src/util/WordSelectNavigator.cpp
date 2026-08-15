@@ -458,29 +458,31 @@ void WordSelectNavigator::releaseWorkingSet() {
   std::string().swap(ownedTextPool);
 }
 
-void WordSelectNavigator::renderHighlight(const GfxRenderer& renderer, int lineHeight) const {
+void WordSelectNavigator::renderHighlight(const GfxRenderer& renderer, int lineHeight,
+                                          const bool foregroundBlack) const {
   if (inMultiSelectMode) {
     const int cursorIdx = getCurrentFlatIndex();
     const int lo = std::min(anchorFlatIndex, cursorIdx);
     const int hi = std::max(anchorFlatIndex, cursorIdx);
     for (int i = lo; i <= hi; i++) {
-      drawSingleHighlight(renderer, lineHeight, i);
-      drawContinuationsIfOutside(renderer, lineHeight, getWordAt(i), lo, hi);
+      drawSingleHighlight(renderer, lineHeight, i, foregroundBlack);
+      drawContinuationsIfOutside(renderer, lineHeight, getWordAt(i), lo, hi, foregroundBlack);
     }
-    drawTouchDragCursor(renderer, lineHeight, cursorIdx);
+    drawTouchDragCursor(renderer, lineHeight, cursorIdx, foregroundBlack);
   } else {
     const int selIdx = getCurrentFlatIndex();
     if (selIdx < 0) return;
-    drawSingleHighlight(renderer, lineHeight, selIdx);
-    drawContinuationsIfOutside(renderer, lineHeight, getWordAt(selIdx), selIdx, selIdx);
-    drawTouchDragCursor(renderer, lineHeight, selIdx);
+    drawSingleHighlight(renderer, lineHeight, selIdx, foregroundBlack);
+    drawContinuationsIfOutside(renderer, lineHeight, getWordAt(selIdx), selIdx, selIdx, foregroundBlack);
+    drawTouchDragCursor(renderer, lineHeight, selIdx, foregroundBlack);
   }
 }
 
-void WordSelectNavigator::drawSingleHighlight(const GfxRenderer& renderer, int lineHeight, int wordIndex) const {
+void WordSelectNavigator::drawSingleHighlight(const GfxRenderer& renderer, int lineHeight, int wordIndex,
+                                              const bool foregroundBlack) const {
   const auto* w = getWordAt(wordIndex);
   if (!w) return;
-  renderer.fillRect(w->screenX - 2, w->screenY - 2, w->width + 4, lineHeight + 4, true);
+  renderer.fillRect(w->screenX - 2, w->screenY - 2, w->width + 4, lineHeight + 4, foregroundBlack);
   const char* displayedText = getDisplay(*w);
   const auto baseDir = w->isRtl ? BidiUtils::BidiBaseDir::RTL : BidiUtils::BidiBaseDir::LTR;
   if (w->bionicBoundary > 0 && w->bionicSuffixX > 0) {
@@ -491,38 +493,41 @@ void WordSelectNavigator::drawSingleHighlight(const GfxRenderer& renderer, int l
     memcpy(boldBuf, displayedText, boldLen);
     boldBuf[boldLen] = '\0';
     if (w->isRtl) {
-      renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText + boldLen, false, w->style, baseDir);
-      renderer.drawText(w->fontId, w->screenX + w->bionicSuffixX, w->screenY, boldBuf, false, boldStyle, baseDir);
-    } else {
-      renderer.drawText(w->fontId, w->screenX, w->screenY, boldBuf, false, boldStyle, baseDir);
-      renderer.drawText(w->fontId, w->screenX + w->bionicSuffixX, w->screenY, displayedText + boldLen, false, w->style,
+      renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText + boldLen, !foregroundBlack, w->style,
                         baseDir);
+      renderer.drawText(w->fontId, w->screenX + w->bionicSuffixX, w->screenY, boldBuf, !foregroundBlack, boldStyle,
+                        baseDir);
+    } else {
+      renderer.drawText(w->fontId, w->screenX, w->screenY, boldBuf, !foregroundBlack, boldStyle, baseDir);
+      renderer.drawText(w->fontId, w->screenX + w->bionicSuffixX, w->screenY, displayedText + boldLen, !foregroundBlack,
+                        w->style, baseDir);
     }
     return;
   }
-  renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText, false, w->style, baseDir);
+  renderer.drawText(w->fontId, w->screenX, w->screenY, displayedText, !foregroundBlack, w->style, baseDir);
 }
 
-void WordSelectNavigator::drawTouchDragCursor(const GfxRenderer& renderer, int lineHeight, int wordIndex) const {
+void WordSelectNavigator::drawTouchDragCursor(const GfxRenderer& renderer, int lineHeight, int wordIndex,
+                                              const bool foregroundBlack) const {
   if (!touchDragCursorVisible) return;
   const auto* w = getWordAt(wordIndex);
   if (!w) return;
   const int x = w->screenX + w->width + 4;
   const int top = w->screenY - 2;
   const int bottom = w->screenY + lineHeight + 1;
-  renderer.drawLine(x, top, x, bottom, 2, true);
-  renderer.drawLine(x - 2, top, x + 3, top, 2, true);
-  renderer.drawLine(x - 2, bottom, x + 3, bottom, 2, true);
+  renderer.drawLine(x, top, x, bottom, 2, foregroundBlack);
+  renderer.drawLine(x - 2, top, x + 3, top, 2, foregroundBlack);
+  renderer.drawLine(x - 2, bottom, x + 3, bottom, 2, foregroundBlack);
 }
 
 void WordSelectNavigator::drawContinuationsIfOutside(const GfxRenderer& renderer, int lineHeight, const WordInfo* w,
-                                                     int lo, int hi) const {
+                                                     int lo, int hi, const bool foregroundBlack) const {
   if (!w) return;
   if (w->continuationIndex >= 0 && (w->continuationIndex < lo || w->continuationIndex > hi)) {
-    drawSingleHighlight(renderer, lineHeight, w->continuationIndex);
+    drawSingleHighlight(renderer, lineHeight, w->continuationIndex, foregroundBlack);
   }
   if (w->continuationOf >= 0 && (w->continuationOf < lo || w->continuationOf > hi)) {
-    drawSingleHighlight(renderer, lineHeight, w->continuationOf);
+    drawSingleHighlight(renderer, lineHeight, w->continuationOf, foregroundBlack);
   }
 }
 
@@ -548,10 +553,8 @@ WordSelectNavigator::Rect WordSelectNavigator::computeDirtyRect(int prevWordIdx,
   return Rect{x0, y0, x1 - x0, y1 - y0};
 }
 
-std::optional<WordSelectNavigator::Rect> WordSelectNavigator::renderHighlightDifferential(GfxRenderer& renderer,
-                                                                                          int lineHeight,
-                                                                                          int prevWordIdx,
-                                                                                          int currWordIdx) {
+std::optional<WordSelectNavigator::Rect> WordSelectNavigator::renderHighlightDifferential(
+    GfxRenderer& renderer, int lineHeight, int prevWordIdx, int currWordIdx, const bool foregroundBlack) {
   // Fallback paths.
   if (inMultiSelectMode) return std::nullopt;
   const auto* curr = getWordAt(currWordIdx);
@@ -586,8 +589,8 @@ std::optional<WordSelectNavigator::Rect> WordSelectNavigator::renderHighlightDif
   }
 
   // Step 3: draw the new highlight on top of the captured pixels.
-  drawSingleHighlight(renderer, lineHeight, currWordIdx);
-  drawTouchDragCursor(renderer, lineHeight, currWordIdx);
+  drawSingleHighlight(renderer, lineHeight, currWordIdx, foregroundBlack);
+  drawTouchDragCursor(renderer, lineHeight, currWordIdx, foregroundBlack);
 
   // Step 4: caller pushes the union region.
   return computeDirtyRect(prevWordIdx, currWordIdx, lineHeight);

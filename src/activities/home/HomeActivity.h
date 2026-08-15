@@ -2,6 +2,8 @@
 #include <array>
 #include <functional>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "./FileBrowserActivity.h"
@@ -77,6 +79,7 @@ class HomeActivity final : public Activity {
 
   std::vector<RecentBook> recentBooks;
   const HomeMenuItem initialMenuItem;
+  std::string initialBookPath;
 
   void onSelectBook(const std::string& path);
   void onFileBrowserOpen();
@@ -116,10 +119,12 @@ class HomeActivity final : public Activity {
 
  public:
   explicit HomeActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
-                        HomeMenuItem initialMenuItemValue = HomeMenuItem::NONE, bool initialFullRefreshValue = false)
+                        HomeMenuItem initialMenuItemValue = HomeMenuItem::NONE, bool initialFullRefreshValue = false,
+                        std::string initialBookPathValue = {})
       : Activity("Home", renderer, mappedInput),
         initialFullRefresh(initialFullRefreshValue),
-        initialMenuItem(initialMenuItemValue) {}
+        initialMenuItem(initialMenuItemValue),
+        initialBookPath(std::move(initialBookPathValue)) {}
   void onEnter() override;
   void onExit() override;
   void loop() override;

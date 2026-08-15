@@ -740,15 +740,12 @@ void KOReaderSyncActivity::render(RenderLock&&) {
   }
 
   if (state == SYNC_FAILED) {
-    UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top, tr(STR_SYNC_FAILED_MSG), true, EpdFontFamily::BOLD);
-    const int messageWidth = screen.width - metrics.contentSidePadding * 2;
-    const int lineHeight = renderer.getLineHeight(UI_10_FONT_ID);
-    const auto messageLines = renderer.wrappedText(UI_10_FONT_ID, statusMessage.c_str(), messageWidth, 3);
-    int messageY = top + 40;
-    for (const auto& line : messageLines) {
-      UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, messageY, line.c_str());
-      messageY += lineHeight + 4;
-    }
+    const Rect textArea{screen.x + metrics.contentSidePadding, screen.y, screen.width - metrics.contentSidePadding * 2,
+                        screen.height};
+    UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top, tr(STR_SYNC_FAILED_MSG), 2, true,
+                                     EpdFontFamily::BOLD);
+    UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top + 40, statusMessage.c_str(), 3, true,
+                                     EpdFontFamily::REGULAR, 4);
 
     const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);

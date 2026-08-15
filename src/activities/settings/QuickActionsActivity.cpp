@@ -11,12 +11,19 @@
 #include "QuickActions.h"
 
 namespace {
-constexpr StrId triggerLabels[] = {StrId::STR_NONE_OPT, StrId::STR_SHORT_PRESS_POWER, StrId::STR_LONG_PRESS_POWER,
-                                   StrId::STR_LONG_PRESS_BACK, StrId::STR_LONG_PRESS_MENU_SHORTCUT};
+constexpr StrId triggerLabels[] = {
+    StrId::STR_NONE_OPT,          StrId::STR_SHORT_PRESS_POWER,        StrId::STR_LONG_PRESS_POWER,
+    StrId::STR_LONG_PRESS_BACK,   StrId::STR_LONG_PRESS_MENU_SHORTCUT, StrId::STR_POWER_BUTTON_CHORD,
+    StrId::STR_TAP_HOME_SHORTCUT, StrId::STR_LONG_PRESS_HOME_SHORTCUT, StrId::STR_DOUBLE_TAP_HOME_SHORTCUT};
 
 std::vector<QuickActions::Trigger> availableTriggers() {
   std::vector<QuickActions::Trigger> triggers = {QuickActions::Trigger::None, QuickActions::Trigger::ShortPower,
-                                                 QuickActions::Trigger::LongPower};
+                                                 QuickActions::Trigger::LongPower, QuickActions::Trigger::PowerUp};
+  if (gpio.hasHomeKey()) {
+    triggers.push_back(QuickActions::Trigger::TapHome);
+    triggers.push_back(QuickActions::Trigger::LongPressHome);
+    triggers.push_back(QuickActions::Trigger::DoubleTapHome);
+  }
 #if CROSSINK_APP_CAP_TOUCH
   if (!gpio.hasTouch()) {
     triggers.push_back(QuickActions::Trigger::LongBack);
@@ -31,9 +38,10 @@ std::vector<QuickActions::Trigger> availableTriggers() {
 
 std::vector<uint8_t> availableActions() {
   std::vector<uint8_t> actions;
-  actions.reserve(CrossPointSettings::SHORT_PWRBTN_COUNT);
-  for (uint8_t action = CrossPointSettings::IGNORE; action < CrossPointSettings::SHORT_PWRBTN_COUNT; ++action) {
-    if (QuickActions::isActionAvailable(action)) actions.push_back(action);
+  actions.reserve(QuickActions::shortcutActionOrder.size());
+  for (const auto action : QuickActions::shortcutActionOrder) {
+    const auto rawAction = static_cast<uint8_t>(action);
+    if (QuickActions::isQuickActionSlotActionAvailable(rawAction)) actions.push_back(rawAction);
   }
   return actions;
 }
@@ -59,7 +67,8 @@ void QuickActionsActivity::showOverview() {
                     I18N.get(triggerLabels[static_cast<uint8_t>(draftTrigger)]));
   for (uint8_t i = 0; i < 5; ++i) {
     const uint8_t action = draftSlots[i];
-    const char* label = QuickActions::isActionAvailable(action) ? I18N.get(QuickActions::actionLabel(action)) : "-";
+    const char* label =
+        QuickActions::isQuickActionSlotActionAvailable(action) ? I18N.get(QuickActions::actionLabel(action)) : "-";
     rows.emplace_back(std::to_string(i + 1) + ". " + label);
   }
   popup.showConfirmed(

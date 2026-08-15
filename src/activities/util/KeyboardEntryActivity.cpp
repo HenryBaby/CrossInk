@@ -538,7 +538,7 @@ void KeyboardEntryActivity::loop() {
     }
   }
 
-  if (!cursorMode && interactionsReady) {
+  if (!cursorMode && interactionsReady.load(std::memory_order_acquire)) {
     unsigned long touchHeldMs = 0;
     const bool tapCandidate = mappedInput.isScreenTouchTapCandidate(tx, ty, touchHeldMs);
     int tapX = 0;
@@ -946,13 +946,14 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   }
 
   // The FreeInkUI keyboard draws the keys and registers their hit rects into
-  // `interactions`; loop() routes touch snapshots against that table.
-  interactionsReady = false;
+  // `interactions`; loop() routes touch snapshots against the last published
+  // table while this render builds the next generation.
   fui::GfxRendererTarget target(renderer);
   target.setFont(fui::GfxRendererTarget::FONT_SMALL, SMALL_FONT_ID);
   target.setFont(fui::GfxRendererTarget::FONT_BODY, UI_12_FONT_ID);
   const fui::DeviceContext device = target.deviceContext();
   const fui::InputSnapshot noInput{};
+  interactions.beginPublishCycle();
   fui::Frame<48> frame(target, device, noInput, interactions);
 
   fui::KeyboardProps props;
@@ -976,7 +977,8 @@ void KeyboardEntryActivity::render(RenderLock&&) {
   const int hintsTop = renderer.getScreenHeight() - metrics.buttonHintsHeight;
   props.bottomHitOverflow = static_cast<int16_t>(std::max(0, hintsTop - (kbRect.y + kbRect.height)));
   fui::keyboard(frame, kbRect, props);
-  interactionsReady = true;
+  interactions.publish();
+  interactionsReady.store(true, std::memory_order_release);
 
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);

@@ -59,10 +59,12 @@ jobs:
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
         with:
-          path: ~/.platformio
-          key: ${{ runner.os }}-platformio-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-platformio-
+          # Do not cache PlatformIO's Python virtual environment. It is tied to
+          # the runner's Python and can become invalid when restored elsewhere.
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: ${{ runner.os }}-platformio-py3.14-core6.1.19-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
@@ -72,6 +74,10 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [default, x4-pro]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -90,34 +96,44 @@ jobs:
       - name: Cache PlatformIO packages
         uses: actions/cache@v4
         with:
-          path: ~/.platformio
-          key: ${{ runner.os }}-platformio-default-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-platformio-default-
-            ${{ runner.os }}-platformio-
+          # Do not cache PlatformIO's Python virtual environment. It is tied to
+          # the runner's Python and can become invalid when restored elsewhere.
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+          key: ${{ runner.os }}-platformio-py3.14-core6.1.19-${{ matrix.environment }}-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
 
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
-      - name: Build X3/X4 firmware
+      - name: Build ${{ matrix.environment }} firmware
         run: |
           set -euo pipefail
-          pio run -e default | tee pio-default.log
+          pio run -j1 -e ${{ matrix.environment }} | tee pio-${{ matrix.environment }}.log
 
       - name: Extract firmware stats
         run: |
           set -euo pipefail
           {
-            echo "## X3/X4 firmware build stats"
-            grep -E "RAM:\s|Flash:\s" pio-default.log | while read -r line; do echo "- ${line}"; done
+            echo "## ${{ matrix.environment }} firmware build stats"
+            grep -E "RAM:\s|Flash:\s" pio-${{ matrix.environment }}.log | while read -r line; do echo "- ${line}"; done
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload firmware artifacts
+        if: matrix.environment == 'default'
         uses: actions/upload-artifact@v7
         with:
           name: firmware-x3-x4
           path: |
             .pio/build/default/firmware-x3-x4.bin
+          if-no-files-found: error
+
+      - name: Upload X4 Pro firmware artifact
+        if: matrix.environment == 'x4-pro'
+        uses: actions/upload-artifact@v7
+        with:
+          name: firmware-x4-pro
+          path: .pio/build/x4-pro/firmware-x4-pro.bin
           if-no-files-found: error
 
   # This job is used as the PR required actions check, allows for changes to other steps in the future without breaking

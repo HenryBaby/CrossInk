@@ -4,6 +4,8 @@
 #include <FreeInkUIIcon.h>
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -43,19 +45,54 @@ inline void fitUiListValues(const GfxRenderer& renderer, std::vector<freeink::ui
   }
 }
 
-// Activities share one refreshed token block rather than each retaining an
-// identical ~1.5KB copy. The token object outlives stacked activities.
-inline freeink::ui::ThemeTokens& sharedUiThemeTokens() {
-  static freeink::ui::ThemeTokens tokens;
-  return tokens;
+// Activities share two static token generations rather than each retaining an
+// identical ~1.5KB copy. A render task always reads the published generation;
+// live configuration changes build the other generation before swapping the
+// atomic pointer, so no reader can observe a partially updated token object.
+namespace UiAppThemeDetail {
+struct ConfigKey {
+  uint8_t uiTheme = UINT8_MAX;
+  uint8_t uiScale = UINT8_MAX;
+  bool hasTouch = false;
+  int16_t bodyLineHeight = -1;
+
+  bool operator==(const ConfigKey& other) const {
+    return uiTheme == other.uiTheme && uiScale == other.uiScale && hasTouch == other.hasTouch &&
+           bodyLineHeight == other.bodyLineHeight;
+  }
+};
+
+inline freeink::ui::ThemeTokens* tokenSlots() {
+  static freeink::ui::ThemeTokens slots[2];
+  return slots;
 }
+
+inline std::atomic<const freeink::ui::ThemeTokens*>& publishedTokens() {
+  static std::atomic<const freeink::ui::ThemeTokens*> published{nullptr};
+  return published;
+}
+
+inline ConfigKey& lastConfig() {
+  static ConfigKey config;
+  return config;
+}
+}  // namespace UiAppThemeDetail
 
 template <size_t MaxInteractions, size_t MaxHandlers>
 inline void applySharedUiTheme(freeink::ui::FreeInkApp<MaxInteractions, MaxHandlers>& app,
                                const freeink::ui::GfxRendererTarget& target) {
-  auto& tokens = sharedUiThemeTokens();
-  tokens = uiThemeTokens(target);
-  app.setThemeRef(&tokens);
+  const UiAppThemeDetail::ConfigKey config{SETTINGS.uiTheme, SETTINGS.uiScale, gpio.hasTouch(),
+                                           target.lineHeight(freeink::ui::GfxRendererTarget::FONT_BODY)};
+  auto& published = UiAppThemeDetail::publishedTokens();
+  const auto current = published.load(std::memory_order_acquire);
+  if (current == nullptr || !(config == UiAppThemeDetail::lastConfig())) {
+    auto* slots = UiAppThemeDetail::tokenSlots();
+    auto* next = current == &slots[0] ? &slots[1] : &slots[0];
+    *next = uiThemeTokens(target);
+    published.store(next, std::memory_order_release);
+    UiAppThemeDetail::lastConfig() = config;
+  }
+  app.setThemeRef(&published);
 }
 
 // Tap release with coords, plus the raw release the tap classifier never

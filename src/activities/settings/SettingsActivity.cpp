@@ -289,7 +289,8 @@ void SettingsActivity::rebuildSettingsLists() {
   const bool hasHomeKey = gpio.hasHomeKey();
   const size_t expectedControlsCount = controlsParentBaseCount - (hasTouch ? 1u : 0u) + (hasHomeKey ? 1u : 0u) +
                                        (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN) ? 1u : 0u) +
-                                       (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION) ? 1u : 0u);
+                                       (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION) ? 1u : 0u) +
+                                       (hasSettingByName(allSettings, StrId::STR_PAGE_TURN_GESTURE) ? 1u : 0u);
   const size_t expectedFrontButtonCount = hasTouch ? 0u : controlsFrontButtonCount;
 #else
   controlsFrontButtonSettings = buildControlsFrontButtonSettingsList(allSettings);
@@ -297,7 +298,8 @@ void SettingsActivity::rebuildSettingsLists() {
 
   const size_t expectedControlsCount = controlsParentBaseCount + (gpio.hasHomeKey() ? 1u : 0u) +
                                        (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN) ? 1u : 0u) +
-                                       (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION) ? 1u : 0u);
+                                       (hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION) ? 1u : 0u) +
+                                       (hasSettingByName(allSettings, StrId::STR_PAGE_TURN_GESTURE) ? 1u : 0u);
   constexpr size_t expectedFrontButtonCount = controlsFrontButtonCount;
 #endif
   if (controlsSettings.size() != expectedControlsCount ||
@@ -695,16 +697,26 @@ void SettingsActivity::applyUiSettingChange(uint8_t CrossPointSettings::* valueP
   // Theme and UI-scale changes take effect immediately, on this screen —
   // reload the theme and re-derive the app's fonts and tokens so the very
   // next repaint is in the new look.
-  if (valuePtr == &CrossPointSettings::uiTheme) {
-    UITheme::getInstance().reload();
-  } else if (valuePtr != &CrossPointSettings::uiScale) {
+  const bool themeChanged = valuePtr == &CrossPointSettings::uiTheme;
+  const bool scaleChanged = valuePtr == &CrossPointSettings::uiScale;
+  if (!themeChanged && !scaleChanged) {
     return;
   }
-  const auto spec = uiScaleSpec();
-  uiTarget.setFont(fui::GfxRendererTarget::FONT_SMALL, spec.smallFontId);
-  uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, spec.bodyFontId);
-  uiTarget.setFont(fui::GfxRendererTarget::FONT_TITLE, spec.titleFontId);
-  applySharedUiTheme(app, uiTarget);
+
+  // Rendering reads the shared theme tokens field-by-field. Hold the same
+  // mutex used by the render task while replacing the theme and fonts, then
+  // release it before requestUpdate() triggers the next repaint.
+  {
+    RenderLock lock(*this);
+    if (themeChanged) {
+      UITheme::getInstance().reload();
+    }
+    const auto spec = uiScaleSpec();
+    uiTarget.setFont(fui::GfxRendererTarget::FONT_SMALL, spec.smallFontId);
+    uiTarget.setFont(fui::GfxRendererTarget::FONT_BODY, spec.bodyFontId);
+    uiTarget.setFont(fui::GfxRendererTarget::FONT_TITLE, spec.titleFontId);
+    applySharedUiTheme(app, uiTarget);
+  }
 }
 
 void SettingsActivity::loop() {

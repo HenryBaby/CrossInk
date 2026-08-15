@@ -12,6 +12,10 @@
 #include <soc/usb_serial_jtag_reg.h>
 #endif
 
+#if FREEINK_DEVICE_X4PRO && !ARDUINO_USB_MODE
+extern "C" bool tud_mounted(void);
+#endif
+
 // Global HalGPIO instance
 HalGPIO gpio;
 
@@ -327,6 +331,11 @@ bool HalGPIO::isUsbConnected() const {
     static const BatteryMonitor battery;
     return battery.isCharging();
   }
+#endif
+#if FREEINK_DEVICE_X4PRO && !ARDUINO_USB_MODE
+  // X4 Pro uses native TinyUSB for its composite CDC+MSC device. The mounted
+  // state is the reliable bus-presence signal for this OTG configuration.
+  return tud_mounted();
 #endif
   if (BoardConfig::ACTIVE.usbDetect >= 0) {
     return digitalRead(BoardConfig::ACTIVE.usbDetect) == HIGH;

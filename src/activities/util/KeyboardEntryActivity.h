@@ -82,9 +82,10 @@ class KeyboardEntryActivity : public Activity {
   freeink::ui::TouchHoldRouter touchRouter;
 
   // loop() runs on the main task while render() rebuilds the interaction
-  // table on the render task; routing against a half-built table would read
-  // torn entries, so taps are dropped during the rebuild window. atomic (not
-  // volatile) so the flag also orders the table writes on dual-core targets.
+  // table on the render task. This is only the first-published-table gate;
+  // later renders publish into the SDK's double buffer without clearing it,
+  // so the previous complete table remains routable during a rebuild. Atomic
+  // release/acquire ordering pairs the first publish with the main task.
   std::atomic<bool> interactionsReady{false};
 
   int delPressCount = 0;

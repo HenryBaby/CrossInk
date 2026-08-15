@@ -87,6 +87,8 @@ void CrossPointState::toJson(JsonDocument& doc) const {
   doc["pendingBookmarkParagraphIndex"] = pendingBookmarkParagraphIndex;
   doc["pendingClippingIndex"] = pendingClippingIndex;
   doc["showBootScreen"] = showBootScreen;
+  doc["quickLockResumePending"] = quickLockResumePending;
+  doc["quickLockResumeTrigger"] = quickLockResumeTrigger;
 }
 
 bool CrossPointState::fromJson(JsonVariantConst doc) {
@@ -115,6 +117,8 @@ bool CrossPointState::fromJson(JsonVariantConst doc) {
   pendingBookmarkParagraphIndex = doc["pendingBookmarkParagraphIndex"] | static_cast<uint16_t>(UINT16_MAX);
   pendingClippingIndex = doc["pendingClippingIndex"] | static_cast<uint16_t>(UINT16_MAX);
   showBootScreen = doc["showBootScreen"] | true;
+  quickLockResumePending = doc["quickLockResumePending"] | false;
+  quickLockResumeTrigger = doc["quickLockResumeTrigger"] | static_cast<uint8_t>(0);
   return true;
 }
 

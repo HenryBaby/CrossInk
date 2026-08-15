@@ -36,10 +36,6 @@ class EpubReaderClippingListActivity final : public Activity {
   std::atomic<bool> uiReady{false};
   int visibleRows = 1;
   int topIndex = 0;
-  int listTop = 0;
-  int listBottom = 0;
-  int listRowHeight = 0;
-  int listRowStep = 0;
   std::vector<freeink::ui::ListItem> uiItems;
   std::array<std::string, 20> uiRawText;
   std::array<std::string, 20> uiLabels;

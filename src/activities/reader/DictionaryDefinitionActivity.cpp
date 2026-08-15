@@ -1345,7 +1345,7 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
         }
       }
       const int lineHeight = getLineHeight();
-      auto dirty = navigator.renderHighlightDifferential(renderer, lineHeight, prevHighlightIdx_, currIdx);
+      auto dirty = navigator.renderHighlightDifferential(renderer, lineHeight, prevHighlightIdx_, currIdx, true);
       if (dirty.has_value()) {
         // Full panel push — matches DictionaryWordSelectActivity. Windowed refresh is not
         // wired up because the SDK's experimental path produces alternating black→white
@@ -1587,11 +1587,11 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
     const int currIdx = navigator.getCurrentFlatIndex();
     bool snapshotPrimed = false;
     if (currIdx >= 0) {
-      auto setup = navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx);
+      auto setup = navigator.renderHighlightDifferential(renderer, lineHeight, /*prevWordIdx=*/-1, currIdx, true);
       snapshotPrimed = setup.has_value();
     }
     if (!snapshotPrimed) {
-      navigator.renderHighlight(renderer, lineHeight);
+      navigator.renderHighlight(renderer, lineHeight, true);
     }
 
     DictUtils::drawWordSelectButtonHints(renderer, mappedInput, navigator);

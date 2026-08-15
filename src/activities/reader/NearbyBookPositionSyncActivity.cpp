@@ -345,25 +345,23 @@ void NearbyBookPositionSyncActivity::renderReady(const std::string& primary, con
                                                  const std::string& detailSecondary) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   Rect screen = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
+  const Rect textArea{screen.x + metrics.contentSidePadding, screen.y, screen.width - metrics.contentSidePadding * 2,
+                      screen.height};
   int y = screen.y + metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) + 70;
 
-  UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, y, primary.c_str(), true, EpdFontFamily::BOLD);
-  y += renderer.getLineHeight(UI_10_FONT_ID) + metrics.verticalSpacing;
+  y += UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, y, primary.c_str(), 2, true,
+                                        EpdFontFamily::BOLD) +
+       metrics.verticalSpacing;
   if (!detailPrimary.empty()) {
-    const auto detailLines =
-        renderer.wrappedText(SMALL_FONT_ID, detailPrimary.c_str(), screen.width - metrics.contentSidePadding * 2, 3);
-    for (const auto& line : detailLines) {
-      UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, line.c_str(), true);
-      y += renderer.getLineHeight(SMALL_FONT_ID);
-    }
-    y += metrics.verticalSpacing;
+    y += UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, detailPrimary.c_str(), 3) +
+         metrics.verticalSpacing;
   }
   if (!detailSecondary.empty()) {
-    UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, detailSecondary.c_str(), true);
-    y += renderer.getLineHeight(SMALL_FONT_ID) + metrics.verticalSpacing;
+    y += UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, detailSecondary.c_str(), 2) +
+         metrics.verticalSpacing;
   }
   if (state_ == State::READY) {
-    UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, tr(STR_NEARBY_POSITION_READY_HINT), true);
+    UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, tr(STR_NEARBY_POSITION_READY_HINT), 2);
   }
 }
 void NearbyBookPositionSyncActivity::renderComparison() const {
@@ -1328,25 +1326,23 @@ void NearbyBookPositionSyncActivity::renderReady(const std::string& primary, con
                                                  const std::string& detailSecondary) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   Rect screen = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
+  const Rect textArea{screen.x + metrics.contentSidePadding, screen.y, screen.width - metrics.contentSidePadding * 2,
+                      screen.height};
   int y = screen.y + metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) + 70;
 
-  UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, y, primary.c_str(), true, EpdFontFamily::BOLD);
-  y += renderer.getLineHeight(UI_10_FONT_ID) + metrics.verticalSpacing;
+  y += UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, y, primary.c_str(), 2, true,
+                                        EpdFontFamily::BOLD) +
+       metrics.verticalSpacing;
   if (!detailPrimary.empty()) {
-    const auto detailLines =
-        renderer.wrappedText(SMALL_FONT_ID, detailPrimary.c_str(), screen.width - metrics.contentSidePadding * 2, 3);
-    for (const auto& line : detailLines) {
-      UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, line.c_str(), true);
-      y += renderer.getLineHeight(SMALL_FONT_ID);
-    }
-    y += metrics.verticalSpacing;
+    y += UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, detailPrimary.c_str(), 3) +
+         metrics.verticalSpacing;
   }
   if (!detailSecondary.empty()) {
-    UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, detailSecondary.c_str(), true);
-    y += renderer.getLineHeight(SMALL_FONT_ID) + metrics.verticalSpacing;
+    y += UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, detailSecondary.c_str(), 2) +
+         metrics.verticalSpacing;
   }
   if (state_ == State::READY) {
-    UITheme::drawCenteredText(renderer, screen, SMALL_FONT_ID, y, tr(STR_NEARBY_POSITION_READY_HINT), true);
+    UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, y, tr(STR_NEARBY_POSITION_READY_HINT), 2);
   }
 }
 

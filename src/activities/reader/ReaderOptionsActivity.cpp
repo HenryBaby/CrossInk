@@ -116,7 +116,7 @@ void ReaderOptionsActivity::rebuildSettingsList() {
   fontSettings.erase(std::remove_if(fontSettings.begin(), fontSettings.end(),
                                     [](const SettingInfo& setting) {
                                       return setting.nameId == StrId::STR_SD_FONT_SIZE_RANGE ||
-                                             setting.nameId == StrId::STR_MANAGE_FONTS;
+                                             setting.nameId == StrId::STR_DOWNLOAD_FONTS;
                                     }),
                      fontSettings.end());
 

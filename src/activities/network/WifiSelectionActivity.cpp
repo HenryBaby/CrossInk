@@ -465,7 +465,7 @@ void WifiSelectionActivity::promptPasswordEntry() {
   startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_WIFI_PASSWORD),
                                                                  "",  // No initial text
                                                                  64,  // Max password length
-                                                                 InputType::Password),
+                                                                 InputType::Text),
                          [this](const ActivityResult& result) {
                            if (result.isCancelled) {
                              state = WifiSelectionState::NETWORK_LIST;
@@ -1238,6 +1238,8 @@ void WifiSelectionActivity::renderNetworkList(const Rect* screen, const ThemeMet
 void WifiSelectionActivity::renderConnecting(const Rect* screen, const ThemeMetrics* metrics) const {
   const auto height = renderer.getLineHeight(UI_10_FONT_ID);
   const auto top = screen->y + (screen->height - height) / 2;
+  const Rect textArea{screen->x + metrics->contentSidePadding, screen->y,
+                      screen->width - metrics->contentSidePadding * 2, screen->height};
 
   if (state == WifiSelectionState::SCANNING) {
     UITheme::drawCenteredText(renderer, *screen, UI_10_FONT_ID, top,
@@ -1247,19 +1249,12 @@ void WifiSelectionActivity::renderConnecting(const Rect* screen, const ThemeMetr
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
     }
   } else {
-    UITheme::drawCenteredText(renderer, *screen, UI_12_FONT_ID, top - 40,
-                              autoConnecting ? tr(STR_CONNECTING_SAVED_WIFI) : tr(STR_CONNECTING), true,
-                              EpdFontFamily::BOLD);
+    UITheme::drawCenteredWrappedTextAtCenter(renderer, textArea, UI_12_FONT_ID, top - 40,
+                                             autoConnecting ? tr(STR_CONNECTING_SAVED_WIFI) : tr(STR_CONNECTING), 2,
+                                             true, EpdFontFamily::BOLD);
 
     const std::string ssidInfo = std::string(tr(STR_TO_PREFIX)) + selectedSSID;
-    const int textWidth = std::max(1, screen->width - metrics->contentSidePadding * 2);
-    const auto ssidLines = renderer.wrappedText(UI_10_FONT_ID, ssidInfo.c_str(), textWidth, 3);
-    const int ssidBlockHeight = static_cast<int>(ssidLines.size()) * height;
-    int ssidY = top - ssidBlockHeight / 2 + height / 2;
-    for (const auto& line : ssidLines) {
-      UITheme::drawCenteredText(renderer, *screen, UI_10_FONT_ID, ssidY, line.c_str());
-      ssidY += height;
-    }
+    UITheme::drawCenteredWrappedTextAtCenter(renderer, textArea, UI_10_FONT_ID, top, ssidInfo.c_str(), 3);
     if (autoConnecting) {
       const auto labels = mappedInput.mapLabels(tr(STR_CANCEL), tr(STR_SHOW_NETWORKS), "", "");
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
@@ -1322,14 +1317,12 @@ void WifiSelectionActivity::renderConnectionFailed(const Rect* screen, const The
   const int messageWidth = screen->width - metrics->contentSidePadding * 2;
   const auto errorLines = renderer.wrappedText(UI_10_FONT_ID, connectionError.c_str(), messageWidth, 3);
   const auto top = screen->y + (screen->height - height * (1 + errorLines.size())) / 2;
+  const Rect textArea{screen->x + metrics->contentSidePadding, screen->y,
+                      screen->width - metrics->contentSidePadding * 2, screen->height};
 
-  UITheme::drawCenteredText(renderer, *screen, UI_12_FONT_ID, top - 20, tr(STR_CONNECTION_FAILED), true,
-                            EpdFontFamily::BOLD);
-  int errorY = top + height + 10;
-  for (const auto& line : errorLines) {
-    UITheme::drawCenteredText(renderer, *screen, UI_10_FONT_ID, errorY, line.c_str());
-    errorY += height;
-  }
+  UITheme::drawCenteredWrappedTextAtCenter(renderer, textArea, UI_12_FONT_ID, top - 20, tr(STR_CONNECTION_FAILED), 2,
+                                           true, EpdFontFamily::BOLD);
+  UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top + height + 10, connectionError.c_str(), 3);
 
   // Use centralized button hints
   const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DONE), "", "");

@@ -15,6 +15,7 @@
 #include "CrossPointState.h"
 #include "MappedInputManager.h"
 #include "SilentRestart.h"
+#include "activities/boot_sleep/SleepImageIndex.h"
 #include "activities/home/FileBrowserActivity.h"
 #include "components/TouchActionButtons.h"
 #include "components/TouchHeaderBackButton.h"
@@ -512,6 +513,7 @@ bool NearbyBookTransferActivity::finishReceivedFile(const uint64_t expectedBytes
     return false;
   }
   if (replacing) Storage.remove(backupPath_.c_str());
+  SleepImageIndex::invalidateForPath(finalPath_.c_str());
   return true;
 }
 
@@ -820,21 +822,14 @@ void NearbyBookTransferActivity::render(RenderLock&&) {
     GUI.drawHeader(renderer, header, tr(STR_NEARBY_BOOK_TRANSFER));
   }
 
-  const int textWidth = width - metrics.contentSidePadding * 2;
-  auto centered = [this, height](const char* text, const int offset = 0, const int font = UI_10_FONT_ID) {
-    renderer.drawCenteredText(font, height / 2 + offset, text, true,
-                              offset == 0 ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
+  const Rect textArea{metrics.contentSidePadding, 0, width - metrics.contentSidePadding * 2, height};
+  auto centered = [this, height, textArea](const char* text, const int offset = 0, const int font = UI_10_FONT_ID) {
+    UITheme::drawCenteredWrappedTextAtCenter(renderer, textArea, font, height / 2 + offset, text, 2, true,
+                                             offset == 0 ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
   };
-  auto centeredWrapped = [this, height, textWidth](const char* text, const int offset, const int maxLines,
-                                                   const int font = UI_10_FONT_ID) {
-    const auto lines = renderer.wrappedText(font, text, textWidth, maxLines);
-    const int lineHeight = renderer.getLineHeight(font);
-    const int extraLines = std::max(0, static_cast<int>(lines.size()) - 1);
-    int y = height / 2 + offset - extraLines * lineHeight / 2;
-    for (const auto& line : lines) {
-      renderer.drawCenteredText(font, y, line.c_str());
-      y += lineHeight;
-    }
+  auto centeredWrapped = [this, height, textArea](const char* text, const int offset, const int maxLines,
+                                                  const int font = UI_10_FONT_ID) {
+    UITheme::drawCenteredWrappedTextAtCenter(renderer, textArea, font, height / 2 + offset, text, maxLines);
   };
   uiReady_ = false;
   if (isMenuState()) {

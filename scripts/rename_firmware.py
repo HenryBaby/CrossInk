@@ -4,6 +4,7 @@ in the same build directory.
 
 Default outputs:
   .pio/build/default/firmware-x3-x4.bin
+  .pio/build/x4-pro/firmware-x4-pro.bin
   .pio/build/sticky/firmware-sticky.bin
   .pio/build/x4-pro/firmware-x4-pro.bin
 
@@ -14,6 +15,7 @@ Release-candidate outputs when CROSSINK_RC_ARTIFACTS=1:
 
 Release outputs when CROSSINK_RELEASE_VERSION is set:
   .pio/build/default/firmware-x3-x4-v<version>.bin
+  .pio/build/x4-pro/firmware-x4-pro-v<version>.bin
   .pio/build/sticky/firmware-sticky-v<version>.bin
   .pio/build/x4-pro/firmware-x4-pro-v<version>.bin
 """

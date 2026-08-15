@@ -20,6 +20,7 @@ settings = settings
 lyra-settings = settings-2
 cog = cog
 transfer = arrow-left-right
+usb = usb
 lyra-transfer = send-horizontal
 chevrons-left-right-ellipsis = chevrons-left-right-ellipsis
 menu = menu

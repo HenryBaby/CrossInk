@@ -39,6 +39,8 @@ class MappedInputManager {
   bool isPowerReleaseSuppressed() const { return suppressPowerRelease; }
   bool wasPressed(Button button) const;
   bool wasReleased(Button button) const;
+  void injectRelease(Button button) const { injectedReleases[static_cast<size_t>(button)] = true; }
+  void clearInjectedReleases() const { injectedReleases.fill(false); }
   bool isPressed(Button button) const;
   const GfxRenderer& getRenderer() const { return renderer; }
   enum class RowTouch : uint8_t { None, Down, Tap };
@@ -47,9 +49,9 @@ class MappedInputManager {
   bool hasTouchHardware() const;
   // True on boards with a capacitive home key (X4 Pro), where the bottom-edge
   // up-swipe is the reader-menu gesture rather than the exit-to-home gesture.
-  // The capacitive Home key is part of the touch controller.  Treat it like
-  // screen touch so "Disable Touchscreen" also disables the key in readers.
-  bool hasHomeKey() const { return touchInputEnabled() && hasHomeKeyHardware(); }
+  // The Home key has its own reader lock setting, so it remains available when
+  // "Disable Touchscreen" turns off only screen touch input.
+  bool hasHomeKey() const { return hasHomeKeyHardware(); }
   // Capability is deliberately separate from this reader-only input gate so
   // Home-key layouts remain available while the key is locked on reader pages.
   bool isHomeButtonLockedInReader() const;
@@ -62,6 +64,15 @@ class MappedInputManager {
   bool wasScreenTouchDown(int& x, int& y) const;
   bool isScreenTouchTapCandidate(int& x, int& y, unsigned long& heldMs) const;
   bool isScreenTouchHeld(int& x, int& y) const;
+  // Ignore the remainder of the active contact when a touch-down action
+  // replaces the current activity before the finger lifts.
+  void suppressCurrentTouchContact() {
+    suppressNextTouchTap();
+    gpio.suppressTouchContact();
+#ifdef SIMULATOR
+    suppressSimulatedTouchContact = true;
+#endif
+  }
   bool wasItemTapped(int& id) const;
   bool wasItemTouchedDown(int& id) const;
   bool wasTabTapped(int& id) const;
@@ -122,6 +133,7 @@ class MappedInputManager {
   constexpr bool wasScreenTouchDown(int&, int&) const { return false; }
   constexpr bool isScreenTouchTapCandidate(int&, int&, unsigned long&) const { return false; }
   constexpr bool isScreenTouchHeld(int&, int&) const { return false; }
+  constexpr void suppressCurrentTouchContact() {}
   constexpr bool wasItemTapped(int&) const { return false; }
   constexpr bool wasItemTouchedDown(int&) const { return false; }
   constexpr bool wasTabTapped(int&) const { return false; }
@@ -188,6 +200,9 @@ class MappedInputManager {
   mutable bool suppressConfirmRelease = false;
   mutable bool suppressPowerRelease = false;
   mutable bool suppressPowerConfirmRelease = false;
+  // One-frame synthetic releases let a chord route through the existing
+  // activity navigation path without allocating an event object.
+  mutable std::array<bool, BUTTON_COUNT> injectedReleases{};
 #if CROSSINK_APP_CAP_TOUCH
   mutable bool suppressTouchTap = false;
   mutable bool deferredHomeGesture = false;
@@ -210,6 +225,7 @@ class MappedInputManager {
     unsigned long startedAt = 0;
   };
   mutable SimulatorTouch simulatorTouch;
+  mutable bool suppressSimulatedTouchContact = false;
 #endif
 #endif
 

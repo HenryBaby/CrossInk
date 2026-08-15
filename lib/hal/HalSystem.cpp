@@ -11,11 +11,20 @@
 #include "esp_private/esp_system_attr.h"
 #include "esp_private/panic_internal.h"
 
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+#include "esp_cpu_utils.h"
+#include "esp_memory_utils.h"
+#include "xtensa/corebits.h"
+#endif
+
 #define MAX_PANIC_STACK_DEPTH 32
+#define MAX_PANIC_BACKTRACE_DEPTH 32
 #define PANIC_CAPTURE_MAGIC 0x50414E49u
 
 RTC_NOINIT_ATTR char panicMessage[256];
 RTC_NOINIT_ATTR HalSystem::StackFrame panicStack[MAX_PANIC_STACK_DEPTH];
+RTC_NOINIT_ATTR uint32_t panicBacktrace[MAX_PANIC_BACKTRACE_DEPTH];
+RTC_NOINIT_ATTR volatile size_t panicBacktraceDepth;
 // RTC_NOINIT is uninitialized on cold boot, so only this exact marker proves a
 // panic diagnostic was captured before the reset.
 RTC_NOINIT_ATTR volatile uint32_t panicCaptureMarker;
@@ -26,6 +35,40 @@ void __real_panic_abort(const char* message);
 void __real_panic_print_backtrace(const void* frame, int core);
 
 static DRAM_ATTR const char PANIC_REASON_UNKNOWN[] = "(unknown panic reason)";
+
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+void IRAM_ATTR captureXtensaPanicBacktrace(const void* frame) {
+  const auto* exceptionFrame = static_cast<const XtExcFrame*>(frame);
+  esp_backtrace_frame_t backtraceFrame = {
+      .pc = static_cast<uint32_t>(exceptionFrame->pc),
+      .sp = static_cast<uint32_t>(exceptionFrame->a1),
+      .next_pc = static_cast<uint32_t>(exceptionFrame->a0),
+      .exc_frame = exceptionFrame,
+  };
+
+  size_t depth = 0;
+  uint32_t pc = esp_cpu_process_stack_pc(backtraceFrame.pc);
+  panicBacktrace[depth++] = pc;
+
+  bool corrupted =
+      !esp_stack_ptr_is_sane(backtraceFrame.sp) ||
+      (!esp_ptr_executable(reinterpret_cast<const void*>(pc)) && exceptionFrame->exccause != EXCCAUSE_INSTR_PROHIBITED);
+  while (depth < MAX_PANIC_BACKTRACE_DEPTH && backtraceFrame.next_pc != 0 && !corrupted) {
+    if (!esp_backtrace_get_next_frame(&backtraceFrame)) {
+      break;
+    }
+
+    pc = esp_cpu_process_stack_pc(backtraceFrame.pc);
+    if (esp_ptr_executable(reinterpret_cast<const void*>(pc))) {
+      panicBacktrace[depth++] = pc;
+    }
+  }
+
+  panicBacktraceDepth = depth;
+  panicCaptureMarker = PANIC_CAPTURE_MAGIC;
+}
+#endif
+
 void IRAM_ATTR __wrap_panic_abort(const char* message) {
   if (!message) message = PANIC_REASON_UNKNOWN;
   // IRAM-safe bounded copy (strncpy is not IRAM-safe in panic context)
@@ -45,13 +88,18 @@ void IRAM_ATTR __wrap_panic_print_backtrace(const void* frame, int core) {
     return;
   }
 
-#if !__riscv
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+  captureXtensaPanicBacktrace(frame);
+  __real_panic_print_backtrace(frame, core);
+  return;
+#elif !__riscv
   __real_panic_print_backtrace(frame, core);
   return;
 #else
   for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {
     panicStack[i].sp = 0;
   }
+  panicBacktraceDepth = 0;
 
   // Copied from components/esp_system/port/arch/riscv/panic_arch.c
   uint32_t sp = (uint32_t)((RvExcFrame*)frame)->sp;
@@ -126,6 +174,7 @@ void clearPanic() {
   for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {
     panicStack[i].sp = 0;
   }
+  panicBacktraceDepth = 0;
   clearLastLogs();
 }
 
@@ -139,22 +188,31 @@ std::string getPanicInfo(bool full) {
     info += "\nCrossInk device type: " CROSSINK_FIRMWARE_DEVICE_TYPE;
     info += "\n\nPanic reason: " + std::string(panicMessage);
     info += "\n\nLast logs:\n" + getLastLogs();
-    info += "\n\nStack memory:\n";
-
     auto toHex = [](uint32_t value) {
       char buffer[9];
       snprintf(buffer, sizeof(buffer), "%08X", value);
       return std::string(buffer);
     };
-    for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {
-      if (panicStack[i].sp == 0) {
-        break;
+    if (panicStack[0].sp != 0) {
+      info += "\n\nStack memory:\n";
+      for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {
+        if (panicStack[i].sp == 0) {
+          break;
+        }
+        info += "0x" + toHex(panicStack[i].sp) + ": ";
+        for (size_t j = 0; j < 8; j++) {
+          info += "0x" + toHex(panicStack[i].spp[j]) + " ";
+        }
+        info += "\n";
       }
-      info += "0x" + toHex(panicStack[i].sp) + ": ";
-      for (size_t j = 0; j < 8; j++) {
-        info += "0x" + toHex(panicStack[i].spp[j]) + " ";
+    }
+
+    const size_t backtraceDepth = panicBacktraceDepth <= MAX_PANIC_BACKTRACE_DEPTH ? panicBacktraceDepth : 0;
+    if (backtraceDepth > 0) {
+      info += "\nStack trace:\n";
+      for (size_t i = 0; i < backtraceDepth; i++) {
+        info += "0x" + toHex(panicBacktrace[i]) + "\n";
       }
-      info += "\n";
     }
 
     return info;

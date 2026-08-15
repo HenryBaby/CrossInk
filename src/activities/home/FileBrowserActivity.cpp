@@ -16,6 +16,7 @@
 #include "CrossPointState.h"
 #include "FileBrowserActionActivity.h"
 #include "MappedInputManager.h"
+#include "activities/boot_sleep/SleepImageIndex.h"
 #include "activities/reader/EpubReaderActivity.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/OptionSelectionActivity.h"
@@ -401,6 +402,7 @@ void FileBrowserActivity::promptDeleteFile(const std::string& fullPath, const st
       LOG_ERR("FileBrowser", "Failed to delete file: %s", fullPath.c_str());
       return;
     }
+    SleepImageIndex::invalidateForPath(fullPath.c_str());
 
     if (isPinnedSleepFavorite(fullPath)) {
       unpinSleepFavorite();
@@ -435,6 +437,7 @@ void FileBrowserActivity::promptDeleteDirectory(const std::string& fullPath, con
       LOG_ERR("FileBrowser", "Failed to delete directory: %s", dirPath.c_str());
       return;
     }
+    SleepImageIndex::invalidateForPath(dirPath.c_str());
 
     for (const auto& metadataPath : metadataPaths) {
       BookActions::clearFileMetadata(metadataPath);
@@ -547,6 +550,7 @@ void FileBrowserActivity::setPreferredSleepFolder(const std::string& fullPath) {
 
   APP_STATE.preferredSleepFolderPath = nextPath;
   APP_STATE.clearRecentSleepHistory();
+  SleepImageIndex::invalidate();
   if (!APP_STATE.saveToFile()) {
     LOG_ERR("FileBrowser", "Failed to save preferred sleep folder path: %s", normalizedPath.c_str());
     return;
@@ -563,6 +567,7 @@ void FileBrowserActivity::clearPreferredSleepFolder() {
 
   APP_STATE.preferredSleepFolderPath.clear();
   APP_STATE.clearRecentSleepHistory();
+  SleepImageIndex::invalidate();
   if (!APP_STATE.saveToFile()) {
     LOG_ERR("FileBrowser", "Failed to clear preferred sleep folder path");
     return;
@@ -743,6 +748,17 @@ void FileBrowserActivity::onRowEvent(const fui::ActionEvent& event, void* user) 
   auto* self = static_cast<FileBrowserActivity*>(user);
   if (event.value < 0 || static_cast<size_t>(event.value) >= self->entryCount()) return;
   self->selectorIndex = static_cast<size_t>(event.value);
+  if (event.longPress && self->mode == Mode::Books) {
+    self->showFileSelection = true;
+    const std::string entry = self->entryNameAt(self->selectorIndex);
+    self->app.clearTapFlash();
+    if (entry.back() == '/') {
+      self->showDirectoryActionMenu(entry);
+    } else {
+      self->showFileActionMenu(entry);
+    }
+    return;
+  }
   // Activation navigates or opens; a lingering flash would gray an unrelated
   // row on the next list.
   self->app.clearTapFlash();
@@ -825,35 +841,7 @@ void FileBrowserActivity::loop() {
     return;
   }
 
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  const int contentTop =
-      metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) + metrics.verticalSpacing;
-  const int contentBottom = renderer.getScreenHeight() - metrics.buttonHintsHeight -
-                            renderer.getLineHeight(SMALL_FONT_ID) - metrics.verticalSpacing;
-  const auto tokens = uiThemeTokens(uiTarget);
-  const auto rowType = usesTwoLineFileBrowserRows() ? UiListRowType::WithSubtitle : UiListRowType::SingleLine;
-  const int rowStep = uiListRowHeight(tokens, rowType) + tokens.listRowGap;
   const int listSize = static_cast<int>(entryCount());
-  int touchX = 0;
-  int touchY = 0;
-  if (mode == Mode::Books && !longPressConfirmHandled &&
-      mappedInput.isScreenTouchLongPress(touchX, touchY, GO_HOME_MS) && touchY >= contentTop &&
-      touchY < contentBottom && rowStep > 0) {
-    const int touchedEntry = topIndex + (touchY - contentTop) / rowStep;
-    if (touchedEntry < 0 || touchedEntry >= listSize || touchedEntry >= topIndex + visibleRows) return;
-    selectorIndex = static_cast<size_t>(touchedEntry);
-    showFileSelection = true;
-    mappedInput.suppressNextTouchTap();
-    longPressConfirmHandled = true;
-    const std::string entry = entryNameAt(selectorIndex);
-    if (entry.back() == '/') {
-      showDirectoryActionMenu(entry, true);
-    } else {
-      showFileActionMenu(entry, true);
-    }
-    return;
-  }
-
   if (entryCount() > 0) {
     const std::string entry = entryNameAt(selectorIndex);
     const bool isDirectory = (entry.back() == '/');
@@ -1091,8 +1079,9 @@ void FileBrowserActivity::buildListScreen(UiApp::ScreenType& screen) {
           ? static_cast<int16_t>(selectorIndex - static_cast<size_t>(topIndex))
           : -1;
   props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;  // physical buttons stay in loop()
-  props.valueInset = 8;               // air between the extension and the row edge
+  props.inputMask = mode == Mode::Books ? static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress)
+                                        : fui::InputTouch;  // physical buttons stay in loop()
+  props.valueInset = 8;                                     // air between the extension and the row edge
   // A file extension is short, so do not sacrifice most of a two-line title
   // to visually balance it with the value column.
   props.balanceWrappedLabelWithValue = false;

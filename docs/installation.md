@@ -8,6 +8,7 @@ nav_order: 2
 ## Supported Devices
 
 - Xteink X3, X4
+- Xteink X4 Pro
 
 ## Web Installation via USB
 
@@ -17,6 +18,16 @@ nav_order: 2
 2. The latest version will be automatically selected, but if you ever want to revert to an earlier build, you can select it from the dropdown.
 3. Choose the firmware option you want to install.
 4. Click on the "Flash Firmware" button
+
+X4 Pro uses the ESP32-S3 firmware option. Keep the reader connected during the
+download-mode and flashing steps shown by Inky.
+
+## USB Drive
+
+On X4 Pro, choose `Home > File Transfer > USB Drive` to expose the SD card to
+your computer. Eject the drive from the computer before disconnecting it; the
+reader restarts to Home when the drive is safely ejected or the cable is
+removed.
 
 ## SD Card Firmware Update
 

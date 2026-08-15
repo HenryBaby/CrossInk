@@ -403,6 +403,9 @@ bool TxtReaderActivity::executePowerButtonAction() {
   }
 
   if (executeReaderShortcutAction(longPowerAction)) {
+    if (longPowerAction == CrossPointSettings::SHORT_PWRBTN::TOGGLE_DARK_MODE) {
+      mappedInput.suppressNextPowerRelease();
+    }
     return true;
   }
 

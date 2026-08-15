@@ -84,6 +84,11 @@ void LookedUpWordsActivity::onRowEvent(const fui::ActionEvent& event, void* user
   auto* self = static_cast<LookedUpWordsActivity*>(user);
   if (event.value < 0 || event.value >= static_cast<int16_t>(self->entries.size())) return;
   self->selectedIndex = event.value;
+  if (event.longPress) {
+    self->app.clearTapFlash();
+    self->showDeleteConfirmation(false);
+    return;
+  }
   self->app.clearTapFlash();
   self->controller.startLookup(self->entries[self->selectedIndex].word);
 }
@@ -105,7 +110,7 @@ void LookedUpWordsActivity::buildHistoryScreen(UiApp::ScreenType& screen) {
   props.selectedIndex = static_cast<int16_t>(selectedIndex);
   props.topIndex = static_cast<uint16_t>(topIndex);
   props.action = ACTION_ROW;
-  props.inputMask = fui::InputTouch;
+  props.inputMask = static_cast<uint16_t>(fui::InputTouch | fui::InputLongPress);
   props.labelText = screen.theme().bodyText;
   props.labelText.maxLines = 2;
   const auto rows = configureUiList(props, screen.theme(), screen.body());
@@ -222,25 +227,6 @@ void LookedUpWordsActivity::loop() {
       requestUpdate();
     }
     return;
-  }
-
-  const auto& metrics = UITheme::getInstance().getMetrics();
-  int touchX = 0;
-  int touchY = 0;
-  if (mappedInput.isScreenTouchLongPress(touchX, touchY, Dictionary::LONG_PRESS_MS)) {
-    const int contentTop =
-        metrics.topPadding + TouchHeaderBackButton::height(metrics, mappedInput) + metrics.verticalSpacing;
-    const int rowHeight = uiListRowHeight(app.theme(), UiListRowType::SingleLine);
-    const int rowStep = rowHeight + app.theme().listRowGap;
-    const int row = rowStep > 0 ? (touchY - contentTop) / rowStep : -1;
-    const int heldIndex = topIndex + row;
-    if (touchY >= contentTop && row >= 0 && touchY - contentTop - row * rowStep < rowHeight && row < visibleRows &&
-        heldIndex < static_cast<int>(entries.size())) {
-      selectedIndex = heldIndex;
-      mappedInput.suppressNextTouchTap();
-      showDeleteConfirmation(false);
-      return;
-    }
   }
 
   const int totalItems = static_cast<int>(entries.size());

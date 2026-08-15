@@ -876,9 +876,13 @@ void HomeActivity::onEnter() {
   RECENT_BOOKS.ensureLoaded();
   loadRecentBooks(recentBooksToLoad);
 
-  if (!APP_STATE.openEpubPath.empty()) {
+  const auto selectInitialBook = [this, &metrics](const std::string& path) {
+    if (path.empty()) {
+      return false;
+    }
+
     for (int i = 0; i < static_cast<int>(recentBooks.size()); ++i) {
-      if (recentBooks[i].path == APP_STATE.openEpubPath) {
+      if (recentBooks[i].path == path) {
         if (metrics.homeRecentBooksCount == 1 && i > 0) {
           std::rotate(recentBooks.begin(), recentBooks.begin() + i, recentBooks.end());
           selectorIndex = 0;
@@ -887,9 +891,14 @@ void HomeActivity::onEnter() {
           selectorIndex = i;
           lastCarouselBookIndex = i;
         }
-        break;
+        return true;
       }
     }
+    return false;
+  };
+
+  if (!selectInitialBook(initialBookPath)) {
+    selectInitialBook(APP_STATE.openEpubPath);
   }
 
   globalStats = GlobalReadingStats::load();
@@ -1626,7 +1635,31 @@ void HomeActivity::loop() {
     return;
   }
 
-  if (mappedInput.wasPressed(MappedInputManager::Button::Back)) {
+  const bool isCarousel =
+      static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
+  const bool carouselTouchOnly = isCarousel && mappedInput.hasTouchHardware();
+  const int previousHighlightedBookIdx = getHighlightedBookIndex();
+  const int visibleBookCount = getVisibleRecentBookCount();
+  const int carouselMenuItemCount =
+      isCarousel
+          ? static_cast<int>(buildHomeMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks, hasClippings).size())
+          : 0;
+
+  MappedInputManager::SwipeDir carouselSwipe = MappedInputManager::SwipeDir::None;
+  int carouselSwipeStartX = 0;
+  int carouselSwipeStartY = 0;
+  int carouselSwipeEndX = 0;
+  int carouselSwipeEndY = 0;
+  const bool hasCarouselSwipe =
+      carouselTouchOnly && mappedInput.wasSwipeWithPoints(carouselSwipe, carouselSwipeStartX, carouselSwipeStartY,
+                                                          carouselSwipeEndX, carouselSwipeEndY);
+  const bool carouselSwipeStartsInMenu =
+      hasCarouselSwipe && containsPoint(LyraCarouselTheme::buttonMenuTouchRect(renderer, carouselMenuItemCount),
+                                        carouselSwipeStartX, carouselSwipeStartY);
+
+  // A touch swipe can also satisfy the generic Back gesture. Keep it in the
+  // carousel path so a left-edge swipe cannot open the selected book instead.
+  if (!hasCarouselSwipe && mappedInput.wasPressed(MappedInputManager::Button::Back)) {
     backPressSeen = true;
   }
 
@@ -1634,15 +1667,11 @@ void HomeActivity::loop() {
   // interaction path above. On other themes, Back opens the most recent book.
   // Requiring a press observed on Home ignores the stale release that can
   // arrive after Back closed the previous activity.
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) && backPressSeen && !recentBooks.empty()) {
+  if (!carouselTouchOnly && !hasCarouselSwipe && mappedInput.wasReleased(MappedInputManager::Button::Back) &&
+      backPressSeen && !recentBooks.empty()) {
     onContinueReading();
     return;
   }
-
-  const bool isCarousel =
-      static_cast<CrossPointSettings::UI_THEME>(SETTINGS.uiTheme) == CrossPointSettings::UI_THEME::LYRA_CAROUSEL;
-  const int previousHighlightedBookIdx = getHighlightedBookIndex();
-  const int visibleBookCount = getVisibleRecentBookCount();
 
   auto activateHomeMenuAction = [this](const HomeMenuAction action) {
     switch (action) {
@@ -1712,25 +1741,22 @@ void HomeActivity::loop() {
 
   if (isCarousel) {
     const int bookCount = visibleBookCount;
-    const int menuItemCount =
-        static_cast<int>(buildHomeMenuItems(hasOpdsServers, hasReadingStats, hasBookmarks, hasClippings).size());
-    const bool inCarouselRow = (selectorIndex < bookCount);
+    const int menuItemCount = carouselMenuItemCount;
+    bool inCarouselRow = (selectorIndex < bookCount);
     const int menuIdx = inCarouselRow ? 0 : (selectorIndex - bookCount);
 
     auto handleTouch = [&](const bool activate) {
       int touchedMenuIndex = -1;
-      if (activate ? mappedInput.wasItemTapped(touchedMenuIndex) : mappedInput.wasItemTouchedDown(touchedMenuIndex)) {
+      // Carousel menu icons have no pressed/highlight state. A completed tap
+      // is the only menu interaction that changes selection or opens an item.
+      if (activate && mappedInput.wasItemTapped(touchedMenuIndex)) {
         if (touchedMenuIndex < 0 || touchedMenuIndex >= menuItemCount) return false;
         const int previousSelectorIndex = selectorIndex;
         selectorIndex = bookCount + touchedMenuIndex;
         if (selectorIndex != previousSelectorIndex) {
           invalidateCoverCache();
         }
-        if (activate) {
-          activateSelectedHomeItem();
-        } else if (selectorIndex != previousSelectorIndex) {
-          requestUpdate();
-        }
+        activateSelectedHomeItem();
         return true;
       }
 
@@ -1754,6 +1780,10 @@ void HomeActivity::loop() {
         }
         if (selectorIndex != previousSelectorIndex) {
           invalidateCoverCache();
+          // Touch-down returns early so the selected cover can repaint before
+          // the finger lifts; keep the stats/context used by the next action
+          // in sync with that new selection.
+          updateHighlightedBookContext(false);
         }
         if (shouldActivateBook) {
           activateSelectedHomeItem();
@@ -1765,10 +1795,10 @@ void HomeActivity::loop() {
       return false;
     };
 
-    if (handleTouch(/*activate=*/false)) {
+    if (!hasCarouselSwipe && handleTouch(/*activate=*/false)) {
       return;
     }
-    if (handleTouch(/*activate=*/true)) {
+    if (!hasCarouselSwipe && handleTouch(/*activate=*/true)) {
       return;
     }
 
@@ -1792,42 +1822,64 @@ void HomeActivity::loop() {
     };
 
     bool handledHorizontalNav = false;
-    const auto swipe = mappedInput.wasSwipe();
-    if (swipe == MappedInputManager::SwipeDir::Left) {
-      moveRight();
-      handledHorizontalNav = true;
-    } else if (swipe == MappedInputManager::SwipeDir::Right) {
-      moveLeft();
-      handledHorizontalNav = true;
+    if (hasCarouselSwipe) {
+      // A swipe that starts in the icon strip is consumed. It must not select
+      // an icon or turn into carousel navigation as it passes through one.
+      if (carouselSwipeStartsInMenu) return;
+
+      switch (carouselSwipe) {
+        case MappedInputManager::SwipeDir::Left:
+        case MappedInputManager::SwipeDir::Right:
+          if (bookCount <= 0) return;
+          if (!inCarouselRow) {
+            selectorIndex = std::clamp(lastCarouselBookIndex, 0, bookCount - 1);
+            lastCarouselBookIndex = selectorIndex;
+            inCarouselRow = true;
+            invalidateCoverCache();
+          }
+          if (carouselSwipe == MappedInputManager::SwipeDir::Left) {
+            moveRight();
+          } else {
+            moveLeft();
+          }
+          handledHorizontalNav = true;
+          break;
+        case MappedInputManager::SwipeDir::None:
+        case MappedInputManager::SwipeDir::Up:
+        case MappedInputManager::SwipeDir::Down:
+          break;
+      }
     }
 
-    if (!handledHorizontalNav && mappedInput.wasPressed(MappedInputManager::Button::Right)) {
-      moveRight();
-    }
-    if (!handledHorizontalNav && mappedInput.wasPressed(MappedInputManager::Button::Left)) {
-      moveLeft();
-    }
-    if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-      if (inCarouselRow) {
-        lastCarouselBookIndex = selectorIndex;
-        selectorIndex = bookCount;
-        invalidateCoverCache();
-      } else {
-        selectorIndex = lastCarouselBookIndex;
-        invalidateCoverCache();
+    if (!carouselTouchOnly) {
+      if (!handledHorizontalNav && mappedInput.wasPressed(MappedInputManager::Button::Right)) {
+        moveRight();
       }
-      requestUpdate();
-    }
-    if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-      if (inCarouselRow) {
-        lastCarouselBookIndex = selectorIndex;
-        selectorIndex = bookCount;
-        invalidateCoverCache();
-      } else {
-        selectorIndex = lastCarouselBookIndex;
-        invalidateCoverCache();
+      if (!handledHorizontalNav && mappedInput.wasPressed(MappedInputManager::Button::Left)) {
+        moveLeft();
       }
-      requestUpdate();
+      if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+        if (inCarouselRow) {
+          lastCarouselBookIndex = selectorIndex;
+          selectorIndex = bookCount;
+          invalidateCoverCache();
+        } else {
+          selectorIndex = lastCarouselBookIndex;
+          invalidateCoverCache();
+        }
+        requestUpdate();
+      }
+      if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
+        if (inCarouselRow) {
+          lastCarouselBookIndex = selectorIndex;
+          selectorIndex = bookCount;
+          invalidateCoverCache();
+        } else {
+          selectorIndex = lastCarouselBookIndex;
+          invalidateCoverCache();
+        }
+        requestUpdate();
+      }
     }
   } else {
     const auto& metrics = UITheme::getInstance().getMetrics();
@@ -1884,7 +1936,7 @@ void HomeActivity::loop() {
     updateHighlightedBookContext();
   }
 
-  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
+  if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) && !(isCarousel && mappedInput.hasTouchHardware())) {
     activateSelectedHomeItem();
   }
 }

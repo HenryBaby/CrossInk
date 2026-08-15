@@ -5,6 +5,32 @@
 #include "BookStatsView.h"
 #include "MappedInputManager.h"
 #include "components/TouchHeaderBackButton.h"
+#include "components/UITheme.h"
+
+namespace {
+
+void drawPageIndicators(const GfxRenderer& renderer, const int currentPage, const int totalPages) {
+  if (totalPages <= 1) {
+    return;
+  }
+
+  constexpr int kDotSize = 8;
+  constexpr int kDotSpacing = 6;
+  const auto& metrics = UITheme::getInstance().getMetrics();
+  const int totalDotWidth = totalPages * kDotSize + (totalPages - 1) * kDotSpacing;
+  const int dotsStartX = (renderer.getScreenWidth() - totalDotWidth) / 2;
+  const int dotY = renderer.getScreenHeight() - metrics.buttonHintsHeight - metrics.verticalSpacing - 4;
+  for (int pageIndex = 0; pageIndex < totalPages; ++pageIndex) {
+    const int dotX = dotsStartX + pageIndex * (kDotSize + kDotSpacing);
+    if (pageIndex == currentPage) {
+      renderer.fillRect(dotX, dotY, kDotSize, kDotSize, true);
+    } else {
+      renderer.drawRect(dotX, dotY, kDotSize, kDotSize, true);
+    }
+  }
+}
+
+}  // namespace
 
 BookStatsActivity::BookStatsActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const std::string& title,
                                      const std::string& bookCachePath, const BookReadingStats& stats,
@@ -464,6 +490,9 @@ void BookStatsActivity::render(RenderLock&&) {
     case Page::EditDates:
       renderEditBookDatesPage(renderer, &mappedInput, bookTitle, stats, selectedEditField, true);
       break;
+  }
+  if (page != Page::EditDates) {
+    drawPageIndicators(renderer, static_cast<int>(page), showAllDevicesStats ? 3 : 2);
   }
   renderer.displayBuffer();
 }
