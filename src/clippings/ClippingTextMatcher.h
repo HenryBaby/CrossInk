@@ -12,9 +12,10 @@ enum class TokenFragmentMatch : uint8_t {
   COMPLETES_TOKEN,
 };
 
-// Compares one rendered word fragment with a saved clipping token. An inserted
-// layout hyphen joins this fragment to the following rendered word instead of
-// consuming a clipping token by itself.
+// Compares one rendered word fragment with a saved clipping token. Layout can
+// split one logical token into adjacent display fragments (for example, a word
+// followed by an ellipsis when focus reading is enabled). An inserted hyphen is
+// omitted from the saved token before matching its fragment.
 inline TokenFragmentMatch matchTokenFragment(const char* word, const bool endsWithInsertedHyphen, const char* token,
                                              const size_t tokenLen, const size_t tokenOffset) {
   if (!word || !token || tokenLen == 0 || tokenOffset >= tokenLen) {
@@ -34,10 +35,10 @@ inline TokenFragmentMatch matchTokenFragment(const char* word, const bool endsWi
     return TokenFragmentMatch::MISMATCH;
   }
 
-  if (endsWithInsertedHyphen) {
-    return wordLen < remainingLen ? TokenFragmentMatch::CONTINUES_TOKEN : TokenFragmentMatch::MISMATCH;
+  if (wordLen == remainingLen) {
+    return endsWithInsertedHyphen ? TokenFragmentMatch::MISMATCH : TokenFragmentMatch::COMPLETES_TOKEN;
   }
-  return wordLen == remainingLen ? TokenFragmentMatch::COMPLETES_TOKEN : TokenFragmentMatch::MISMATCH;
+  return TokenFragmentMatch::CONTINUES_TOKEN;
 }
 
 }  // namespace ClippingTextMatcher

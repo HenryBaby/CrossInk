@@ -28,6 +28,41 @@ class HalGPIO {
   bool usbStateChanged = false;
 
  public:
+  // HAL-owned, normalized multi-touch representation. Activities must not
+  // depend on the SDK's controller-specific touch snapshot type.
+  struct TouchContact {
+    uint8_t id = 0;
+    float nx = 0.0f;
+    float ny = 0.0f;
+  };
+
+  struct TouchSnapshot {
+    // Mirror the SDK's bounded capture capacity while keeping app code
+    // independent of its controller-specific snapshot type.
+    static constexpr uint8_t MAX_CONTACTS = InputManager::MAX_TOUCH_CONTACTS;
+    uint8_t count = 0;
+    // Actual controller count. This may exceed count when the SDK truncates a
+    // frame, allowing firmware to opt into exact cardinalities safely.
+    uint8_t reportedCount = 0;
+    TouchContact contacts[MAX_CONTACTS];
+  };
+
+  struct CompletedMultiTouchSwipe {
+    uint8_t contactCount = 0;
+    float nxStart = 0.0f;
+    float nyStart = 0.0f;
+    float nxEnd = 0.0f;
+    float nyEnd = 0.0f;
+    unsigned long durationMs = 0;
+  };
+
+  struct CompletedMultiTouchRotation {
+    float degrees = 0.0f;
+    float nxCenter = 0.0f;
+    float nyCenter = 0.0f;
+    unsigned long durationMs = 0;
+  };
+
   enum class DeviceType : uint8_t { X4, X3 };
 
  private:
@@ -62,6 +97,10 @@ class HalGPIO {
   unsigned long getPowerButtonHeldTime() const;
 #if CROSSINK_APP_CAP_TOUCH
   bool hasTouch() const;
+  bool supportsMultiTouch() const;
+  TouchSnapshot getTouchSnapshot() const;
+  bool wasCompletedMultiTouchSwipe(CompletedMultiTouchSwipe& swipe) const;
+  bool wasCompletedMultiTouchRotation(CompletedMultiTouchRotation& rotation) const;
   // Capacitive home key under the bezel, reported by the touch controller
   // (e.g. X4 Pro's GT911 key). Tap = short press (fires on release, the primary
   // "home" action); LongPress = held ~700ms (a hold shortcut, e.g. reader menu).
@@ -84,6 +123,10 @@ class HalGPIO {
   bool wasTouchActivity() const;
 #else
   constexpr bool hasTouch() const { return false; }
+  constexpr bool supportsMultiTouch() const { return false; }
+  constexpr TouchSnapshot getTouchSnapshot() const { return {}; }
+  constexpr bool wasCompletedMultiTouchSwipe(CompletedMultiTouchSwipe&) const { return false; }
+  constexpr bool wasCompletedMultiTouchRotation(CompletedMultiTouchRotation&) const { return false; }
   constexpr bool hasHomeKey() const { return false; }
   constexpr bool wasHomeKeyPressed() const { return false; }
   constexpr bool wasHomeKeyTapped() const { return false; }

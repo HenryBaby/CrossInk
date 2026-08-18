@@ -8,6 +8,7 @@ Refer to https://freeink.org/llms.txt for guidance.
 
 ## Simulator
 
+- Sticky is outside this downstream fork's product and validation scope. Do not spend build or test time on Sticky targets unless the user explicitly brings it back into scope.
 - Simulator patches belong in the adjacent `crossink-simulator` repo.
 - The valid local simulator env in this repo is `simulator`, and `pio run -e simulator` currently builds cleanly.
 - The simulator `PNGdec` stub in `crossink-simulator/src/PNGdec.h` needs to mirror the real API shape used by app code, including `hasAlpha()` and `getTransparentColor()`, even though decode still fails intentionally.
@@ -47,3 +48,4 @@ Refer to https://freeink.org/llms.txt for guidance.
 - `LyraTheme::drawHeader()` does not call `BaseTheme::drawHeader()`, so header changes in the base theme must be duplicated in Lyra if needed.
 - Preserve the complete opening `[!CAUTION]` block in `README.md` verbatim during upstream syncs, README rewrites, and documentation updates unless the user explicitly asks to change it. It identifies this as a personal, fully vibe-coded downstream build and warns that there could be dragons.
 - The README section `Changes maintained by this downstream fork` is the canonical persistent footer for published release notes. `scripts/generate_release_notes.py` appends it automatically; update the README section instead of duplicating new wording in the release workflow.
+- Published release notes stay minimal and provenance-focused: link the whole upstream tag, map cherry-picks to local/source commits when relevant, and omit internal development/build details. Keep Internal notes out of generated bodies; the v1.5.0 feature-list style is an anti-pattern.

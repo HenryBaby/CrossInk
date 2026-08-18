@@ -28,8 +28,10 @@ class ReaderOptionsActivity final : public Activity {
   std::vector<SettingInfo> settings;
   std::vector<SettingInfo> fontSettings;
   std::vector<SettingInfo> pageLayoutSettings;
+  std::vector<SettingInfo> screenMarginSettings;
   const std::vector<SettingInfo>* currentSettings = nullptr;
   SettingAction activeSubmenu = SettingAction::None;
+  SettingAction parentSubmenu = SettingAction::None;
   OptionPopup optionPopup;
   SaveSettingsCallback saveSettingsCallback = nullptr;
   void* saveSettingsContext = nullptr;

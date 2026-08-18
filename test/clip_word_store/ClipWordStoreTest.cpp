@@ -66,6 +66,14 @@ TEST(ClippingTextMatcher, MatchesLayoutInsertedHyphenFragmentsAsOneToken) {
             ClippingTextMatcher::TokenFragmentMatch::COMPLETES_TOKEN);
 }
 
+TEST(ClippingTextMatcher, MatchesAdjacentDisplayFragmentsAsOneToken) {
+  constexpr char token[] = "it\xE2\x80\xA6";
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("it", false, token, sizeof(token) - 1, 0),
+            ClippingTextMatcher::TokenFragmentMatch::CONTINUES_TOKEN);
+  EXPECT_EQ(ClippingTextMatcher::matchTokenFragment("\xE2\x80\xA6", false, token, sizeof(token) - 1, 2),
+            ClippingTextMatcher::TokenFragmentMatch::COMPLETES_TOKEN);
+}
+
 TEST(ClippingTextMatcher, RejectsAuthoredHyphensAndMismatchedInsertedSuffixes) {
   constexpr char token[] = "correctly";
   constexpr char authoredHyphenToken[] = "wellknown";

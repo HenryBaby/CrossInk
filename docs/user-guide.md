@@ -53,20 +53,36 @@ This guide covers day-to-day device use. For focused reference material, see [Re
 
 ## 1. Hardware Overview
 
-The device utilises the standard buttons on the Xteink X4 (in the same layout as the manufacturer firmware, by default):
+CrossInk supports many devices with various button layouts. For the X3/X4 devices with front buttons, by default they will use the following layout from left to right, and this guide will refer to them by those names.
 
-### Button Layout
+<table>
+  <thead>
+    <tr>
+      <th colspan="4"><center>Default Front Button Mapping</center></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Back</td>
+      <td>Confirm</td>
+      <td>Left</td>
+      <td>Right</td>
+    </tr>
+  </tbody>
+</table>
 
-| Location        | Buttons                                              |
-| --------------- | ---------------------------------------------------- |
-| **Bottom Edge** | **Back**, **Confirm**, **Left**, **Right**           |
-| **Right Side**  | **Power**, **Volume Up**, **Volume Down**, **Reset** |
+For devices with buttons on either side of the device, this guide may refer to the buttons as follows:
+
+| Location       | Button Mapping     |
+| -------------- | ------------------ |
+| **Left Side**  | **Left**/**Up**    |
+| **Right Side** | **Right**/**Down** |
 
 Button layout can be customized in **Settings > Controls**.
 
 ### Taking a Screenshot
 
-When the Power Button and Volume Down button are pressed at the same time, it will take a screenshot and save it in the folder `screenshots/`.
+When the Power Button and Down button are pressed at the same time, it will take a screenshot and save it in the folder `screenshots/`.
 
 Alternatively, while reading a book, press the **Confirm** button to open the reader menu and select **Take screenshot**.
 
@@ -104,7 +120,7 @@ See [Reading Mode](#4-reading-mode) below for more information.
 
 The Browse Files screen acts as a file and folder browser. The full path to the current directory is shown at the top of the screen. File extensions are displayed alongside each filename, and directories are shown with brackets (e.g. `[folder-name]`). Hidden directories can be shown from settings.
 
-- **Navigate List:** Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to move the selection cursor up and down through folders and books. You can also long-press these buttons to scroll a full page up or down.
+- **Navigate List:** Use **Left** (or **Up**), or **Right** (or **Down**) to move the selection cursor up and down through folders and books. You can also long-press these buttons to scroll a full page up or down.
 - **Open Selection:** Press **Confirm** to open a folder or start reading a selected book. Selecting a `.bmp` file will open the image viewer.
 - **Delete Files or Folders:** Hold and release **Confirm** to open the selected file or folder action menu, then choose **Delete**. You will be given an option to either confirm or cancel. Folder deletion is limited to empty folders.
 - **Book Actions:** EPUB and XTC files can also show options such as **Delete Cache** or **Mark Finished** from the same action menu.
@@ -171,7 +187,7 @@ device model and build.
   - "Cover" - The book cover image (Note: this is experimental and may not work as expected)
   - "None" - A blank screen
   - "Cover + Custom" - The book cover image while actively reading, falls back to "Custom" behavior otherwise
-  - "Page Overlay" - A sleep overlay on top of the current page
+  - "Page Overlay" - Uses an image to overlay on top of the current page. Best used with transparent `.png` files or black and white `.bmp` files.
   - "Reading Stats" - Recent reading stats on the sleep screen
   - "Minimal" - A minimal sleep screen
   - "Minimal Stats" - A minimal stats sleep screen on supported devices
@@ -214,6 +230,23 @@ device model and build.
   - "OFF" (default) - Disable the fix
   - "ON" - Enable the fix
 
+- **Frontlight and wake schedule** (on supported devices with a frontlight and
+  real-time clock): Open **Settings > Display > Frontlight**.
+  - **Restore Light on Wake**: When enabled, a frontlight that was on before
+    sleep is turned back on when the device wakes. If the light was off before
+    sleep, a complete schedule can still decide whether it should turn on.
+  - **Frontlight Schedule**: Enable the daily wake schedule, then set **Start**
+    and **End** in local time. Times use one-minute increments. The schedule
+    includes the Start time and excludes the End time, and it can cross
+    midnight (for example, 9:00 PM to 7:00 AM). Start and End must both be set
+    and different; otherwise the schedule is inactive.
+  - The schedule is checked when the device boots or wakes, not continuously
+    while it is already awake. Restore on Wake takes precedence when the light
+    was on before sleep. Set the device's local time and UTC offset under
+    **Settings > System > Device** so the schedule uses the expected clock.
+    When the schedule is disabled or an endpoint is unset, the endpoint value
+    is shown as `--`; saved endpoint times are retained for later re-enabling.
+
 > [!NOTE]
 > A battery charging indicator is shown on the battery icon whenever the device is actively charging.
 
@@ -232,7 +265,7 @@ device model and build.
   Options > Font Options > Word Spacing**. Changing it reflows the current
   book, so page positions may change; it is not available for TXT books.
 
-- **Reader Screen Margin**: Controls the screen margins in Reading Mode between 5 and 40 pixels in 5-pixel increments.
+- **Reader Screen Margin**: Set separate Top/Bottom and Left/Right margins in Reading Mode, each from 5 to 150 pixels using 5- or 10-pixel steps.
 
 - **Reader Paragraph Alignment**: Set the alignment of paragraphs; options are "Justified" (default), "Left", "Center", "Right", or "Book's Style".
 
@@ -271,6 +304,11 @@ device model and build.
   - Battery - Show/Hide the battery indicator
   - XTC Status Bar - Show/Hide a status bar for XTC files
 
+On touchscreen readers, tap the status-bar area while reading to show or hide
+the entire status bar for the current reading session. This quick toggle does
+not change the page layout or page breaks; use **Customize Status Bar** to
+choose which status-bar items are shown.
+
 #### 3.6.3 Controls
 
 - **Power Button**: Configure short-press and long-press power button actions.
@@ -280,7 +318,7 @@ device model and build.
 
 - **Side Buttons**: Configure side-button layout, orientation awareness, and side-button long-press behavior.
 
-- **Side Button Layout (reader)**: Swap the order of the up and down volume buttons from "Prev/Next" (default) to "Next/Prev". You can also disable them entirely. This change is only in effect when reading.
+- **Side Button Layout (reader)**: Swap the order of the up and down buttons from "Prev/Next" (default) to "Next/Prev" or "Next/Next". You can also disable them entirely. This change is only in effect when reading.
 
 - **Long-press Behavior**: Set whether long-pressing front page-turn buttons does nothing, skips to the next/previous chapter, or changes reader orientation.
 
@@ -499,16 +537,17 @@ Once any of the options above is set up, press **Confirm** while reading to open
 
 The **Sleep Screen** setting controls what is displayed when the device goes to sleep:
 
-| Mode               | Behavior                                                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Dark** (default) | The CrossInk logo on a dark background.                                                                                      |
-| **Light**          | The CrossInk logo on a white background.                                                                                     |
-| **Custom**         | A custom image from the SD card (see below). Falls back to **Dark** if no custom image is found.                             |
-| **Cover**          | The cover of the currently open book. Falls back to **Dark** if no book is open.                                             |
-| **Cover + Custom** | The cover of the currently open book, shown only while actively reading. Falls back to **Custom** behavior when not reading. |
-| **Minimal**        | A compact sleep screen based on the Minimal home layout.                                                                     |
-| **Minimal Stats**  | A compact sleep screen with recent reading stats, on supported devices.                                                      |
-| **None**           | A blank screen.                                                                                                              |
+| Mode               | Behavior                                                                                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Dark** (default) | The CrossInk logo on a dark background.                                                                                                          |
+| **Light**          | The CrossInk logo on a white background.                                                                                                         |
+| **Custom**         | A custom image from the SD card (see below). Falls back to **Dark** if no custom image is found.                                                 |
+| **Cover**          | The cover of the currently open book. Falls back to **Dark** if no book is open.                                                                 |
+| **Cover + Custom** | The cover of the currently open book, shown only while actively reading. Falls back to **Custom** behavior when not reading.                     |
+| **Page Overlay**   | Keeps the current reader page visible and draws a sleep wallpaper over it. If no wallpaper is available, the page remains visible while reading. |
+| **Minimal**        | A compact sleep screen based on the Minimal home layout.                                                                                         |
+| **Minimal Stats**  | A compact sleep screen with recent reading stats, on supported devices.                                                                          |
+| **None**           | A blank screen.                                                                                                                                  |
 
 #### Cover settings
 
@@ -519,10 +558,12 @@ When using **Cover** or **Cover + Custom**, two additional settings apply:
 
 #### Custom images
 
-To use custom sleep images, set the sleep screen mode to **Custom** or **Cover + Custom**, then place images on the SD card:
+To use custom sleep images, set the sleep screen mode to **Custom**, **Cover + Custom**, or **Page Overlay**, then place images on the SD card:
 
-- **Multiple Images (recommended):** Create a `.sleep` directory in the root of the SD card and place any number of `.bmp` images inside. One will be randomly selected each time the device sleeps. (A directory named `sleep` is also accepted as a fallback.)
-- **Single Image:** Place a file named `sleep.bmp` in the root directory. This is used as a fallback if no valid images are found in the `.sleep`/`sleep` directory.
+- **Multiple Images (recommended):** Create a `.sleep` directory in the root of the SD card and place any number of `.bmp` images inside. In **Page Overlay** mode, `.png` images are also supported. One image will be randomly selected each time the device sleeps. (A directory named `sleep` is also accepted as a fallback.)
+- **Single Image:** Place a file named `sleep.bmp` in the root directory. In **Page Overlay** mode, `sleep.png` is also supported. These files are used as fallbacks if no valid image is found in the `.sleep`/`sleep` directory.
+
+In **Page Overlay** mode, white BMP pixels and transparent PNG pixels let the current reader page show through; the remaining wallpaper pixels are drawn over the page. PNG wallpapers are supported only in this mode.
 
 > [!TIP]
 > For best results:
@@ -558,19 +599,19 @@ Once you have opened a book, the button layout changes to facilitate reading.
 
 ### Page Turning
 
-| Action            | Buttons                              |
-| ----------------- | ------------------------------------ |
-| **Previous Page** | Press **Left** _or_ **Volume Up**    |
-| **Next Page**     | Press **Right** _or_ **Volume Down** |
+| Action            | Buttons                       |
+| ----------------- | ----------------------------- |
+| **Previous Page** | Press **Left** _or_ **Up**    |
+| **Next Page**     | Press **Right** _or_ **Down** |
 
-The role of the volume (side) buttons can be swapped in **Settings > Controls > Side Buttons**.
+The role of the side buttons can be swapped in **Settings > Controls > Side Buttons**.
 
 If the **Short-press Action** setting is set to "Page Turn", you can also turn to the next page by briefly pressing the Power button.
 
 ### Chapter Navigation
 
-- **Next Chapter:** Press and **hold** the **Right** (or **Volume Down**) button briefly, then release.
-- **Previous Chapter:** Press and **hold** the **Left** (or **Volume Up**) button briefly, then release.
+- **Next Chapter:** Press and **hold** the **Right** (or **Down**) button briefly, then release.
+- **Previous Chapter:** Press and **hold** the **Left** (or **Up**) button briefly, then release.
 
 This feature can be disabled in **Settings > Controls > Front Buttons** to help avoid changing chapters by mistake.
 
@@ -607,6 +648,16 @@ a book is open but keeps it available in reader menus. For the different touch
 selection gestures used by [dictionary lookup](./dictionary.md#looking-up-a-word)
 and [clippings](./reader-features.md#clippings-and-highlights), see those
 feature guides.
+
+On devices with multi-touch support, you can also assign actions to two-finger
+swipes from **Settings > Controls > Taps & Gestures > Two-finger Swipe**. Set an
+action for **Swipe Up**, **Swipe Down**, **Swipe Left**, or **Swipe Right**, then
+move two fingers together in that direction while reading. Available actions
+include brightness and warmth changes (when the hardware supports them),
+chapter navigation for EPUBs, and font-size changes for EPUB or TXT books. Each
+action can be assigned to only one direction; choosing it again moves it to the
+new direction. See [Two-finger Swipe Actions](./controls.md#two-finger-swipe-actions)
+for the complete list and reader-specific limitations.
 
 ### Footnote Navigation
 
@@ -662,7 +713,7 @@ Press **Back** at any time to close the menu and return to your current page.
 
 Accessible by selecting **Chapters** from the Reader Menu.
 
-1. Use **Left** (or **Volume Up**), or **Right** (or **Volume Down**) to highlight the desired chapter.
+1. Use **Left** (or **Up**), or **Right** (or **Down**) to highlight the desired chapter.
 2. Press **Confirm** to jump to that chapter.
 3. _Alternatively, press **Back** to cancel and return to your current page._
 

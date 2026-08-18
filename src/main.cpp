@@ -3,6 +3,8 @@
 #include <CrossInkHalFrontlight.h>
 #include <FontCacheManager.h>
 #include <FontDecompressor.h>
+#include <FreeInkUIGfxRenderer.h>
+#include <FreeInkUIIcon.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalClock.h>
@@ -95,6 +97,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "activities/settings/OtaUpdateActivity.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
+#include "components/icons/tablerFilledIcons.h"
 #include "fontIds.h"
 #include "network/UsbSerialFileTransfer.h"
 #ifdef SIMULATOR
@@ -108,6 +111,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "util/ButtonShortcutController.h"
 #include "util/Dictionary.h"
 #include "util/DictionaryRegistry.h"
+#include "util/FrontlightSchedule.h"
 #include "util/ScreenshotUtil.h"
 
 GfxRenderer renderer(display);
@@ -119,7 +123,6 @@ DictionaryRegistry dictionaryRegistry;
 FontCacheManager fontCacheManager(renderer.getFontMap(), renderer.getSdCardFonts());
 static unsigned long allowSleepAt = 0;
 static ButtonShortcutController buttonShortcutController;
-static unsigned long lastX4ProPowerClickAt = 0;
 static unsigned long lastX4ProHomeKeyTapAt = 0;
 static bool x4ProHomeKeyTapPending = false;
 // A held power button can span deep-sleep wake and the first main-loop frame.
@@ -130,9 +133,7 @@ static bool powerButtonReleasedSinceWake = false;
 static bool wakePowerReleasePending = false;
 
 namespace {
-constexpr unsigned long X4PRO_POWER_DOUBLE_CLICK_MS = 500;
 constexpr unsigned long X4PRO_HOME_KEY_DOUBLE_TAP_MS = 300;
-constexpr unsigned long X4PRO_POWER_CLICK_MAX_HOLD_MS = 400;
 }  // namespace
 
 static void logBootHeap(const char* stage) {
@@ -464,14 +465,6 @@ bool startGlobalSyncProgress(const bool networkBootReady = false) {
 CrossPointSettings::SHORT_PWRBTN getPowerButtonAction() {
   static bool longPowerButtonHandled = false;
 
-  if (activityManager.readerPowerButtonOpensSettings()) {
-    if (mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
-      longPowerButtonHandled = false;
-      screenshotComboHandled = false;
-    }
-    return CrossPointSettings::SHORT_PWRBTN::IGNORE;
-  }
-
   if (mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
     if (longPowerButtonHandled) {
       longPowerButtonHandled = false;
@@ -521,9 +514,12 @@ void notifyQuickLockChanged() {
     const bool foreground = !background;
     RenderLock lock;
     renderer.fillRect(x, y, badgeSize, badgeSize, background);
-    renderer.drawRoundedRect(x + 12, y + 4, 16, 22, 4, 8, foreground);
-    renderer.fillRect(x + 7, y + 19, 26, 16, foreground);
-    renderer.fillRect(x + 18, y + 25, 4, 6, background);
+    freeink::ui::GfxRendererTarget target(renderer);
+    target.bitmap(
+        freeink::ui::Rect{x + (badgeSize - icon_tabler_lock_28.w) / 2, y + (badgeSize - icon_tabler_lock_28.h) / 2,
+                          icon_tabler_lock_28.w, icon_tabler_lock_28.h},
+        freeink::ui::bitmapFromIcon(icon_tabler_lock_28), freeink::ui::BitmapMode::Center,
+        freeink::ui::Paint::solid(foreground ? freeink::ui::Color::Black : freeink::ui::Color::White));
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   } else {
     (void)activityManager.requestUpdateAndWait();
@@ -552,7 +548,7 @@ bool handleGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action
         return true;
       }
       RenderLock lock;
-      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+      renderer.displayBuffer(manualScreenRefreshMode());
       return true;
     }
     case CrossPointSettings::SHORT_PWRBTN::SCREENSHOT: {
@@ -732,42 +728,6 @@ void putTiltSensorToSleepForDeepSleep() {
   LOG_ERR("MAIN", "Tilt sensor did not confirm sleep before deep sleep");
 }
 
-bool handleX4ProFrontlightDoubleClick() {
-#ifdef SIMULATOR
-  return false;
-#else
-  if (mappedInputManager.isPowerReleaseSuppressed()) {
-    // A modal consumed this Power press as Confirm. Do not pair its release
-    // with the click that opened the modal.
-    lastX4ProPowerClickAt = 0;
-    return false;
-  }
-
-  if (!BoardConfig::isX4Pro() || !gpio.wasReleased(HalGPIO::BTN_POWER)) {
-    return false;
-  }
-
-  const unsigned long now = millis();
-  if (gpio.getPowerButtonHeldTime() > X4PRO_POWER_CLICK_MAX_HOLD_MS) {
-    lastX4ProPowerClickAt = 0;
-    return false;
-  }
-
-  if (lastX4ProPowerClickAt == 0 || now - lastX4ProPowerClickAt > X4PRO_POWER_DOUBLE_CLICK_MS) {
-    lastX4ProPowerClickAt = now;
-    return false;
-  }
-
-  lastX4ProPowerClickAt = 0;
-  const bool lightOn = !Frontlight.isOn();
-  Frontlight.setOn(lightOn);
-  SETTINGS.frontlightOn = lightOn ? 1 : 0;
-  SETTINGS.saveToFile();
-  LOG_INF("LIGHT", "Frontlight toggled %s by power-button double-click", lightOn ? "on" : "off");
-  return true;
-#endif
-}
-
 bool executeX4ProHomeButtonAction(const uint8_t action) {
   switch (action) {
     case CrossPointSettings::HOME_BUTTON_BACK_HOME:
@@ -921,6 +881,14 @@ void mirrorWakeShortPressToNvs() {
     nvs_commit(h);
   }
   nvs_close(h);
+#endif
+}
+
+bool shouldClearX4WakeGhosting() {
+#if FREEINK_DEVICE_X4
+  return gpio.deviceIsX4();
+#else
+  return false;
 #endif
 }
 
@@ -1079,14 +1047,16 @@ void setup() {
   const bool cleanImageBaseOnEntry =
       snapshotTarget == SILENT_REBOOT_TARGET_READER && (snapshotPayload & SILENT_REBOOT_READER_CLEAN_IMAGE_BASE) != 0;
   const bool isNetworkResume = snapshotTarget >= static_cast<uint32_t>(NetworkBootTarget::OTA);
-  // KOReader Sync and OPDS can render their parent screens while a deferred
-  // Wi-Fi child is completing. On S3 devices, keep the reader-sized render
-  // stack without loading the rest of the reader resources. C3 devices retain
-  // the smaller network stack to preserve their tighter internal-RAM budget.
+  // KOReader Sync, OPDS, and File Transfer can render their parent screens
+  // while a deferred Wi-Fi child is completing. On S3 devices, keep the
+  // reader-sized render stack without loading the rest of the reader
+  // resources. C3 devices retain the smaller network stack to preserve their
+  // tighter internal-RAM budget.
   const bool useReaderRenderStack =
       !isNetworkResume ||
       (FREEINK_MCU_S3 && (snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC) ||
-                          snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::OPDS)));
+                          snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::OPDS) ||
+                          snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::FILE_TRANSFER)));
   silentRebootMagic = 0;
   silentRebootTarget = 0;
   silentRebootPayload = 0;
@@ -1184,13 +1154,25 @@ void setup() {
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
   logBootHeap("boot state ready");
-  // Frontlight PWM up (no-op on boards without one). X4 Pro restores the complete
-  // persisted state; other frontlight boards retain their opt-in wake behavior.
-#if FREEINK_DEVICE_X4PRO || defined(SIMULATOR_DEVICE_X4_PRO)
-  const bool restoreLightOn = SETTINGS.frontlightOn != 0;
-#else
-  const bool restoreLightOn = SETTINGS.frontlightOn != 0 && (SETTINGS.frontlightRestoreOnWake != 0 || isSilentReboot);
-#endif
+  // A silent restart is a process-level recovery rather than a user wake, so
+  // retain the current light state. On real wakes, Restore on Wake restores a
+  // prior on state; a prior off state falls through to the local-time schedule.
+  const bool wasLightOnBeforeSleep = SETTINGS.frontlightOn != 0;
+  bool restoreLightOn = wasLightOnBeforeSleep && (isSilentReboot || SETTINGS.frontlightRestoreOnWake != 0);
+  if (FrontlightSchedule::shouldApplyOnWakeSchedule(isSilentReboot, SETTINGS.frontlightRestoreOnWake != 0,
+                                                    wasLightOnBeforeSleep) &&
+      FrontlightSchedule::hasCompleteWindow(SETTINGS.frontlightScheduleEnabled != 0, SETTINGS.frontlightScheduleStart,
+                                            SETTINGS.frontlightScheduleEnd)) {
+    uint8_t utcHour = 0;
+    uint8_t utcMinute = 0;
+    if (halClock.getTime(utcHour, utcMinute)) {
+      const uint16_t localTimeOfDay = FrontlightSchedule::localTimeOfDay(utcHour, utcMinute, SETTINGS.clockUtcOffsetQ);
+      restoreLightOn = FrontlightSchedule::containsTimeOfDay(SETTINGS.frontlightScheduleStart,
+                                                             SETTINGS.frontlightScheduleEnd, localTimeOfDay);
+    } else {
+      restoreLightOn = false;
+    }
+  }
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
   // Re-sync the wake-hold NVS mirror with the freshly-loaded settings, covering
@@ -1287,6 +1269,10 @@ void setup() {
         } else {
           renderer.displayBuffer(HalDisplay::HALF_REFRESH);
         }
+      } else if (shouldClearX4WakeGhosting()) {
+        LOG_INF("BOOT", "X4 wake: clearing retained sleep image with half refresh");
+        renderer.clearScreen();
+        renderer.displayBuffer(HalDisplay::HALF_REFRESH);
       }
       break;
     case BootResume::Splash:
@@ -1466,8 +1452,17 @@ void loop() {
   // so it cannot replace or double-fire this one.
   static bool screenshotButtonsReleased = true;
   static bool screenshotComboActive = false;
-  if (!buttonShortcutController.isQuickLocked() && !activityManager.readerPowerButtonOpensSettings() &&
-      gpio.isPressed(HalGPIO::BTN_POWER) && gpio.isPressed(HalGPIO::BTN_DOWN)) {
+  // Consume both halves of the screenshot chord through their releases. In
+  // particular, releasing Power first must not let the later Down release
+  // navigate a newly opened overlay or reader page.
+  if (screenshotComboActive) {
+    if (gpio.isPressed(HalGPIO::BTN_POWER) || gpio.isPressed(HalGPIO::BTN_DOWN)) return;
+    screenshotButtonsReleased = true;
+    screenshotComboActive = false;
+    return;
+  }
+  if (!buttonShortcutController.isQuickLocked() && gpio.isPressed(HalGPIO::BTN_POWER) &&
+      gpio.isPressed(HalGPIO::BTN_DOWN)) {
     screenshotComboActive = true;
     if (screenshotButtonsReleased) {
       screenshotButtonsReleased = false;
@@ -1477,16 +1472,6 @@ void loop() {
       ScreenshotUtil::takeScreenshot(renderer);
     }
     return;
-  }
-  if (screenshotComboActive) {
-    if (gpio.isPressed(HalGPIO::BTN_POWER)) return;
-    if (gpio.wasReleased(HalGPIO::BTN_POWER)) {
-      screenshotButtonsReleased = true;
-      screenshotComboActive = false;
-      return;
-    }
-    screenshotButtonsReleased = true;
-    screenshotComboActive = false;
   }
 
   const bool powerPressed = gpio.isPressed(HalGPIO::BTN_POWER);
@@ -1542,9 +1527,9 @@ void loop() {
     return;
   }
 #endif
-  // X4 Pro-only button shortcuts. Home-key taps are consumed until their
-  // single- or double-tap action is known.
-  if (handleX4ProFrontlightDoubleClick() || handleX4ProHomeKeyShortcuts()) {
+  // Home-key taps are consumed until their single- or double-tap action is
+  // known.
+  if (handleX4ProHomeKeyShortcuts()) {
     return;
   }
 

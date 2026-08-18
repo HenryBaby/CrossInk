@@ -22,8 +22,11 @@ class ControlsOptionsActivity final : public Activity {
   std::vector<SettingInfo> homeButtonSettings;
   std::vector<SettingInfo> frontButtonSettings;
   std::vector<SettingInfo> sideButtonSettings;
+  std::vector<SettingInfo> tapsGesturesSettings;
+  std::vector<SettingInfo> twoFingerSwipeSettings;
   const std::vector<SettingInfo>* currentSettings = nullptr;
   SettingAction activeSubmenu = SettingAction::None;
+  SettingAction parentSubmenu = SettingAction::None;
   OptionPopup optionPopup;
 
   using UiApp = freeink::ui::FreeInkApp<20, 4>;

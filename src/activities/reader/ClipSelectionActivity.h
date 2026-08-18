@@ -26,7 +26,8 @@ struct ClipWordStyle {
 class ClipSelectionActivity final : public Activity {
  public:
   ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, ClipWordStore wordStore, int fontId,
-                        Section& section, int startPageInSection, int marginTop, int marginLeft);
+                        Section& section, int startPageInSection, int marginTop, int marginLeft,
+                        const DictionaryClippingRequest* dictionaryRequest = nullptr);
 
   void onEnter() override;
   void onExit() override;
@@ -60,6 +61,8 @@ class ClipSelectionActivity final : public Activity {
   bool hasSavedBuffer = false;
   bool usingFallbackFont = false;
   bool touchDragSelecting = false;
+  bool hasDictionaryRequest = false;
+  DictionaryClippingRequest dictionaryRequest{};
   std::array<uint16_t, MAX_READING_ORDER_WORDS> readingOrder{};
   size_t readingOrderSize = 0;
 
@@ -76,6 +79,7 @@ class ClipSelectionActivity final : public Activity {
   void useFallbackFont(const char* reason);
   bool selectWordAtPoint(int x, int y);
   void confirmSelection();
+  bool finishDictionarySelection();
   int lineEndForward(int orderIdx) const;
   int lineEndBackward(int orderIdx) const;
 };

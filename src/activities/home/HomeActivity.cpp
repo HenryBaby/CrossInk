@@ -1403,6 +1403,21 @@ bool HomeActivity::preRenderCarouselFrames(bool showProgressPopup) {
 }
 
 void HomeActivity::loop() {
+  if (quickActionsLongPowerHandled) {
+    if (!mappedInput.isPressed(MappedInputManager::Button::Power)) {
+      quickActionsLongPowerHandled = false;
+    }
+    return;
+  }
+
+  if (SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::QUICK_ACTIONS &&
+      mappedInput.isPressed(MappedInputManager::Button::Power) &&
+      mappedInput.getHeldTime() >= SETTINGS.getPowerButtonLongPressDuration()) {
+    quickActionsLongPowerHandled = true;
+    handleShortcutAction(CrossPointSettings::SHORT_PWRBTN::QUICK_ACTIONS);
+    return;
+  }
+
   if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
 
   if (usesMinimalHomeInteraction()) {
@@ -1949,6 +1964,11 @@ bool HomeActivity::handleShortcutAction(const CrossPointSettings::SHORT_PWRBTN a
 
   if (action != CrossPointSettings::SHORT_PWRBTN::QUICK_ACTIONS) {
     return false;
+  }
+
+  if (quickActionsLongPowerHandled && mappedInput.wasReleased(MappedInputManager::Button::Power)) {
+    quickActionsLongPowerHandled = false;
+    return true;
   }
 
   QuickActions::showConfiguredPopup(

@@ -75,7 +75,7 @@ uint8_t enumRawValueForDisplayIndex(const SettingInfo& setting, uint8_t displayI
 }
 
 bool isWebSettingAvailable(const SettingInfo& setting) {
-  if (setting.nameId == StrId::STR_PAGE_TURN_GESTURE && !gpio.hasTouch()) {
+  if (setting.nameId == StrId::STR_PAGE_TURN && !gpio.hasTouch()) {
     return false;
   }
 
@@ -91,6 +91,19 @@ bool isWebSettingAvailable(const SettingInfo& setting) {
     return false;
   }
 #endif
+
+  const bool isFrontlightWakeSetting = setting.nameId == StrId::STR_RESTORE_LIGHT_ON_WAKE ||
+                                       setting.nameId == StrId::STR_FRONTLIGHT_SCHEDULE ||
+                                       setting.nameId == StrId::STR_START || setting.nameId == StrId::STR_END;
+  if (isFrontlightWakeSetting && !Frontlight.present()) {
+    return false;
+  }
+
+  const bool isFrontlightScheduleSetting = setting.nameId == StrId::STR_FRONTLIGHT_SCHEDULE ||
+                                           setting.nameId == StrId::STR_START || setting.nameId == StrId::STR_END;
+  if (isFrontlightScheduleSetting && !halClock.isAvailable()) {
+    return false;
+  }
 
   if (!halClock.isAvailable()) {
     switch (setting.nameId) {
@@ -1357,6 +1370,8 @@ void CrossPointWebServer::handleGetSettings() const {
         doc["type"] = "value";
         if (s.valuePtr) {
           doc["value"] = static_cast<int>(SETTINGS.*(s.valuePtr));
+        } else if (s.value16Ptr) {
+          doc["value"] = static_cast<int>(SETTINGS.*(s.value16Ptr));
         }
         doc["min"] = s.valueRange.min;
         doc["max"] = s.valueRange.max;
@@ -1365,7 +1380,12 @@ void CrossPointWebServer::handleGetSettings() const {
       }
       case SettingType::STRING: {
         doc["type"] = "string";
-        if (s.stringGetter) {
+        // Passwords are write-only in the web UI. Returning the KOReader
+        // value can expose credentials and, for legacy invalid data, emit
+        // binary bytes that make the whole JSON response unparsable.
+        if (strcmp(s.key, "koPassword") == 0) {
+          doc["value"] = "";
+        } else if (s.stringGetter) {
           doc["value"] = s.stringGetter();
         } else if (s.stringMaxLen > 0) {
           doc["value"] = reinterpret_cast<const char*>(&SETTINGS) + s.stringOffset;
@@ -1411,6 +1431,7 @@ void CrossPointWebServer::handlePostSettings() {
   sdFontSystem.refreshIfDirty();
   const auto& settings = getSettingsList(&sdFontSystem.registry());
   int applied = 0;
+  uint8_t CrossPointSettings::* twoFingerSwipeEdited = nullptr;
 
   for (const auto& s : settings) {
     if (!s.key || !isWebSettingAvailable(s)) continue;
@@ -1433,6 +1454,12 @@ void CrossPointWebServer::handlePostSettings() {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = enumRawValueForDisplayIndex(s, static_cast<uint8_t>(val));
             QuickActions::settingChanged(SETTINGS, s.valuePtr);
+            if (s.valuePtr == &CrossPointSettings::twoFingerSwipeUp ||
+                s.valuePtr == &CrossPointSettings::twoFingerSwipeDown ||
+                s.valuePtr == &CrossPointSettings::twoFingerSwipeLeft ||
+                s.valuePtr == &CrossPointSettings::twoFingerSwipeRight) {
+              twoFingerSwipeEdited = s.valuePtr;
+            }
           } else if (s.valueSetter) {
             s.valueSetter(static_cast<uint8_t>(val));
           }
@@ -1445,6 +1472,8 @@ void CrossPointWebServer::handlePostSettings() {
         if (val >= s.valueRange.min && val <= s.valueRange.max) {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
+          } else if (s.value16Ptr) {
+            SETTINGS.*(s.value16Ptr) = static_cast<uint16_t>(val);
           }
           applied++;
         }
@@ -1471,6 +1500,9 @@ void CrossPointWebServer::handlePostSettings() {
     }
   }
 
+  if (twoFingerSwipeEdited != nullptr) {
+    CrossPointSettings::normalizeTwoFingerSwipeActions(SETTINGS, twoFingerSwipeEdited);
+  }
   SETTINGS.saveToFile();
 
   LOG_DBG("WEB", "Applied %d setting(s)", applied);

@@ -6,7 +6,10 @@
 #include <vector>
 
 inline constexpr size_t CLIPPING_CHAPTER_TITLE_MAX = 48;
-inline constexpr size_t CLIPPING_TEXT_MAX = 512;
+// Clipping text lives on the SD card rather than in every in-memory clipping
+// record. Match the reader's bounded selection-text budget so previews retain
+// a complete multi-paragraph selection without growing the saved-item index.
+inline constexpr size_t CLIPPING_TEXT_MAX = 4U * 1024U;
 inline constexpr uint16_t CLIPPING_MAX_PER_BOOK = 256;
 inline constexpr uint16_t CLIPPING_MAX_PAGE_MATCHES = 16;
 

@@ -86,7 +86,6 @@ class ActivityManager {
   std::atomic<bool> requestedUpdate{false};
 
   bool handleGlobalHomeGesture();
-  bool handleReaderPowerButtonSettingsOverride();
 
  public:
   explicit ActivityManager(GfxRenderer& renderer, MappedInputManager& mappedInput)
@@ -136,7 +135,6 @@ class ActivityManager {
   bool requiresExclusiveStorageLoop() const;
   bool isHomeActivity() const;
   bool isReaderActivity() const;
-  bool readerPowerButtonOpensSettings() const;
   bool handleHomeButtonBackOrHome();
   bool openReaderMenuFromShortcut();
   bool openReaderMenuAfterClosingOverlay();

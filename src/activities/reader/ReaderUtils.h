@@ -8,7 +8,9 @@
 
 #include <algorithm>
 
+#include "GlobalActions.h"
 #include "MappedInputManager.h"
+#include "ReaderStatusBarTapTarget.h"
 #include "components/UITheme.h"
 
 namespace ReaderUtils {
@@ -19,8 +21,8 @@ constexpr uint8_t STATUS_BAR_TEXT_PADDING = 3;
 // Gap between the top clock status bar band and the first line of book text.
 // Signed so negative values pull the text up toward the clock (unsigned would wrap
 // a negative to a huge positive). Note the book-text top margin is
-// std::max(screenMargin, reservedClockHeight + TOP_CLOCK_TEXT_PADDING), so this only
-// bites once reservedClockHeight + padding drops below the screen-margin setting.
+// std::max(screenMarginVertical, reservedClockHeight + TOP_CLOCK_TEXT_PADDING), so this only
+// bites once reservedClockHeight + padding drops below the vertical-margin setting.
 constexpr int8_t TOP_CLOCK_TEXT_PADDING = 0;
 
 inline GfxRenderer::Orientation toRendererOrientation(const uint8_t orientation) {
@@ -150,6 +152,20 @@ inline TouchPageTurn detectTouchPageTurn(const GfxRenderer& renderer, const Mapp
 #endif
 }
 
+inline bool isBottomStatusBarTap(const GfxRenderer& renderer, const int y, const int statusBarHeight) {
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  return ReaderStatusBarTapTarget::containsBottom(y, renderer.getScreenHeight(), orientedMarginBottom, statusBarHeight);
+}
+
+inline bool isTopStatusBarTap(const GfxRenderer& renderer, const int y, const int statusBarHeight) {
+  int orientedMarginTop, orientedMarginRight, orientedMarginBottom, orientedMarginLeft;
+  renderer.getOrientedViewableTRBL(&orientedMarginTop, &orientedMarginRight, &orientedMarginBottom,
+                                   &orientedMarginLeft);
+  return ReaderStatusBarTapTarget::containsTop(y, renderer.getScreenHeight(), orientedMarginTop, statusBarHeight);
+}
+
 // Reader menu opens on its board-specific vertical swipe anywhere on the open
 // page, or a long press of the capacitive home key (a short home tap still goes home).
 inline bool isTouchMenuGesture(const MappedInputManager& input) {
@@ -198,9 +214,9 @@ inline PageTurnResult detectPageTurn(const MappedInputManager& input) {
 // before the next page turn (the tiled grayscale cleanup does).
 inline void displayWithRefreshCycle(const GfxRenderer& renderer, int& pagesUntilFullRefresh, bool async = false) {
   // A negative countdown is reserved for the explicit Refresh Screen shortcut.
-  // Regular cadence cleanup remains a HALF refresh at 1, while the manual command
-  // uses the panel's visibly complete waveform.
-  const auto mode = pagesUntilFullRefresh < 0    ? HalDisplay::FULL_REFRESH
+  // Regular cadence cleanup remains a HALF refresh at 1. The X4 retains its
+  // prior clean HALF waveform; other panels use their full waveform.
+  const auto mode = pagesUntilFullRefresh < 0    ? manualScreenRefreshMode()
                     : pagesUntilFullRefresh <= 1 ? HalDisplay::HALF_REFRESH
                                                  : HalDisplay::FAST_REFRESH;
   if (async) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <CrossInkHalFrontlight.h>
 #include <HalClock.h>
 #include <HalGPIO.h>
 #include <HalTiltSensor.h>
@@ -20,6 +21,7 @@
 #include "util/Dictionary.h"
 #include "util/DictionaryRegistry.h"
 #include "util/FontFamilyLabel.h"
+#include "util/FrontlightSchedule.h"
 
 inline std::string fontSizePointLabel(const uint8_t pointSize) { return std::to_string(pointSize) + " pt"; }
 
@@ -548,7 +550,7 @@ inline SettingInfo buildHomeButtonActionSetting(const StrId nameId, uint8_t Cros
 inline const std::vector<SettingInfo>& getBaseSettingsList() {
   static const std::vector<SettingInfo> baseList = [] {
     std::vector<SettingInfo> v;
-    v.reserve(73);
+    v.reserve(77);
     auto add = [&v](SettingInfo setting) { v.push_back(std::move(setting)); };
 
     // --- Display ---
@@ -590,10 +592,18 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                           {StrId::STR_LIST_VIEW, StrId::STR_GRID_VIEW}, "recentBooksView", StrId::STR_CAT_DISPLAY));
     add(SettingInfo::Toggle(StrId::STR_SUNLIGHT_FADING_FIX, &CrossPointSettings::fadingFix, "fadingFix",
                             StrId::STR_CAT_DISPLAY));
-#if FREEINK_CAP_FRONTLIGHT && !FREEINK_DEVICE_X4PRO && !defined(SIMULATOR_DEVICE_X4_PRO)
     add(SettingInfo::Toggle(StrId::STR_RESTORE_LIGHT_ON_WAKE, &CrossPointSettings::frontlightRestoreOnWake,
                             "frontlightRestoreOnWake", StrId::STR_CAT_DISPLAY));
-#endif
+    // Kept in the shared catalog for persistence and the web API. On-device,
+    // these values are presented only by Display > Frontlight.
+    add(SettingInfo::Toggle(StrId::STR_FRONTLIGHT_SCHEDULE, &CrossPointSettings::frontlightScheduleEnabled,
+                            "frontlightScheduleEnabled", StrId::STR_CAT_DISPLAY));
+    add(SettingInfo::Value16(StrId::STR_START, &CrossPointSettings::frontlightScheduleStart,
+                             {0, FrontlightSchedule::kUnsetTimeOfDay, 1}, "frontlightScheduleStart",
+                             StrId::STR_CAT_DISPLAY));
+    add(SettingInfo::Value16(StrId::STR_END, &CrossPointSettings::frontlightScheduleEnd,
+                             {0, FrontlightSchedule::kUnsetTimeOfDay, 1}, "frontlightScheduleEnd",
+                             StrId::STR_CAT_DISPLAY));
 
     // --- Reader ---
     // Built-in font-family entry. Replaced per-call with a registry-aware
@@ -621,8 +631,15 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
             "orientation", StrId::STR_CAT_READER)
             .withEnumRawValues({CrossPointSettings::PORTRAIT, CrossPointSettings::LANDSCAPE_CW,
                                 CrossPointSettings::LANDSCAPE_CCW, CrossPointSettings::INVERTED}));
-    add(SettingInfo::Value(StrId::STR_SCREEN_MARGIN, &CrossPointSettings::screenMargin, {5, 40, 5}, "screenMargin",
-                           StrId::STR_CAT_READER));
+    add(SettingInfo::Submenu(StrId::STR_SCREEN_MARGIN, SettingAction::ScreenMargin));
+    add(SettingInfo::Value(StrId::STR_TOP_BOTTOM, &CrossPointSettings::screenMarginVertical,
+                           {CrossPointSettings::MIN_SCREEN_MARGIN, CrossPointSettings::MAX_SCREEN_MARGIN,
+                            CrossPointSettings::SCREEN_MARGIN_SMALL_STEP},
+                           "screenMarginVertical", StrId::STR_CAT_READER));
+    add(SettingInfo::Value(StrId::STR_LEFT_RIGHT, &CrossPointSettings::screenMarginHorizontal,
+                           {CrossPointSettings::MIN_SCREEN_MARGIN, CrossPointSettings::MAX_SCREEN_MARGIN,
+                            CrossPointSettings::SCREEN_MARGIN_SMALL_STEP},
+                           "screenMarginHorizontal", StrId::STR_CAT_READER));
     add(SettingInfo::Toggle(StrId::STR_PUBLISHER_PAGE_NUMBERS, &CrossPointSettings::publisherPageNumbers,
                             "publisherPageNumbers", StrId::STR_CAT_READER));
     add(SettingInfo::Enum(
@@ -657,6 +674,36 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                           StrId::STR_CAT_READER));
 
     // --- Controls ---
+    add(SettingInfo::Toggle(StrId::STR_PINCH_FONT_RESIZE, &CrossPointSettings::pinchFontResizeEnabled,
+                            "pinchFontResizeEnabled", StrId::STR_CAT_CONTROLS));
+    const std::vector<StrId> twoFingerSwipeActions = {
+        StrId::STR_NOT_SET,          StrId::STR_INCREASE_BRIGHTNESS, StrId::STR_DECREASE_BRIGHTNESS,
+        StrId::STR_INCREASE_WARMTH,  StrId::STR_DECREASE_WARMTH,     StrId::STR_NEXT_CHAPTER,
+        StrId::STR_PREVIOUS_CHAPTER, StrId::STR_INCREASE_FONT_SIZE,  StrId::STR_DECREASE_FONT_SIZE,
+    };
+    const std::vector<uint8_t> twoFingerSwipeActionValues = {
+        CrossPointSettings::TWO_FINGER_SWIPE_NOT_SET,
+        CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_BRIGHTNESS,
+        CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_BRIGHTNESS,
+        CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_WARMTH,
+        CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_WARMTH,
+        CrossPointSettings::TWO_FINGER_SWIPE_NEXT_CHAPTER,
+        CrossPointSettings::TWO_FINGER_SWIPE_PREVIOUS_CHAPTER,
+        CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_FONT_SIZE,
+        CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_FONT_SIZE,
+    };
+    add(SettingInfo::Enum(StrId::STR_TWO_FINGER_SWIPE_UP, &CrossPointSettings::twoFingerSwipeUp, twoFingerSwipeActions,
+                          "twoFingerSwipeUp", StrId::STR_CAT_CONTROLS)
+            .withEnumRawValues(twoFingerSwipeActionValues));
+    add(SettingInfo::Enum(StrId::STR_TWO_FINGER_SWIPE_DOWN, &CrossPointSettings::twoFingerSwipeDown,
+                          twoFingerSwipeActions, "twoFingerSwipeDown", StrId::STR_CAT_CONTROLS)
+            .withEnumRawValues(twoFingerSwipeActionValues));
+    add(SettingInfo::Enum(StrId::STR_TWO_FINGER_SWIPE_LEFT, &CrossPointSettings::twoFingerSwipeLeft,
+                          twoFingerSwipeActions, "twoFingerSwipeLeft", StrId::STR_CAT_CONTROLS)
+            .withEnumRawValues(twoFingerSwipeActionValues));
+    add(SettingInfo::Enum(StrId::STR_TWO_FINGER_SWIPE_RIGHT, &CrossPointSettings::twoFingerSwipeRight,
+                          twoFingerSwipeActions, "twoFingerSwipeRight", StrId::STR_CAT_CONTROLS)
+            .withEnumRawValues(twoFingerSwipeActionValues));
     add(SettingInfo::Enum(StrId::STR_SIDE_BTN_LAYOUT, &CrossPointSettings::sideButtonLayout,
                           {StrId::STR_DISABLED, StrId::STR_PREV_NEXT, StrId::STR_NEXT_PREV, StrId::STR_NEXT_NEXT},
                           "sideButtonLayout", StrId::STR_CAT_CONTROLS)
@@ -702,7 +749,7 @@ inline const std::vector<SettingInfo>& getBaseSettingsList() {
                              "longPressBackAction", ShortcutOptionCatalog::LongPress));
     add(SettingInfo::Toggle(StrId::STR_PWR_BTN_FOOTNOTE_BACK, &CrossPointSettings::pwrBtnFootnoteBack,
                             "pwrBtnFootnoteBack", StrId::STR_CAT_CONTROLS));
-    add(SettingInfo::Enum(StrId::STR_PAGE_TURN_GESTURE, &CrossPointSettings::pageTurnGesture,
+    add(SettingInfo::Enum(StrId::STR_PAGE_TURN, &CrossPointSettings::pageTurnGesture,
                           {StrId::STR_TAP_AND_SWIPE, StrId::STR_TAP_ONLY, StrId::STR_SWIPE_ONLY,
                            StrId::STR_INVERTED_TAP, StrId::STR_DISABLED},
                           "pageTurnGesture", StrId::STR_CAT_CONTROLS));
@@ -895,10 +942,40 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
     v.erase(std::remove_if(v.begin(), v.end(),
                            [](const SettingInfo& s) {
                              return s.nameId == StrId::STR_TOUCH_READER_CONTROLS ||
-                                    s.nameId == StrId::STR_DISABLE_TOUCHSCREEN ||
-                                    s.nameId == StrId::STR_PAGE_TURN_GESTURE;
+                                    s.nameId == StrId::STR_DISABLE_TOUCHSCREEN || s.nameId == StrId::STR_PAGE_TURN ||
+                                    s.nameId == StrId::STR_PINCH_FONT_RESIZE ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_UP ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_DOWN ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_LEFT ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_RIGHT;
                            }),
             v.end());
+  }
+  if (!gpio.supportsMultiTouch()) {
+    v.erase(std::remove_if(v.begin(), v.end(),
+                           [](const SettingInfo& s) {
+                             return s.nameId == StrId::STR_PINCH_FONT_RESIZE ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_UP ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_DOWN ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_LEFT ||
+                                    s.nameId == StrId::STR_TWO_FINGER_SWIPE_RIGHT;
+                           }),
+            v.end());
+  }
+  for (auto& setting : v) {
+    const bool isTwoFingerSwipe =
+        setting.nameId == StrId::STR_TWO_FINGER_SWIPE_UP || setting.nameId == StrId::STR_TWO_FINGER_SWIPE_DOWN ||
+        setting.nameId == StrId::STR_TWO_FINGER_SWIPE_LEFT || setting.nameId == StrId::STR_TWO_FINGER_SWIPE_RIGHT;
+    if (!isTwoFingerSwipe) continue;
+    if (!Frontlight.present()) {
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_BRIGHTNESS);
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_BRIGHTNESS);
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_WARMTH);
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_WARMTH);
+    } else if (!Frontlight.hasColorTemperature()) {
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_WARMTH);
+      removeEnumRawValue(setting, CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_WARMTH);
+    }
   }
   if (hasTouch) {
     v.erase(std::remove_if(v.begin(), v.end(),
@@ -1078,6 +1155,14 @@ inline std::vector<SettingInfo> buildReaderPageLayoutSettingsList(const std::vec
   return settings;
 }
 
+inline std::vector<SettingInfo> buildReaderScreenMarginSettingsList(const std::vector<SettingInfo>& allSettings) {
+  std::vector<SettingInfo> settings;
+  settings.reserve(2);
+  addSettingByName(settings, allSettings, StrId::STR_TOP_BOTTOM);
+  addSettingByName(settings, allSettings, StrId::STR_LEFT_RIGHT);
+  return settings;
+}
+
 inline void addSettingByKey(std::vector<SettingInfo>& target, const std::vector<SettingInfo>& allSettings,
                             const char* key) {
   const auto it = std::find_if(allSettings.begin(), allSettings.end(),
@@ -1095,13 +1180,13 @@ inline bool hasSettingByName(const std::vector<SettingInfo>& allSettings, StrId 
 inline std::vector<SettingInfo> buildControlsSettingsParentList(const std::vector<SettingInfo>& allSettings) {
   const bool hasTiltPageTurnSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN);
   const bool hasTiltPageTurnDirectionSetting = hasSettingByName(allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
-  const bool hasPageTurnGestureSetting = hasSettingByName(allSettings, StrId::STR_PAGE_TURN_GESTURE);
+  const bool hasTapsGestures = hasSettingByName(allSettings, StrId::STR_PAGE_TURN);
   const bool hasFrontButtons = !gpio.hasTouch();
   const bool hasHomeKey = gpio.hasHomeKey();
 
   std::vector<SettingInfo> settings;
   settings.reserve(3 + (hasHomeKey ? 1u : 0u) + (hasFrontButtons ? 1u : 0u) + (hasTiltPageTurnSetting ? 1u : 0u) +
-                   (hasTiltPageTurnDirectionSetting ? 1u : 0u) + (hasPageTurnGestureSetting ? 1u : 0u));
+                   (hasTiltPageTurnDirectionSetting ? 1u : 0u) + (hasTapsGestures ? 1u : 0u));
   if (hasHomeKey) {
     settings.push_back(SettingInfo::Submenu(StrId::STR_HOME_BUTTON, SettingAction::ControlsHomeButton));
   }
@@ -1111,9 +1196,34 @@ inline std::vector<SettingInfo> buildControlsSettingsParentList(const std::vecto
   }
   settings.push_back(SettingInfo::Submenu(StrId::STR_SIDE_BUTTONS, SettingAction::ControlsSideButtons));
   settings.push_back(SettingInfo::Action(StrId::STR_QUICK_ACTIONS, SettingAction::QuickActions));
+  if (hasTapsGestures) {
+    settings.push_back(SettingInfo::Submenu(StrId::STR_TAPS_AND_GESTURES, SettingAction::ControlsTapsGestures));
+  }
   if (hasTiltPageTurnSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN);
   if (hasTiltPageTurnDirectionSetting) addSettingByName(settings, allSettings, StrId::STR_TILT_PAGE_TURN_DIRECTION);
-  if (hasPageTurnGestureSetting) addSettingByName(settings, allSettings, StrId::STR_PAGE_TURN_GESTURE);
+  return settings;
+}
+
+inline std::vector<SettingInfo> buildControlsTapsGesturesSettingsList(const std::vector<SettingInfo>& allSettings) {
+  std::vector<SettingInfo> settings;
+  const bool hasPinch = hasSettingByName(allSettings, StrId::STR_PINCH_FONT_RESIZE);
+  const bool hasTwoFingerSwipe = hasSettingByName(allSettings, StrId::STR_TWO_FINGER_SWIPE_UP);
+  settings.reserve(1 + (hasPinch ? 1u : 0u) + (hasTwoFingerSwipe ? 1u : 0u));
+  addSettingByName(settings, allSettings, StrId::STR_PAGE_TURN);
+  if (hasPinch) addSettingByName(settings, allSettings, StrId::STR_PINCH_FONT_RESIZE);
+  if (hasTwoFingerSwipe) {
+    settings.push_back(SettingInfo::Submenu(StrId::STR_TWO_FINGER_SWIPE, SettingAction::ControlsTwoFingerSwipe));
+  }
+  return settings;
+}
+
+inline std::vector<SettingInfo> buildControlsTwoFingerSwipeSettingsList(const std::vector<SettingInfo>& allSettings) {
+  std::vector<SettingInfo> settings;
+  settings.reserve(4);
+  addSettingByName(settings, allSettings, StrId::STR_TWO_FINGER_SWIPE_UP);
+  addSettingByName(settings, allSettings, StrId::STR_TWO_FINGER_SWIPE_DOWN);
+  addSettingByName(settings, allSettings, StrId::STR_TWO_FINGER_SWIPE_LEFT);
+  addSettingByName(settings, allSettings, StrId::STR_TWO_FINGER_SWIPE_RIGHT);
   return settings;
 }
 
@@ -1166,7 +1276,7 @@ inline std::vector<SettingInfo> buildControlsSideButtonSettingsList(const std::v
 
 inline std::vector<SettingInfo> buildGroupedDisplaySettingsList(const std::vector<SettingInfo>& allSettings) {
   std::vector<SettingInfo> displaySettings;
-  displaySettings.reserve(8);
+  displaySettings.reserve(9);
 
   auto addDisplaySetting = [&](StrId nameId) {
     const auto it = std::find_if(allSettings.begin(), allSettings.end(),
@@ -1177,6 +1287,9 @@ inline std::vector<SettingInfo> buildGroupedDisplaySettingsList(const std::vecto
   };
 
   displaySettings.push_back(SettingInfo::Submenu(StrId::STR_DISPLAY_SLEEP_SCREEN, SettingAction::DisplaySleepScreen));
+  if (Frontlight.present()) {
+    displaySettings.push_back(SettingInfo::Submenu(StrId::STR_FRONTLIGHT, SettingAction::DisplayFrontlight));
+  }
   addDisplaySetting(StrId::STR_HIDE_BATTERY);
   if (halClock.isAvailable()) {
     addDisplaySetting(StrId::STR_HIDE_CLOCK);
@@ -1188,6 +1301,25 @@ inline std::vector<SettingInfo> buildGroupedDisplaySettingsList(const std::vecto
   addDisplaySetting(StrId::STR_SUNLIGHT_FADING_FIX);
 
   return displaySettings;
+}
+
+inline std::vector<SettingInfo> buildDisplayFrontlightSettingsList(const std::vector<SettingInfo>& allSettings) {
+  std::vector<SettingInfo> settings;
+  settings.reserve(4);
+
+  auto addDisplaySetting = [&](const StrId nameId) {
+    const auto it = std::find_if(allSettings.begin(), allSettings.end(),
+                                 [nameId](const auto& setting) { return setting.nameId == nameId; });
+    if (it != allSettings.end()) settings.push_back(*it);
+  };
+
+  addDisplaySetting(StrId::STR_RESTORE_LIGHT_ON_WAKE);
+  if (halClock.isAvailable()) {
+    addDisplaySetting(StrId::STR_FRONTLIGHT_SCHEDULE);
+    addDisplaySetting(StrId::STR_START);
+    addDisplaySetting(StrId::STR_END);
+  }
+  return settings;
 }
 
 inline std::vector<SettingInfo> buildDisplaySleepSettingsList(const std::vector<SettingInfo>& allSettings) {

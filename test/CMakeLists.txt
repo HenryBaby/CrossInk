@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
 project(crosspoint_reader_tests C CXX)
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -53,3 +55,9 @@ add_subdirectory(reader_progress_save_debouncer)
 add_subdirectory(page_count_estimator)
 add_subdirectory(compact_table_layout)
 add_subdirectory(quick_lock)
+add_subdirectory(frontlight_schedule)
+add_subdirectory(pinch_font_resize)
+add_subdirectory(reader_status_bar_tap_target)
+add_subdirectory(two_finger_swipe)
+add_subdirectory(option_popup)
+add_subdirectory(release_notes)

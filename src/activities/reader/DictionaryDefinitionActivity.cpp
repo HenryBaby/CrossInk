@@ -485,7 +485,8 @@ int DictionaryDefinitionActivity::dictionaryFooterHeight() const {
   const auto metrics = UITheme::getInstance().getMetrics();
   const int dictionaryNameHeight = renderer.getLineHeight(UI_10_FONT_ID) + metrics.optionPopupTitleGap;
 #if CROSSINK_APP_CAP_TOUCH
-  return dictionaryNameHeight + (showTouchDictionarySwitch() ? kDictionarySwitchTouchHeight : 0);
+  return dictionaryNameHeight +
+         (showTouchDictionarySwitch() ? kDictionarySwitchTouchHeight * (hasClippingRequest_ ? 2 : 1) : 0);
 #else
   return dictionaryNameHeight;
 #endif
@@ -493,8 +494,14 @@ int DictionaryDefinitionActivity::dictionaryFooterHeight() const {
 
 #if CROSSINK_APP_CAP_TOUCH
 bool DictionaryDefinitionActivity::dictionarySwitchButtonContains(const int x, const int y) const {
-  const int buttonY = modalY_ + modalHeight_ - kDictionarySwitchTouchHeight;
+  const int buttonY = modalY_ + modalHeight_ - kDictionarySwitchTouchHeight * (hasClippingRequest_ ? 2 : 1);
   return x >= modalX_ && x < modalX_ + modalWidth_ && y >= buttonY && y < buttonY + kDictionarySwitchTouchHeight;
+}
+
+bool DictionaryDefinitionActivity::dictionaryCreateClippingButtonContains(const int x, const int y) const {
+  const int buttonY = modalY_ + modalHeight_ - kDictionarySwitchTouchHeight;
+  return hasClippingRequest_ && x >= modalX_ && x < modalX_ + modalWidth_ && y >= buttonY &&
+         y < buttonY + kDictionarySwitchTouchHeight;
 }
 
 bool DictionaryDefinitionActivity::modalContains(const int x, const int y) const {
@@ -549,7 +556,7 @@ void DictionaryDefinitionActivity::wrapText() {
     rightPadding = renderer.getScreenWidth() - (modalX_ + modalWidth_ - innerPadding);
     bodyStartY = modalY_ + innerPadding + renderer.getLineHeight(getDefinitionFontId()) + metrics.optionPopupTitleGap;
   } else {
-    const int sidePadding = metrics.contentSidePadding + SETTINGS.screenMargin;
+    const int sidePadding = metrics.contentSidePadding + SETTINGS.screenMarginHorizontal;
     leftPadding = contentX + sidePadding;
     rightPadding = (isLandscapeCcw ? hintGutterWidth : 0) + sidePadding;
     bodyStartY = hintGutterHeight + metrics.topPadding + metrics.headerHeight + metrics.verticalSpacing;
@@ -1204,7 +1211,7 @@ void DictionaryDefinitionActivity::loop() {
       }
 
       touchDragLookup_ = false;
-      controller.lookupOrPopup(navigator.finishTouchMultiSelect());
+      controller.lookupOrPopup(navigator.finishTouchMultiSelect(), navigator.getLookupSelectionWordCount());
       return;
     }
 
@@ -1243,6 +1250,12 @@ void DictionaryDefinitionActivity::loop() {
 #if CROSSINK_APP_CAP_TOUCH
   int touchX = 0;
   int touchY = 0;
+  if (showTouchDictionarySwitch() && hasClippingRequest_ && mappedInput.wasScreenTapped(touchX, touchY) &&
+      dictionaryCreateClippingButtonContains(touchX, touchY)) {
+    setResult(ActivityResult{clippingRequest_});
+    finish();
+    return;
+  }
   if (showTouchDictionarySwitch() && mappedInput.wasScreenTapped(touchX, touchY) &&
       dictionarySwitchButtonContains(touchX, touchY)) {
     openDictionarySwitch();
@@ -1550,7 +1563,8 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
     const int innerPadding = metrics.optionPopupInnerPadding;
     const int footerLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
 #if CROSSINK_APP_CAP_TOUCH
-    const int switchButtonHeight = showTouchDictionarySwitch() ? kDictionarySwitchTouchHeight : 0;
+    const int switchButtonHeight =
+        showTouchDictionarySwitch() ? kDictionarySwitchTouchHeight * (hasClippingRequest_ ? 2 : 1) : 0;
 #else
     constexpr int switchButtonHeight = 0;
 #endif
@@ -1566,14 +1580,26 @@ void DictionaryDefinitionActivity::render(RenderLock&&) {
 
 #if CROSSINK_APP_CAP_TOUCH
   if (!isWordSelectMode && showTouchDictionarySwitch()) {
-    const Rect buttonRect{modalX_, modalY_ + modalHeight_ - kDictionarySwitchTouchHeight, modalWidth_,
-                          kDictionarySwitchTouchHeight};
+    const Rect buttonRect{modalX_,
+                          modalY_ + modalHeight_ - kDictionarySwitchTouchHeight * (hasClippingRequest_ ? 2 : 1),
+                          modalWidth_, kDictionarySwitchTouchHeight};
     renderer.drawLine(buttonRect.x, buttonRect.y, buttonRect.x + buttonRect.width, buttonRect.y, true);
     const char* label = tr(STR_SWITCH_DICTIONARY);
     const int labelX =
         buttonRect.x + (buttonRect.width - renderer.getTextWidth(UI_10_FONT_ID, label, EpdFontFamily::BOLD)) / 2;
     const int labelY = buttonRect.y + (buttonRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
     renderer.drawText(UI_10_FONT_ID, labelX, labelY, label, true, EpdFontFamily::BOLD);
+    if (hasClippingRequest_) {
+      const Rect clippingRect{modalX_, modalY_ + modalHeight_ - kDictionarySwitchTouchHeight, modalWidth_,
+                              kDictionarySwitchTouchHeight};
+      renderer.drawLine(clippingRect.x, clippingRect.y, clippingRect.x + clippingRect.width, clippingRect.y, true);
+      const char* clippingLabel = tr(STR_SAVE_CLIPPING);
+      const int clippingLabelX =
+          clippingRect.x +
+          (clippingRect.width - renderer.getTextWidth(UI_10_FONT_ID, clippingLabel, EpdFontFamily::BOLD)) / 2;
+      const int clippingLabelY = clippingRect.y + (clippingRect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2;
+      renderer.drawText(UI_10_FONT_ID, clippingLabelX, clippingLabelY, clippingLabel, true, EpdFontFamily::BOLD);
+    }
   }
 #endif
 

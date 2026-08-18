@@ -137,6 +137,7 @@ void XtcReaderActivity::onEnter() {
 }
 
 void XtcReaderActivity::onExit() {
+  mappedInput.setReaderTouchscreenOverride(false);
   Activity::onExit();
 
   mappedInput.setReaderMode(false);
@@ -194,6 +195,18 @@ void XtcReaderActivity::loop() {
   if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
 
   const auto touch = ReaderUtils::detectTouchPageTurn(renderer, mappedInput);
+  const int statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+  const auto statusBarMode = static_cast<CrossPointSettings::XTC_STATUS_BAR_MODE>(SETTINGS.xtcStatusBarMode);
+  const bool tappedStatusBar =
+      touch.tapped && ((statusBarMode == CrossPointSettings::XTC_STATUS_BAR_MODE::XTC_STATUS_BAR_TOP &&
+                        ReaderUtils::isTopStatusBarTap(renderer, touch.y, statusBarHeight)) ||
+                       (statusBarMode == CrossPointSettings::XTC_STATUS_BAR_MODE::XTC_STATUS_BAR_BOTTOM &&
+                        ReaderUtils::isBottomStatusBarTap(renderer, touch.y, statusBarHeight)));
+  if (tappedStatusBar) {
+    statusBarVisible = !statusBarVisible;
+    requestUpdate();
+    return;
+  }
 
   // Paged back into the book: release the end screen app and its theme tokens.
   {
@@ -476,6 +489,13 @@ void XtcReaderActivity::loop() {
   } else if (needsUpdate) {
     requestUpdate();
   }
+}
+
+bool XtcReaderActivity::handleTwoFingerSwipeAction(const CrossPointSettings::TWO_FINGER_SWIPE_ACTION) {
+  // XTC pages are pre-rendered images: they cannot be reflowed for font-size
+  // changes, and the reader does not expose stable chapter jumps. Consume the
+  // configured command without letting it turn into a regular page swipe.
+  return true;
 }
 
 void XtcReaderActivity::toggleHomeButtonInReader() {
@@ -936,8 +956,16 @@ bool XtcReaderActivity::executeLongPressBackAction() {
 bool XtcReaderActivity::handleShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
   if (action == CrossPointSettings::SHORT_PWRBTN::QUICK_ACTIONS) {
     QuickActions::showConfiguredPopup(
-        quickActionsPopup, [this] { requestUpdate(); }, {},
+        quickActionsPopup, [this] { requestUpdate(); },
+        [this](const auto quickAction) {
+          mappedInput.setReaderTouchscreenOverride(false);
+          dispatchShortcutAction(quickAction);
+        },
         [](const auto quickAction) { return supportsQuickAction(quickAction); });
+    if (quickActionsPopup.isActive()) {
+      mappedInput.setReaderTouchscreenOverride(true);
+      quickActionsPopup.setCancelCallback([this] { mappedInput.setReaderTouchscreenOverride(false); });
+    }
     return true;
   }
   return executeReaderShortcutAction(action);
@@ -1038,6 +1066,12 @@ void XtcReaderActivity::renderStatusBarOverlay(const StatusBarOverlayPosition po
     renderer.fillRect(0, clearY, renderer.getScreenWidth(), clearHeight, false);
   }
 
+  // XTC pages already contain a status strip in their bitmap. Clear that same
+  // overlay area before returning so hiding it does not leave stale pixels.
+  if (!statusBarVisible) {
+    return;
+  }
+
   const int pageCount = static_cast<int>(xtc->getPageCount());
   const int displayPage = static_cast<int>(pageToRender) + 1;
   const float progress = pageCount > 0 ? (static_cast<float>(displayPage) * 100.0f) / pageCount : 0.0f;
@@ -1062,6 +1096,16 @@ void XtcReaderActivity::renderPage(const uint32_t pageToRender) {
       renderer.drawCenteredText(UI_12_FONT_ID, 300, message, true, EpdFontFamily::BOLD);
       renderer.displayBuffer();
     };
+    const auto clearHiddenStatusBar = [this, pageToRender] {
+      if (statusBarVisible) {
+        return;
+      }
+      if (SETTINGS.xtcStatusBarMode == CrossPointSettings::XTC_STATUS_BAR_MODE::XTC_STATUS_BAR_TOP) {
+        renderStatusBarOverlay(StatusBarOverlayPosition::Top, pageToRender);
+      } else {
+        renderStatusBarOverlay(StatusBarOverlayPosition::Bottom, pageToRender);
+      }
+    };
 
     // XTCH stores two 48 KB planes. Stream each rendering pass through a 1 KB
     // scratch chunk so fragmented C3 heaps never need one contiguous 96 KB block.
@@ -1070,9 +1114,10 @@ void XtcReaderActivity::renderPage(const uint32_t pageToRender) {
       showStreamError();
       return;
     }
+    clearHiddenStatusBar();
 
     if (pagesUntilFullRefresh <= 1) {
-      renderer.displayBuffer(pagesUntilFullRefresh < 0 ? HalDisplay::FULL_REFRESH : HalDisplay::HALF_REFRESH);
+      renderer.displayBuffer(pagesUntilFullRefresh < 0 ? manualScreenRefreshMode() : HalDisplay::HALF_REFRESH);
       renderer.preconditionGrayscale();
       pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
     } else {
@@ -1085,6 +1130,7 @@ void XtcReaderActivity::renderPage(const uint32_t pageToRender) {
       showStreamError();
       return;
     }
+    clearHiddenStatusBar();
     renderer.copyGrayscaleLsbBuffers();
 
     renderer.clearScreen(0x00);
@@ -1092,6 +1138,7 @@ void XtcReaderActivity::renderPage(const uint32_t pageToRender) {
       showStreamError();
       return;
     }
+    clearHiddenStatusBar();
     renderer.copyGrayscaleMsbBuffers();
     renderer.displayGrayBuffer();
 
@@ -1100,6 +1147,7 @@ void XtcReaderActivity::renderPage(const uint32_t pageToRender) {
       showStreamError();
       return;
     }
+    clearHiddenStatusBar();
     renderer.cleanupGrayscaleWithFrameBuffer();
     return;
   }

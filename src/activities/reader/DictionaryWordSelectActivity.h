@@ -38,7 +38,7 @@ class DictionaryWordSelectActivity final : public Activity {
         // DictionaryLookupController borrows this activity-owned path.  Qualify
         // the member so it cannot instead bind to the constructor parameter,
         // which is destroyed as soon as construction completes.
-        controller(renderer, mappedInput, *this, this->cachePath),
+        controller(renderer, mappedInput, *this, this->cachePath, true),
         framebufferContainsPage_(framebufferContainsPage),
         reservedBottomHeight_(reservedBottomHeight),
         initialTouchX_(initialTouchX),
@@ -138,6 +138,8 @@ class DictionaryWordSelectActivity final : public Activity {
   ReaderPageReloadFn readerPageReload_ = nullptr;
   bool workingSetSuspended_ = false;
   bool workingSetMemoryError_ = false;
+  DictionaryClippingRequest pendingClippingRequest_{};
+  bool hasPendingClippingRequest_ = false;
   int suspendedSelectionX_ = -1;
   int suspendedSelectionY_ = -1;
 
@@ -177,6 +179,8 @@ class DictionaryWordSelectActivity final : public Activity {
   bool allocateWorkingSet();
   bool extractWords();
   bool mergeHyphenatedWords();
+  bool captureClippingRequest();
+  void finishWithClippingRequest();
   bool appendText(const char* text, size_t length, uint16_t& offset);
   bool appendMergedText(const char* first, size_t firstLength, const char* second, size_t secondLength,
                         uint16_t& offset);

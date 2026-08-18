@@ -22,6 +22,7 @@ SECTION_TITLE_MAP = {
 }
 
 DOWNSTREAM_SECTION_TITLE = 'Changes maintained by this downstream fork'
+NON_PUBLISHED_SECTION_TITLES = {'Internal'}
 
 def normalize_version(version):
     version = version.strip()
@@ -54,6 +55,27 @@ def normalize_section_titles(section):
             line = f'## {SECTION_TITLE_MAP.get(title, title)}'
         lines.append(line)
     return '\n'.join(lines).strip()
+
+def remove_non_published_sections(section):
+    """Remove explicitly internal headings before publishing release notes."""
+    lines = section.splitlines()
+    kept = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        heading = re.match(r'^(#{2,6})\s+(.+?)\s*$', line)
+        if heading and heading.group(2) in NON_PUBLISHED_SECTION_TITLES:
+            level = len(heading.group(1))
+            index += 1
+            while index < len(lines):
+                next_heading = re.match(r'^(#{1,6})\s+', lines[index])
+                if next_heading and len(next_heading.group(1)) <= level:
+                    break
+                index += 1
+            continue
+        kept.append(line)
+        index += 1
+    return '\n'.join(kept).strip()
 
 
 def extract_markdown_section(markdown, title):
@@ -98,7 +120,7 @@ def default_intro():
     now, timezone_name = crossink_local_time()
     time_text = now.strftime('%I:%M%p').lower()
     date_text = f"{now.strftime('%B')} {now.day}, {now.year}"
-    return f'This release is up to date with the master branch of CrossInk as of {time_text} {timezone_name} {date_text}.'
+    return f'This release is up to date with the main branch of CrossInk as of {time_text} {timezone_name} {date_text}.'
 
 
 def parse_args():
@@ -115,7 +137,8 @@ def main():
     args = parse_args()
     version = normalize_version(args.version)
     changelog = args.changelog.read_text(encoding='utf-8')
-    section = normalize_section_titles(extract_version_section(changelog, version))
+    section = remove_non_published_sections(extract_version_section(changelog, version))
+    section = normalize_section_titles(section)
     section = remove_markdown_section(section, DOWNSTREAM_SECTION_TITLE)
     downstream_section = extract_markdown_section(args.readme.read_text(encoding='utf-8'), DOWNSTREAM_SECTION_TITLE)
     intro = args.intro.strip() if args.intro else default_intro()

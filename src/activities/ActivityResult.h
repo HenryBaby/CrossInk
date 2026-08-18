@@ -109,6 +109,16 @@ struct ClippingResult {
   uint16_t wordCount = 0;
 };
 
+// A dictionary lookup retains the selected page-word range and exact byte
+// boundaries within its outer words. The reader resolves it through its
+// canonical ClipWordStore before creating a clipping.
+struct DictionaryClippingRequest {
+  uint16_t firstPageWordOrdinal = 0;
+  uint16_t lastPageWordOrdinal = 0;
+  uint16_t firstWordByteOffset = 0;
+  uint16_t lastWordByteEndOffset = 0;
+};
+
 struct ClippingJumpResult {
   uint16_t spineIndex = 0;
   uint16_t page = 0;
@@ -119,10 +129,11 @@ struct ClippingJumpResult {
   bool settingsChanged = false;
 };
 
-using ResultVariant = std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult,
-                                   IntervalResult, OptionSelectionResult, PageResult, ProgressChangeResult, SyncResult,
-                                   NetworkModeResult, FootnoteResult, BookmarkResult, FileBrowserActionResult,
-                                   FilePathResult, WordResult, ReadingStatsResult, ClippingResult, ClippingJumpResult>;
+using ResultVariant =
+    std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, IntervalResult,
+                 OptionSelectionResult, PageResult, ProgressChangeResult, SyncResult, NetworkModeResult, FootnoteResult,
+                 BookmarkResult, FileBrowserActionResult, FilePathResult, WordResult, ReadingStatsResult,
+                 ClippingResult, DictionaryClippingRequest, ClippingJumpResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

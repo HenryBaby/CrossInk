@@ -3,12 +3,12 @@ PlatformIO pre-build script: inject git info into version defines.
 
   default:       1.1.0-dev+<branch>  (local development builds)
   production:    1.1.0               (when $CROSSINK_RELEASE_VERSION is set)
-  default RC:    1.1.0-rc+<hash>       (when $CROSSINK_RC_HASH is set)
+  RC:            1.1.0-<hash>-RC      (when $CROSSINK_RC_HASH is set)
   test & debug:          1.2.6-<branch>+<5-char-hash>
-  gh_release_rc: 1.1.0-rc+<hash>       (hash from $CROSSINK_RC_HASH in CI,
+  gh_release_rc: 1.1.0-<hash>-RC       (hash from $CROSSINK_RC_HASH in CI,
                                         or from git locally)
 
-All other environments set CROSSINK_VERSION directly in platformio.ini.
+Simulator environments set CROSSINK_VERSION directly in platformio.ini.
 """
 
 import configparser
@@ -117,7 +117,8 @@ def get_crossink_version(project_dir):
 
 def get_release_candidate_version(project_dir):
     short_hash = os.environ.get('CROSSINK_RC_HASH') or get_git_short_hash(project_dir)
-    return f'{get_crossink_version(project_dir)}-rc+{sanitize_version_component(short_hash)}'
+    base_version = re.sub(r'-RC$', '', get_crossink_version(project_dir), flags=re.IGNORECASE)
+    return f'{base_version}-{sanitize_version_component(short_hash)}-RC'
 
 
 def get_production_version(project_dir):
@@ -127,21 +128,37 @@ def get_production_version(project_dir):
     return get_crossink_version(project_dir)
 
 
+def get_hardware_version(project_dir, pioenv):
+    if os.environ.get('CROSSINK_RC_HASH'):
+        return get_release_candidate_version(project_dir)
+
+    if pioenv == 'default':
+        if os.environ.get('CROSSINK_RELEASE_VERSION'):
+            return get_production_version(project_dir)
+        base_version = get_crossink_version(project_dir)
+        branch = get_git_branch(project_dir)
+        return f'{base_version}-dev+{branch}'
+
+    base_version = (
+        get_production_version(project_dir)
+        if os.environ.get('CROSSINK_RELEASE_VERSION')
+        else get_crossink_version(project_dir)
+    )
+    device_suffix = {'sticky': '-sticky', 'x4-pro': '-x4-pro'}[pioenv]
+    return f'{base_version}{device_suffix}'
+
+
 def inject_version(env):
     project_dir = env['PROJECT_DIR']
     pioenv = env['PIOENV']
 
-    if pioenv == 'default':
+    if pioenv in {'default', 'sticky', 'x4-pro'}:
+        version_string = get_hardware_version(project_dir, pioenv)
         if os.environ.get('CROSSINK_RC_HASH'):
-            version_string = get_release_candidate_version(project_dir)
             print(f'CrossInk RC build version: {version_string}')
         elif os.environ.get('CROSSINK_RELEASE_VERSION'):
-            version_string = get_production_version(project_dir)
             print(f'CrossInk production build version: {version_string}')
         else:
-            base_version = get_crossink_version(project_dir)
-            branch = get_git_branch(project_dir)
-            version_string = f'{base_version}-dev+{branch}'
             print(f'CrossInk build version: {version_string}')
         env.Append(CPPDEFINES=[('CROSSINK_VERSION', f'\\"{version_string}\\"')])
 
