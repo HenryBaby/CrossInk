@@ -2,6 +2,8 @@
 
 #include <I18n.h>
 
+#include <cstddef>
+
 #include "MappedInputManager.h"
 #include "activities/Activity.h"
 #include "util/ButtonNavigator.h"
@@ -10,6 +12,8 @@ class GfxRenderer;
 
 class IntervalSelectionActivity final : public Activity {
  public:
+  using ValueFormatter = void (*)(int value, char* buf, size_t len);
+
   explicit IntervalSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, const char* activityName,
                                      StrId titleId, int initialValue, int minValue, int maxValue, int smallStep,
                                      int largeStep, StrId valueFormatId = StrId::STR_NONE_OPT,
@@ -17,7 +21,7 @@ class IntervalSelectionActivity final : public Activity {
                                      bool ignoreInitialConfirmRelease = false, bool showPercentValue = false,
                                      StrId maxBoundaryLabelId = StrId::STR_NONE_OPT,
                                      bool overrideDisabledReaderTouchscreen = false,
-                                     bool showTouchHeaderBackButton = false)
+                                     bool showTouchHeaderBackButton = false, ValueFormatter valueFormatter = nullptr)
       : Activity(activityName, renderer, mappedInput),
         titleId(titleId),
         valueFormatId(valueFormatId),
@@ -32,7 +36,8 @@ class IntervalSelectionActivity final : public Activity {
         ignoreConfirmRelease(ignoreInitialConfirmRelease),
         showPercentValue(showPercentValue),
         overrideDisabledReaderTouchscreen(overrideDisabledReaderTouchscreen),
-        showTouchHeaderBackButton(showTouchHeaderBackButton) {}
+        showTouchHeaderBackButton(showTouchHeaderBackButton),
+        valueFormatter(valueFormatter) {}
 
   void onEnter() override;
   void onExit() override;
@@ -56,6 +61,7 @@ class IntervalSelectionActivity final : public Activity {
   bool showPercentValue;
   bool overrideDisabledReaderTouchscreen;
   bool showTouchHeaderBackButton;
+  ValueFormatter valueFormatter;
   bool draggingBar = false;
   ButtonNavigator buttonNavigator;
 

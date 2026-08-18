@@ -8,6 +8,8 @@
 #include <XteinkDetect.h>
 #include <esp_sleep.h>
 
+#include <algorithm>
+
 #if FREEINK_MCU_S3
 #include <soc/usb_serial_jtag_reg.h>
 #endif
@@ -201,6 +203,38 @@ unsigned long HalGPIO::getPowerButtonHeldTime() const { return inputMgr.getPower
 
 #if CROSSINK_APP_CAP_TOUCH
 bool HalGPIO::hasTouch() const { return inputMgr.hasTouch(); }
+
+bool HalGPIO::supportsMultiTouch() const { return inputMgr.supportsMultiTouch(); }
+
+HalGPIO::TouchSnapshot HalGPIO::getTouchSnapshot() const {
+  TouchSnapshot result;
+  if (!supportsMultiTouch()) return result;
+
+  const auto source = inputMgr.getTouchSnapshot();
+  const auto& touch = BoardConfig::ACTIVE.touch;
+  const uint16_t width = touch.rawMaxX > touch.rawMinX ? touch.rawMaxX - touch.rawMinX : 1;
+  const uint16_t height = touch.rawMaxY > touch.rawMinY ? touch.rawMaxY - touch.rawMinY : 1;
+  result.count = std::min<uint8_t>(source.count, TouchSnapshot::MAX_CONTACTS);
+  result.reportedCount = source.reportedCount;
+  for (uint8_t i = 0; i < result.count; ++i) {
+    const auto& point = source.points[i];
+    result.contacts[i].id = point.id;
+    result.contacts[i].nx = std::clamp(static_cast<float>(point.point.x) / width, 0.0f, 1.0f);
+    result.contacts[i].ny = std::clamp(static_cast<float>(point.point.y) / height, 0.0f, 1.0f);
+  }
+  return result;
+}
+
+bool HalGPIO::wasCompletedMultiTouchSwipe(CompletedMultiTouchSwipe& swipe) const {
+  if (!supportsMultiTouch()) return false;
+  return inputMgr.wasMultiTouchSwipe(swipe.contactCount, swipe.nxStart, swipe.nyStart, swipe.nxEnd, swipe.nyEnd,
+                                     swipe.durationMs);
+}
+
+bool HalGPIO::wasCompletedMultiTouchRotation(CompletedMultiTouchRotation& rotation) const {
+  if (!supportsMultiTouch()) return false;
+  return inputMgr.wasMultiTouchRotation(rotation.degrees, rotation.nxCenter, rotation.nyCenter, rotation.durationMs);
+}
 
 bool HalGPIO::hasHomeKey() const { return BoardConfig::hasHomeKey(); }
 

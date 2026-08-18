@@ -32,16 +32,48 @@ Note: Even though some actions assigned to the front buttons could be used globa
 - Orientation aware
 - Long-press action
 
+### Taps & Gestures
+
+- Page Turn Gesture
+- Pinch to Resize Font (on supported multi-touch devices)
+- Two-finger Swipe (on supported multi-touch devices)
+
 ### Page Turn Gesture
 
-On touchscreen devices, **Page Turn Gesture** is the last option in
-**Settings > Controls**. It changes page-turn gestures while reading.
+On touchscreen devices, **Page Turn Gesture** is in
+**Settings > Controls > Taps & Gestures**. It changes page-turn gestures while
+reading.
 
 - **Tap & Swipe** (default): Tap the left third to go back and the rest of the screen to go forward, or swipe right and left.
 - **Tap Only**: Use the normal tap zones; horizontal swipes do not turn pages or go Back/Home.
 - **Swipe Only**: Swipe right or left; taps do not turn pages.
 - **Inverted Tap**: Tap the left two-thirds to go forward and the right third to go back.
 - **Disabled**: Do not turn pages with taps or horizontal swipes.
+
+## Two-finger Swipe Actions
+
+On touchscreen devices with multi-touch support, open **Settings > Controls >
+Taps & Gestures > Two-finger Swipe** to assign actions to the four swipe
+directions. During reading, place two fingers on the page and move them
+together in the configured direction. Use **Not Set** to leave a direction
+unassigned.
+
+Each action can be assigned to only one direction. If you assign an action to a
+new direction, CrossInk clears its previous direction automatically.
+
+Available actions depend on the device and reader:
+
+| Action | Availability |
+| --- | --- |
+| Increase Brightness / Decrease Brightness | Devices with a frontlight |
+| Increase Warmth / Decrease Warmth | Devices with an adjustable warm/cool frontlight |
+| Next Chapter / Previous Chapter | EPUB readers |
+| Increase Font Size / Decrease Font Size | EPUB and TXT readers |
+
+Use a clear, mostly straight motion so both contacts are recognized as one
+gesture. Configured two-finger swipes are handled separately from the ordinary
+one-finger page-turn mapping. On image-based XTC books, chapter and font-size
+actions are consumed but cannot change the pre-rendered pages.
 
 ## Side Button Long-press Action
 

@@ -17,7 +17,7 @@ constexpr ThemeMetrics makeValues() {
   v.homeCoverHeight = 600;
   v.homeCoverTileHeight = 660;
   v.homeRecentBooksCount = 3;
-  v.keyboardKeyHeight = 50;
+  v.keyboardKeyHeight = 56;
   v.keyboardCenteredText = true;
   return v;
 }

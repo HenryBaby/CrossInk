@@ -35,6 +35,13 @@ class WordSelectNavigator {
     uint16_t textLen = 0;
     uint16_t lookupOffset = 0;
     uint16_t lookupLen = 0;
+    // Ordinal among all visible words on the source reader page. This remains
+    // stable when dictionary lookup excludes punctuation-only tokens.
+    uint16_t pageWordOrdinal = 0;
+    // Byte offset inside the original PageLine word. Dash-separated tokens are
+    // exposed as independent selectable fragments while retaining this link to
+    // the canonical reader word for clipping.
+    uint16_t sourceWordByteOffset = 0;
     int16_t screenX = 0;
     int16_t screenY = 0;
     int16_t width = 0;
@@ -127,6 +134,15 @@ class WordSelectNavigator {
 
   // Flat index of the current cursor word. -1 if empty.
   int getCurrentFlatIndex() const;
+
+  // Range selected for the current lookup. A completed multi-select remains
+  // available until its caller consumes it, even though the visual mode exits.
+  bool getLookupSelectionRange(int& fromIdx, int& toIdx) const;
+  size_t getLookupSelectionWordCount() const;
+  void clearCompletedSelection() {
+    completedSelectionStart = -1;
+    completedSelectionEnd = -1;
+  }
 
   // Word at flat index idx. nullptr if out of bounds.
   const WordInfo* getWordAt(int idx) const;
@@ -290,6 +306,8 @@ class WordSelectNavigator {
   bool inMultiSelectMode = false;
   bool confirmReleaseConsumed = false;
   int anchorFlatIndex = -1;
+  int completedSelectionStart = -1;
+  int completedSelectionEnd = -1;
   bool touchDragCursorVisible = false;
 
   int findClosestWord(int targetRow) const;

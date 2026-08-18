@@ -198,7 +198,7 @@ void OpdsSettingsActivity::handleSelection() {
       }
     };
     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_PASSWORD),
-                                                                   editServer.password, 63, InputType::Password),
+                                                                   editServer.password, 63, InputType::Text),
                            handler);
   } else if (selectedIndex == 4) {
     auto handler = [this](const ActivityResult& result) {

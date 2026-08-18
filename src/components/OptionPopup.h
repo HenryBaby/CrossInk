@@ -435,9 +435,6 @@ class OptionPopup {
   }
 
   void selectTouchOption(MappedInputManager& input, const std::function<void()>& requestUpdate) {
-    // A popup action can push a new activity before this tap release disappears
-    // from the input queue. Do not let that activity receive the popup's tap.
-    input.suppressNextTouchTap();
     if (confirmationMode) {
       activateSelection(input, requestUpdate, false);
     } else {

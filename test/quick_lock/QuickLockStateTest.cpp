@@ -79,3 +79,34 @@ TEST(ButtonShortcutController, PageTurnChordEmitsPageTurn) {
 
   EXPECT_EQ(controller.update(1U, true, true, false, false, Action::PageTurn).event, Event::PageTurn);
 }
+
+TEST(ButtonShortcutController, EveryChordActionConsumesBothReleaseOrders) {
+  using Action = ButtonShortcutController::ChordAction;
+  constexpr Action actions[] = {
+      Action::Screenshot,       Action::QuickLock,           Action::Sleep,
+      Action::PageTurn,         Action::ToggleBookmark,      Action::ReadingStats,
+      Action::MarkFinished,     Action::ForceRefresh,        Action::ToggleFont,
+      Action::ToggleGuideDots,  Action::ToggleBionicReading, Action::CyclePageTurn,
+      Action::SyncProgress,     Action::FileTransfer,        Action::CalibreWireless,
+      Action::JoinNetwork,      Action::CreateHotspot,       Action::ToggleDarkMode,
+      Action::Footnotes,        Action::FileBrowser,         Action::CreateClipping,
+      Action::LookupWord,       Action::ToggleHomeButton,    Action::QuickActions,
+      Action::ToggleFrontlight, Action::ToggleTouchscreen,
+  };
+
+  for (const auto action : actions) {
+    for (const bool releasePowerFirst : {false, true}) {
+      ButtonShortcutController controller;
+
+      EXPECT_NE(controller.update(1U, true, true, false, false, action).event, ButtonShortcutController::Event::None);
+      const auto firstRelease = controller.update(2U, !releasePowerFirst, releasePowerFirst, false, false, action);
+      EXPECT_EQ(firstRelease.event, ButtonShortcutController::Event::None);
+      EXPECT_TRUE(firstRelease.consumeInput);
+      const auto secondRelease = controller.update(3U, false, false, false, false, action);
+      EXPECT_EQ(secondRelease.event, ButtonShortcutController::Event::None);
+      EXPECT_TRUE(secondRelease.consumeInput);
+      const auto afterRelease = controller.update(4U, false, false, false, false, action);
+      EXPECT_EQ(afterRelease.consumeInput, action == Action::QuickLock);
+    }
+  }
+}

@@ -21,6 +21,7 @@
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
+#include "components/TouchHeaderBackButton.h"
 #include "components/UIScale.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
@@ -232,6 +233,10 @@ void OpdsBookBrowserActivity::loop() {
   }
 
   if (state == BrowserState::BROWSING) {
+    if (TouchHeaderBackButton::wasTapped(mappedInput, renderer)) {
+      navigateBack();
+      return;
+    }
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       activateSelected();
     } else if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
@@ -323,19 +328,52 @@ void OpdsBookBrowserActivity::rootScreen(UiApp::ScreenType& screen, void* user) 
 // draw the themed header (padding, centering, and rule come from the theme).
 void OpdsBookBrowserActivity::screenHeader(UiApp::ScreenType& screen, const bool withSearch) {
   screen.takeBottom(static_cast<int16_t>(UITheme::getInstance().getMetrics().buttonHintsHeight));
-  fui::HeaderProps header;
-  header.title = server.name.empty() ? tr(STR_OPDS_BROWSER) : server.name.c_str();
-  header.borderEdges = fui::EdgeBottom;
-  if (withSearch && !searchTemplate.empty()) {
-    header.trailingIcon = fui::bitmapFromIcon(icon_search_32);
-    header.trailingAction = ACTION_SEARCH;
-    // Optically align the icon with the title glyphs: text hangs low in its
-    // line cell by the font's internal leading; drop the button to match.
-    const int titleFontId = uiScaleSpec().titleFontId;
-    header.actionOffsetY =
-        static_cast<int16_t>((renderer.getLineHeight(titleFontId) - renderer.getTextHeight(titleFontId)) / 2);
+  const bool useTouchBackHeader = state == BrowserState::BROWSING && mappedInput.hasTouchHardware();
+  if (useTouchBackHeader) {
+    const Rect headerRect = TouchHeaderBackButton::headerRect(renderer, mappedInput);
+    const auto backLayout = TouchHeaderBackButton::layout(headerRect);
+    const bool showSearch = withSearch && !searchTemplate.empty();
+    TouchHeaderBackButton::draw(renderer, uiTarget, headerRect,
+                                server.name.empty() ? tr(STR_OPDS_BROWSER) : server.name.c_str(), false,
+                                showSearch ? static_cast<int>(backLayout.iconRect.width + 8) : 0);
+    screen.takeTop(static_cast<int16_t>(headerRect.height));
+
+    if (showSearch) {
+      fui::ButtonProps search;
+      search.action = ACTION_SEARCH;
+      search.styles = fui::plainStyles(fui::Paint::solid(fui::Color::Black));
+      search.minTouchSize = screen.theme().minTouchSize;
+      search.radius = 8;
+      const fui::Rect searchRect{static_cast<int16_t>(headerRect.x + headerRect.width - backLayout.iconRect.width),
+                                 static_cast<int16_t>(backLayout.iconRect.y),
+                                 static_cast<int16_t>(backLayout.iconRect.width),
+                                 static_cast<int16_t>(backLayout.iconRect.height)};
+      screen.button(search, searchRect);
+      // Keep the touch target clear of the divider, but draw the glyph on the
+      // shared Back/title baseline instead of at the top of its action lane.
+      const int16_t iconX =
+          static_cast<int16_t>(searchRect.x + (searchRect.width - TouchHeaderBackButton::ICON_SIZE) / 2);
+      const int16_t iconY = static_cast<int16_t>(backLayout.iconRect.y + TouchHeaderBackButton::TITLE_VERTICAL_OFFSET +
+                                                 (backLayout.iconRect.height - TouchHeaderBackButton::ICON_SIZE) / 2);
+      screen.target().bitmap(
+          fui::Rect{iconX, iconY, TouchHeaderBackButton::ICON_SIZE, TouchHeaderBackButton::ICON_SIZE},
+          fui::bitmapFromIcon(icon_search_32), fui::BitmapMode::Center, fui::Paint::solid(fui::Color::Black));
+    }
+  } else {
+    fui::HeaderProps header;
+    header.title = server.name.empty() ? tr(STR_OPDS_BROWSER) : server.name.c_str();
+    header.borderEdges = fui::EdgeBottom;
+    if (withSearch && !searchTemplate.empty()) {
+      header.trailingIcon = fui::bitmapFromIcon(icon_search_32);
+      header.trailingAction = ACTION_SEARCH;
+      // Optically align the icon with the title glyphs: text hangs low in its
+      // line cell by the font's internal leading; drop the button to match.
+      const int titleFontId = uiScaleSpec().titleFontId;
+      header.actionOffsetY =
+          static_cast<int16_t>((renderer.getLineHeight(titleFontId) - renderer.getTextHeight(titleFontId)) / 2);
+    }
+    screen.header(header);
   }
-  screen.header(header);
   // Same breathing room between header and content as the legacy screens.
   screen.spacer(static_cast<int16_t>(UITheme::getInstance().getMetrics().verticalSpacing));
 }

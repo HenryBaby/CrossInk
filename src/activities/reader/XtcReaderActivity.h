@@ -34,6 +34,8 @@ class XtcReaderActivity final : public Activity {
   ReadingStatsDateTime sessionStartLocalDateTime;
   bool hasSessionStartLocalDateTime = false;
   bool longPowerPageTurnHandled = false;
+  // Session-only display toggle; fixed-layout XTC pages are never regenerated.
+  bool statusBarVisible = true;
   bool longPressMenuHandled = false;
   bool frontButtonLongPressHandled = false;
   bool longPressBackHandled = false;
@@ -87,6 +89,7 @@ class XtcReaderActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
+  bool handleTwoFingerSwipeAction(CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) override;
   bool prepareManualRefresh() override {
     pagesUntilFullRefresh = -1;
     return true;
@@ -95,8 +98,8 @@ class XtcReaderActivity final : public Activity {
   void onInputLockChanged(bool locked) override;
   bool handleQuickLockUnlock(QuickLockTrigger trigger) override;
   bool canSnapshotForSleepOverlay() const override { return true; }
-  bool handlesReaderPowerSettingsOverride() const override { return true; }
   bool allowPowerAsConfirmInReaderMode() const override { return quickActionsPopup.isActive(); }
+  bool blocksGlobalInput() const override { return quickActionsPopup.isActive(); }
   bool handleShortcutAction(CrossPointSettings::SHORT_PWRBTN action) override;
   bool openReaderSettingsMenu() override {
     if (!xtc) {

@@ -64,6 +64,7 @@ void onCdcEvent(void*, esp_event_base_t, int32_t eventId, void* eventData) {
 }
 #endif
 
+// Only native USB exposes the CDC overflow event used to reject incomplete uploads.
 #if defined(CROSSINK_USB_RX_OVERFLOW_ENABLED)
 uint32_t rxOverflowCount() { return rxDroppedBytes.load(std::memory_order_relaxed); }
 

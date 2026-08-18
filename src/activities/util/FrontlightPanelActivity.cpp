@@ -154,8 +154,8 @@ bool FrontlightPanelActivity::handleHomeGesture() {
 }
 
 void FrontlightPanelActivity::loop() {
-  // The X4 Pro power-button double-click can change the light globally while
-  // this panel is open. Keep the panel's state and eventual persistence in sync.
+  // A power-button shortcut can change the light globally while this panel is
+  // open. Keep the panel's state and eventual persistence in sync.
   if (lightOn != Frontlight.isOn()) {
     lightOn = Frontlight.isOn();
     requestUpdate();
@@ -274,11 +274,14 @@ void FrontlightPanelActivity::buildPanelScreen(UiApp::ScreenType& screen) {
   const fui::Rect labelRect{headerRow.x, static_cast<int16_t>(headerRow.y + (rowH - lh) / 2),
                             static_cast<int16_t>(headerRow.width - iconW - theme.spaceMd), lh};
   screen.target().text(labelRect, line, theme.bodyText);
-  // Generous hit target: the full header-row height and a wide band on the right
-  // (well beyond the glyph) so the toggle is easy to hit. Stays within the
-  // header row so it never steals taps from the brightness slider below.
+  // Keep the visible glyph aligned to the content inset, but let its touch
+  // target fill the otherwise blank right edge and the adjacent row gaps.
+  // This makes the control more forgiving without reaching the brightness
+  // slider below.
   const int16_t hitW = static_cast<int16_t>(iconW + theme.spaceLg * 4);
-  const fui::Rect hitRect{static_cast<int16_t>(headerRow.right() - hitW), headerRow.y, hitW, rowH};
+  const fui::Rect hitRect{static_cast<int16_t>(headerRow.right() - hitW),
+                          static_cast<int16_t>(headerRow.y - theme.spaceSm),
+                          static_cast<int16_t>(hitW + sideInset.right), static_cast<int16_t>(rowH + theme.spaceSm * 2)};
   screen.frame().hit(hitRect, ACTION_TOGGLE);
   screen.target().bitmap(iconRect, lightIcon, fui::BitmapMode::Center);
 

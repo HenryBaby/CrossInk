@@ -98,6 +98,8 @@ void WordSelectNavigator::reset() {
   inMultiSelectMode = false;
   confirmReleaseConsumed = false;
   anchorFlatIndex = -1;
+  completedSelectionStart = -1;
+  completedSelectionEnd = -1;
   pendingSnapIdx = -1;
   snapshot_.clear();
 }
@@ -126,6 +128,31 @@ int WordSelectNavigator::getCurrentFlatIndex() const {
   if (rows.empty() || currentRow >= static_cast<int>(rows.size())) return -1;
   if (rows[currentRow].wordCount == 0) return -1;
   return rows[currentRow].firstWord + currentWordInRow;
+}
+
+bool WordSelectNavigator::getLookupSelectionRange(int& fromIdx, int& toIdx) const {
+  const int currentIdx = getCurrentFlatIndex();
+  if (currentIdx < 0) return false;
+  if (completedSelectionStart >= 0 && completedSelectionEnd >= 0) {
+    fromIdx = completedSelectionStart;
+    toIdx = completedSelectionEnd;
+    return true;
+  }
+  if (inMultiSelectMode && anchorFlatIndex >= 0) {
+    fromIdx = anchorFlatIndex;
+    toIdx = currentIdx;
+    return true;
+  }
+  fromIdx = currentIdx;
+  toIdx = currentIdx;
+  return true;
+}
+
+size_t WordSelectNavigator::getLookupSelectionWordCount() const {
+  int fromIdx = -1;
+  int toIdx = -1;
+  if (!getLookupSelectionRange(fromIdx, toIdx)) return 0;
+  return static_cast<size_t>(fromIdx <= toIdx ? toIdx - fromIdx : fromIdx - toIdx) + 1;
 }
 
 const WordSelectNavigator::WordInfo* WordSelectNavigator::getWordAt(int idx) const {
@@ -380,6 +407,8 @@ WordSelectNavigator::MultiSelectAction WordSelectNavigator::handleMultiSelectInp
     if (input.wasReleased(MappedInputManager::Button::Confirm)) {
       const int cursorIdx = getCurrentFlatIndex();
       outPhrase = buildPhrase(anchorFlatIndex, cursorIdx);
+      completedSelectionStart = anchorFlatIndex;
+      completedSelectionEnd = cursorIdx;
       inMultiSelectMode = false;
       return MultiSelectAction::PhraseReady;
     }
@@ -407,6 +436,8 @@ WordSelectNavigator::MultiSelectAction WordSelectNavigator::handleMultiSelectInp
     if (flatIdx >= 0) {
       inMultiSelectMode = true;
       anchorFlatIndex = flatIdx;
+      completedSelectionStart = -1;
+      completedSelectionEnd = -1;
       confirmReleaseConsumed = true;
       return MultiSelectAction::EnteredMultiSelect;
     }
@@ -421,12 +452,16 @@ bool WordSelectNavigator::beginTouchMultiSelect() {
   if (flatIdx < 0) return false;
   inMultiSelectMode = true;
   anchorFlatIndex = flatIdx;
+  completedSelectionStart = -1;
+  completedSelectionEnd = -1;
   return true;
 }
 
 std::string WordSelectNavigator::finishTouchMultiSelect() {
   if (!inMultiSelectMode) return {};
   const std::string phrase = buildPhrase(anchorFlatIndex, getCurrentFlatIndex());
+  completedSelectionStart = anchorFlatIndex;
+  completedSelectionEnd = getCurrentFlatIndex();
   inMultiSelectMode = false;
   return phrase;
 }

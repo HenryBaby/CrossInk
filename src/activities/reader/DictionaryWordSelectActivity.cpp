@@ -63,6 +63,20 @@ bool containsDashSeparator(const char* text, const size_t length) {
   return false;
 }
 
+bool hasVisibleWordText(const char* text) {
+  if (!text) return false;
+  const char* cursor = text;
+  if (static_cast<unsigned char>(cursor[0]) == 0xE2 && cursor[1] != '\0' && cursor[2] != '\0' &&
+      static_cast<unsigned char>(cursor[1]) == 0x80 && static_cast<unsigned char>(cursor[2]) == 0x83) {
+    cursor += 3;
+  }
+  while (*cursor) {
+    if (*cursor != ' ' && *cursor != '\t' && *cursor != '\r' && *cursor != '\n') return true;
+    ++cursor;
+  }
+  return false;
+}
+
 template <typename Sink>
 void forEachWordPart(const char* text, const size_t length, Sink&& sink) {
   size_t partStart = 0;
@@ -580,6 +594,7 @@ bool DictionaryWordSelectActivity::extractWords() {
   const int16_t naturalSpaceWidth =
       static_cast<int16_t>(renderer.getTextAdvanceX(SETTINGS.getReaderFontId(), " ", EpdFontFamily::REGULAR));
 
+  uint16_t pageWordOrdinal = 0;
   for (const auto& element : page->elements) {
     if (element->getTag() != TAG_PageLine) continue;
     const auto* line = static_cast<const PageLine*>(element.get());
@@ -613,6 +628,12 @@ bool DictionaryWordSelectActivity::extractWords() {
       const uint8_t bionicBoundary = block->bionicBoundary(wordIndex);
       const uint16_t bionicSuffixX = block->bionicRunOffset(wordIndex);
       const bool wordIsRtl = isRtlWord(wordText, block->getBlockStyle().isRtl);
+
+      if (!hasVisibleWordText(wordText)) {
+        lastSelectableWordIndex = -2;
+        continue;
+      }
+      const uint16_t sourcePageWordOrdinal = pageWordOrdinal++;
 
       if (!utf8ContainsLookupCharacter(wordText)) {
         lastSelectableWordIndex = -2;
@@ -661,6 +682,8 @@ bool DictionaryWordSelectActivity::extractWords() {
         word.textLen = static_cast<uint16_t>(wordLength);
         word.lookupOffset = offset;
         word.lookupLen = word.textLen;
+        word.pageWordOrdinal = sourcePageWordOrdinal;
+        word.sourceWordByteOffset = 0;
         word.screenX = screenX;
         word.screenY = screenY;
         word.width = wordWidth;
@@ -703,6 +726,8 @@ bool DictionaryWordSelectActivity::extractWords() {
         word.textLen = static_cast<uint16_t>(part.length);
         word.lookupOffset = offset;
         word.lookupLen = word.textLen;
+        word.pageWordOrdinal = sourcePageWordOrdinal;
+        word.sourceWordByteOffset = static_cast<uint16_t>(part.sourceOffset);
         word.screenX = static_cast<int16_t>(screenX + offsetX);
         word.screenY = screenY;
         word.width = partWidth;
@@ -716,6 +741,50 @@ bool DictionaryWordSelectActivity::extractWords() {
     }
   }
   return true;
+}
+
+bool DictionaryWordSelectActivity::captureClippingRequest() {
+  int firstIdx = -1;
+  int lastIdx = -1;
+  if (!navigator.getLookupSelectionRange(firstIdx, lastIdx)) {
+    LOG_ERR("CLIP", "Dictionary clipping has no selected words");
+    return false;
+  }
+  const auto* first = navigator.getWordAt(firstIdx);
+  const auto* last = navigator.getWordAt(lastIdx);
+  if (!first || !last) {
+    LOG_ERR("CLIP", "Dictionary clipping selection indexes are invalid");
+    return false;
+  }
+  if (first->continuationOf >= 0) first = navigator.getWordAt(first->continuationOf);
+  if (last->continuationIndex >= 0) last = navigator.getWordAt(last->continuationIndex);
+  if (!first || !last) {
+    LOG_ERR("CLIP", "Dictionary clipping hyphenated selection is invalid");
+    return false;
+  }
+  const bool firstPrecedesLast =
+      first->pageWordOrdinal < last->pageWordOrdinal ||
+      (first->pageWordOrdinal == last->pageWordOrdinal && first->sourceWordByteOffset <= last->sourceWordByteOffset);
+  const auto* rangeFirst = firstPrecedesLast ? first : last;
+  const auto* rangeLast = firstPrecedesLast ? last : first;
+  pendingClippingRequest_.firstPageWordOrdinal = rangeFirst->pageWordOrdinal;
+  pendingClippingRequest_.lastPageWordOrdinal = rangeLast->pageWordOrdinal;
+  pendingClippingRequest_.firstWordByteOffset = rangeFirst->sourceWordByteOffset;
+  pendingClippingRequest_.lastWordByteEndOffset =
+      static_cast<uint16_t>(rangeLast->sourceWordByteOffset + rangeLast->textLen);
+  hasPendingClippingRequest_ = true;
+  navigator.clearCompletedSelection();
+  return true;
+}
+
+void DictionaryWordSelectActivity::finishWithClippingRequest() {
+  if (!hasPendingClippingRequest_) {
+    LOG_ERR("CLIP", "Dictionary clipping requested without a selected range");
+    DictUtils::cancelAndFinish(*this);
+    return;
+  }
+  setResult(ActivityResult{pendingClippingRequest_});
+  finish();
 }
 
 bool DictionaryWordSelectActivity::mergeHyphenatedWords() {
@@ -815,7 +884,8 @@ void DictionaryWordSelectActivity::loop() {
             readerBackgroundRender_ ? readerContext_ : this,
             readerBackgroundRender_ ? readerBackgroundRender_
                                     : &DictionaryWordSelectActivity::renderDefinitionBackgroundCallback,
-            dictionaryFontFamilyName_, dictionaryFontPointSize_, true, &highlightSnapshotStorage_);
+            dictionaryFontFamilyName_, dictionaryFontPointSize_, true,
+            hasPendingClippingRequest_ ? &pendingClippingRequest_ : nullptr, &highlightSnapshotStorage_);
         if (!definition) {
           LOG_ERR("DICT", "OOM allocating DictionaryDefinitionActivity (%u bytes)",
                   static_cast<unsigned>(sizeof(DictionaryDefinitionActivity)));
@@ -825,32 +895,25 @@ void DictionaryWordSelectActivity::loop() {
         }
         suspendWorkingSet();
         startActivityForResult(std::move(definition), [this](const ActivityResult& result) {
-          if (!result.isCancelled) {
-            setResult(ActivityResult{});
+          if (const auto* request = std::get_if<DictionaryClippingRequest>(&result.data)) {
+            setResult(ActivityResult{*request});
             finish();
-          } else {
-            {
-              RenderLock lock(*this);
-              if (!restoreWorkingSet()) {
-                GUI.drawPopup(renderer, tr(STR_MEMORY_ERROR));
-                renderer.displayBuffer();
-                delay(1000);
-                ActivityResult parentResult;
-                parentResult.isCancelled = true;
-                setResult(std::move(parentResult));
-                finish();
-                return;
-              }
-            }
-            forceFullRepaintOnNextRender();
-            requestUpdate();
+            return;
           }
+          // A definition is the terminal screen of reader-page lookup. Its
+          // dismiss paths (Back and an outside tap) must return to the reader,
+          // rather than restoring the word-selection highlight beneath it.
+          setResult(ActivityResult{});
+          finish();
         });
         break;
       }
       case DictionaryLookupController::LookupEvent::NotFoundDismissedBack:
-        forceFullRepaintOnNextRender();
-        requestUpdate();
+        setResult(ActivityResult{});
+        finish();
+        break;
+      case DictionaryLookupController::LookupEvent::CreateClipping:
+        finishWithClippingRequest();
         break;
       case DictionaryLookupController::LookupEvent::NotFoundDismissedDone:
         setResult(ActivityResult{});
@@ -892,7 +955,8 @@ void DictionaryWordSelectActivity::loop() {
     }
 
     touchDragLookup_ = false;
-    controller.lookupOrPopup(navigator.finishTouchMultiSelect());
+    controller.lookupOrPopup(navigator.finishTouchMultiSelect(), navigator.getLookupSelectionWordCount());
+    if (controller.isLookingUp()) captureClippingRequest();
     return;
   }
 
@@ -918,11 +982,17 @@ void DictionaryWordSelectActivity::loop() {
     return;
   }
 
-  if (controller.handleMultiSelect(navigator)) return;
+  if (controller.handleMultiSelect(navigator)) {
+    if (controller.isLookingUp()) captureClippingRequest();
+    return;
+  }
 
   if (navigator.isMultiSelecting()) return;
 
-  if (controller.handleConfirmLookup(navigator)) return;
+  if (controller.handleConfirmLookup(navigator)) {
+    if (controller.isLookingUp()) captureClippingRequest();
+    return;
+  }
 
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     DictUtils::cancelAndFinish(*this);

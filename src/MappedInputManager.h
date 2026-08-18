@@ -12,6 +12,23 @@ class MappedInputManager {
   static constexpr size_t BUTTON_COUNT = static_cast<size_t>(Button::PageForward) + 1;
   enum class SwipeDir { None, Left, Right, Up, Down };
 
+  struct CompletedSwipe {
+    uint8_t contactCount = 0;
+    int startX = 0;
+    int startY = 0;
+    int endX = 0;
+    int endY = 0;
+    SwipeDir direction = SwipeDir::None;
+    unsigned long durationMs = 0;
+  };
+
+  struct CompletedRotation {
+    float degrees = 0.0f;
+    int centerX = 0;
+    int centerY = 0;
+    unsigned long durationMs = 0;
+  };
+
   struct Labels {
     const char* btn1;
     const char* btn2;
@@ -47,6 +64,12 @@ class MappedInputManager {
 #if CROSSINK_APP_CAP_TOUCH
   bool hasTouch() const;
   bool hasTouchHardware() const;
+  // Multi-touch follows the same reader touch gate as all other screen input,
+  // so it cannot bypass the Disable Touchscreen setting.
+  bool supportsMultiTouch() const;
+  bool getTwoFingerTouch(int& x1, int& y1, int& x2, int& y2) const;
+  bool wasCompletedMultiTouchSwipe(CompletedSwipe& swipe) const;
+  bool wasCompletedMultiTouchRotation(CompletedRotation& rotation) const;
   // True on boards with a capacitive home key (X4 Pro), where the bottom-edge
   // up-swipe is the reader-menu gesture rather than the exit-to-home gesture.
   // The Home key has its own reader lock setting, so it remains available when
@@ -123,6 +146,10 @@ class MappedInputManager {
 #else
   constexpr bool hasTouch() const { return false; }
   constexpr bool hasTouchHardware() const { return false; }
+  constexpr bool supportsMultiTouch() const { return false; }
+  constexpr bool getTwoFingerTouch(int&, int&, int&, int&) const { return false; }
+  constexpr bool wasCompletedMultiTouchSwipe(CompletedSwipe&) const { return false; }
+  constexpr bool wasCompletedMultiTouchRotation(CompletedRotation&) const { return false; }
   constexpr bool hasHomeKey() const { return false; }
   constexpr bool isHomeButtonLockedInReader() const { return false; }
   constexpr bool wasScreenTapped(int&, int&) const { return false; }

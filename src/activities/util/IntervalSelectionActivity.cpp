@@ -63,7 +63,7 @@ int IntervalSelectionActivity::clampedValue(const int candidate) const {
 
 bool IntervalSelectionActivity::usesTextTouchStepControls() const {
   return titleId == StrId::STR_TIME_TO_SLEEP || titleId == StrId::STR_AUTO_TURN_INTERVAL_SECONDS ||
-         titleId == StrId::STR_LINE_SPACING;
+         titleId == StrId::STR_LINE_SPACING || titleId == StrId::STR_TOP_BOTTOM || titleId == StrId::STR_LEFT_RIGHT;
 }
 
 void IntervalSelectionActivity::onEnter() {
@@ -256,7 +256,9 @@ void IntervalSelectionActivity::render(RenderLock&&) {
   }
 
   char formattedValue[32];
-  if (maxBoundaryLabelId != StrId::STR_NONE_OPT && value == maxValue) {
+  if (valueFormatter != nullptr) {
+    valueFormatter(value, formattedValue, sizeof(formattedValue));
+  } else if (maxBoundaryLabelId != StrId::STR_NONE_OPT && value == maxValue) {
     snprintf(formattedValue, sizeof(formattedValue), "%s", I18N.get(maxBoundaryLabelId));
   } else if (showPercentValue) {
     snprintf(formattedValue, sizeof(formattedValue), "%d%%", value);

@@ -9,6 +9,8 @@
 #include <iosfwd>
 #include <mutex>
 
+#include "ReaderFontSizeStep.h"
+
 class CrossPointSettings : public PersistableStore<CrossPointSettings> {
  private:
   mutable std::mutex _mutex;
@@ -143,6 +145,19 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     FRONT_ORIENTATION_AWARE_NAV_BUTTONS = 1,
     FRONT_ORIENTATION_AWARE_ALL_BUTTONS = 2,
     FRONT_ORIENTATION_AWARE_COUNT
+  };
+
+  enum TWO_FINGER_SWIPE_ACTION {
+    TWO_FINGER_SWIPE_NOT_SET = 0,
+    TWO_FINGER_SWIPE_INCREASE_BRIGHTNESS,
+    TWO_FINGER_SWIPE_DECREASE_BRIGHTNESS,
+    TWO_FINGER_SWIPE_INCREASE_WARMTH,
+    TWO_FINGER_SWIPE_DECREASE_WARMTH,
+    TWO_FINGER_SWIPE_NEXT_CHAPTER,
+    TWO_FINGER_SWIPE_PREVIOUS_CHAPTER,
+    TWO_FINGER_SWIPE_INCREASE_FONT_SIZE,
+    TWO_FINGER_SWIPE_DECREASE_FONT_SIZE,
+    TWO_FINGER_SWIPE_ACTION_COUNT,
   };
 
   // Side button long-press action options
@@ -430,6 +445,13 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t pageTurnGesture = TAP_AND_SWIPE;
   // Disables all touchscreen input while a reader is active. Reader menus temporarily override this.
   uint8_t disableReaderTouchscreen = 0;
+  // Available only on multi-touch hardware; defaults on for pinch font resizing.
+  uint8_t pinchFontResizeEnabled = 1;
+  // Configurable two-finger swipes. A non-empty action may be assigned to one direction only.
+  uint8_t twoFingerSwipeUp = TWO_FINGER_SWIPE_NOT_SET;
+  uint8_t twoFingerSwipeDown = TWO_FINGER_SWIPE_NOT_SET;
+  uint8_t twoFingerSwipeLeft = TWO_FINGER_SWIPE_NOT_SET;
+  uint8_t twoFingerSwipeRight = TWO_FINGER_SWIPE_NOT_SET;
   // Short power button action behaviour
   uint8_t shortPwrBtn = IGNORE;
   // Long power button action behaviour
@@ -488,8 +510,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t refreshFrequency = REFRESH_15;
   uint8_t hyphenationEnabled = 0;
 
-  // Reader screen margin settings
-  uint8_t screenMargin = 5;
+  // Reader screen margins. Legacy single-axis settings initialize both values.
+  uint8_t screenMarginVertical = 5;
+  uint8_t screenMarginHorizontal = 5;
   // Show EPUB publisher pagebreak labels in the reader margin when present.
   uint8_t publisherPageNumbers = 0;
   // OPDS browser settings
@@ -564,10 +587,15 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t frontlightBrightness = 60;
   uint8_t frontlightWarmth = 50;  // 0 = cool .. 100 = warm
   uint8_t frontlightOn = 0;
-  // When 0 (default), the frontlight always comes up OFF after a wake/boot (brightness
-  // and warmth are still remembered for when it's switched on). When 1, the on/off
-  // state from before sleep is restored too. Shown in Display settings on frontlight boards.
-  uint8_t frontlightRestoreOnWake = 0;
+  // When enabled, restore a previously-on light after sleep. A previous off
+  // state falls through to a complete schedule.
+  uint8_t frontlightRestoreOnWake = 1;
+  // Daily wake-only schedule, in local minutes since midnight.
+  // An unset endpoint keeps the schedule inactive; its value is retained while
+  // the schedule toggle is off so it can be re-enabled without re-entry.
+  uint8_t frontlightScheduleEnabled = 0;
+  uint16_t frontlightScheduleStart = 0xFFFF;
+  uint16_t frontlightScheduleEnd = 0xFFFF;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
   // Custom KOReader sync device display name. Empty means use the hardware default.
@@ -592,6 +620,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static constexpr uint8_t MIN_LINE_HEIGHT_PERCENT = 70;
   static constexpr uint8_t MAX_LINE_HEIGHT_PERCENT = 200;
   static constexpr uint8_t LINE_HEIGHT_PERCENT_STEP = 1;
+  static constexpr uint8_t MIN_SCREEN_MARGIN = 5;
+  static constexpr uint8_t MAX_SCREEN_MARGIN = 150;
+  static constexpr uint8_t SCREEN_MARGIN_SMALL_STEP = 5;
+  static constexpr uint8_t SCREEN_MARGIN_LARGE_STEP = 10;
   static constexpr uint8_t MAX_WORD_SPACING = 4;
   static constexpr uint16_t DEFAULT_READING_IDLE_TIME_THRESHOLD_SECONDS = 5 * 60;
   static constexpr uint16_t MIN_READING_IDLE_TIME_THRESHOLD_SECONDS = 30;
@@ -639,7 +671,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static bool isSdFontPointSizeAllowedForRange(uint8_t pointSize, uint8_t range);
   FONT_SIZE getEffectiveReaderFontSize() const;
   uint8_t getSdFontTargetPointSize() const;
-  bool changeReaderFontSize(bool larger);
+  bool changeReaderFontSize(bool larger, FontSizeStepMode mode = FontSizeStepMode::Wrap);
   int getReaderFontId() const;
   int getBuiltInReaderFontId() const;
 
@@ -679,6 +711,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
   static void validateReaderFrontButtonMapping(CrossPointSettings& settings);
+  static bool isTwoFingerSwipeActionAvailable(uint8_t action, bool frontlightPresent, bool hasColorTemperature);
+  static bool normalizeTwoFingerSwipeActions(CrossPointSettings& settings,
+                                             uint8_t CrossPointSettings::* editedField = nullptr);
   static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
   static uint8_t sleepScreenStorageToMode(uint8_t storedValue);
   static uint8_t sleepScreenModeToStorage(uint8_t mode);

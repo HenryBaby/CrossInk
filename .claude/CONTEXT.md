@@ -8,6 +8,7 @@ Refer to https://freeink.org/llms.txt for guidance.
 
 ## Simulator
 
+- Sticky is outside this downstream fork's product and validation scope. Do not spend build or test time on Sticky targets unless the user explicitly brings it back into scope.
 - Simulator patches belong in the adjacent `crossink-simulator` repo.
 - The valid local simulator env in this repo is `simulator`, and `pio run -e simulator` currently builds cleanly.
 - The simulator `PNGdec` stub in `crossink-simulator/src/PNGdec.h` needs to mirror the real API shape used by app code, including `hasAlpha()` and `getTransparentColor()`, even though decode still fails intentionally.
