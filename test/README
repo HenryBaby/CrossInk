@@ -1,5 +1,17 @@
 
-This directory is intended for PlatformIO Test Runner and project tests.
+This directory contains host CMake/CTest unit tests. Run them in the project
+Docker image so build and test tooling stays inside the container:
+
+```sh
+docker build -t crossink-builder .
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD:/workspace" -v crossink-platformio:/platformio \
+  crossink-builder unit-tests
+```
+
+Use `unit-tests -- -R test_name` to pass a selector to CTest. The incremental
+build remains in mounted `build/test`; clearing that directory is an explicit
+cache reset and is never done by the dispatcher.
 
 Unit Testing is a software testing method by which individual units of
 source code, sets of one or more MCU program modules together with associated

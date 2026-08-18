@@ -64,7 +64,11 @@ def emit_header(path, ident, data, *, original_len=None):
         h.write("#pragma once\n#include <cstddef>\n\n")
         h.write(f"constexpr char {ident}[] PROGMEM = {{\n")
         for i in range(0, len(data), 16):
-            row = ", ".join(f"0x{b:02x}" for b in data[i:i+16])
+            # Plain hexadecimal literals above 0x7f are not safely representable
+            # in a signed char initializer under strict C++ compilation. Keep
+            # the generated API as constexpr char[] while making conversion
+            # explicit for every byte.
+            row = ", ".join(f"static_cast<char>(0x{b:02x})" for b in data[i:i+16])
             h.write(f"  {row},\n")
         h.write("};\n\n")
         if original_len is None:

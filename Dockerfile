@@ -11,6 +11,11 @@ RUN apt-get update \
       ca-certificates \
       git \
       build-essential \
+      cmake \
+      pkg-config \
+      libexpat1-dev \
+      libssl-dev \
+      libsdl2-dev \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir \
       https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip \
@@ -18,8 +23,9 @@ RUN apt-get update \
     && chmod 0777 /platformio /output
 
 COPY docker/build-firmware.sh /usr/local/bin/build-firmware
-RUN sed -i 's/\r$//' /usr/local/bin/build-firmware \
-    && chmod +x /usr/local/bin/build-firmware
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/build-firmware /usr/local/bin/entrypoint.sh \
+    && chmod +x /usr/local/bin/build-firmware /usr/local/bin/entrypoint.sh
 
 WORKDIR /workspace
-ENTRYPOINT ["build-firmware"]
+ENTRYPOINT ["entrypoint.sh"]

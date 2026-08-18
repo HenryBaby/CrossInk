@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Added
+
+- Docker development images now include CMake/CTest and Linux SDL2 support,
+  with explicit container-only unit-test and simulator smoke-test modes while
+  retaining the firmware builder command.
+
 ## [v1.5.3] - 2026-08-15
 
 ### Upstream CrossInk v1.5.1-rc-2

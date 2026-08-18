@@ -42,6 +42,7 @@ Refer to https://freeink.org/llms.txt for guidance.
 
 ## Misc Repo Gotchas
 
+- Run all builds, tests, static analysis, formatting checks, and simulator execution inside project-specific Docker containers. Do not install or run development tooling directly on the homelab host or in the persistent code-server control-plane container.
 - POSIX TZ signs are inverted from ISO 8601 in `TimeStore::applyTimezone()`: `"UTC-1"` means UTC+1.
 - `LyraTheme::drawHeader()` does not call `BaseTheme::drawHeader()`, so header changes in the base theme must be duplicated in Lyra if needed.
 - Preserve the complete opening `[!CAUTION]` block in `README.md` verbatim during upstream syncs, README rewrites, and documentation updates unless the user explicitly asks to change it. It identifies this as a personal, fully vibe-coded downstream build and warns that there could be dragons.

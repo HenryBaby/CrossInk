@@ -6,9 +6,9 @@ nav_order: 2
 
 # Docker Build
 
-CrossInk can be built in a Docker container so the host only needs Docker and
-Git. The image installs the PlatformIO Core version used by CI and uses the
-same `platformio.ini` environments as a local build.
+CrossInk can be built and tested in a Docker container so the host only needs
+Docker and Git. The image installs PlatformIO Core, CMake/CTest, and the Linux
+SDL2 development packages used by the native simulator.
 
 ## Build the image
 
@@ -44,6 +44,27 @@ docker run --rm \
   -v "$PWD/output:/output" \
 crossink-builder -e default
 ```
+
+The entrypoint also has explicit container-only test modes. Existing
+PlatformIO arguments remain firmware builds for backwards compatibility:
+
+```sh
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" \
+  -v crossink-platformio:/platformio crossink-builder unit-tests
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" \
+  -v crossink-platformio:/platformio crossink-builder simulator
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" \
+  -v crossink-platformio:/platformio crossink-builder sticky-simulator --page-turns 10
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" \
+  -v crossink-platformio:/platformio crossink-builder x4-pro-simulator --theme lyra-carousel
+```
+
+Simulator options are passed to the smoke runner; `--no-build` reuses the
+matching binary in mounted `.pio/`. Pass CTest selectors after `unit-tests --`,
+for example `unit-tests -- -R quick_lock`. The checkout is mounted at
+`/workspace`; PlatformIO packages use the named `crossink-platformio` cache,
+while `build/test` and `.pio/` persist in the checkout. The smoke runner uses a
+temporary isolated `fs_` and does not delete unrelated files or `output/`.
 
 The script initializes the `freeink-sdk` submodule when it is missing. The
 named PlatformIO volume keeps downloaded packages and toolchains between runs.
