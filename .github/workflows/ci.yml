@@ -107,7 +107,25 @@ jobs:
       - name: Install PlatformIO Core
         run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
 
+      - name: Resolve main-push release metadata
+        id: release_metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(python3 - <<'PY'
+          import configparser
+          config = configparser.ConfigParser()
+          config.read('platformio.ini')
+          print(config.get('crossink', 'version'))
+          PY
+          )"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build ${{ matrix.environment }} firmware
+        env:
+          CROSSINK_RELEASE_VERSION: ${{ steps.release_metadata.outputs.release_version }}
         run: |
           set -euo pipefail
           pio run -j1 -e ${{ matrix.environment }} | tee pio-${{ matrix.environment }}.log
@@ -121,7 +139,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload firmware artifacts
-        if: matrix.environment == 'default'
+        if: matrix.environment == 'default' && !(github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v7
         with:
           name: firmware-x3-x4
@@ -130,12 +148,34 @@ jobs:
           if-no-files-found: error
 
       - name: Upload X4 Pro firmware artifact
-        if: matrix.environment == 'x4-pro'
+        if: matrix.environment == 'x4-pro' && !(github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v7
         with:
           name: firmware-x4-pro
           path: .pio/build/x4-pro/firmware-x4-pro.bin
           if-no-files-found: error
+
+      - name: Write promotion provenance
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          python3 scripts/release_artifacts.py write \
+            --binary ".pio/build/${{ matrix.environment }}/firmware-${{ matrix.environment == 'default' && 'x3-x4' || 'x4-pro' }}-v${{ steps.release_metadata.outputs.release_version }}.bin" \
+            --output ".pio/build/${{ matrix.environment }}" \
+            --commit "${{ github.sha }}" \
+            --version "${{ steps.release_metadata.outputs.release_version }}" \
+            --environment "${{ matrix.environment }}"
+
+      - name: Upload immutable promotion artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: promotable-firmware-${{ matrix.environment }}-${{ github.sha }}
+          path: |
+            .pio/build/${{ matrix.environment }}/firmware-${{ matrix.environment == 'default' && 'x3-x4' || 'x4-pro' }}-v${{ steps.release_metadata.outputs.release_version }}.bin
+            .pio/build/${{ matrix.environment }}/provenance.json
+            .pio/build/${{ matrix.environment }}/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
 
   # This job is used as the PR required actions check, allows for changes to other steps in the future without breaking
   # PR requirements.

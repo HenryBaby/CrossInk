@@ -72,7 +72,7 @@ jobs:
       - name: Build CrossInk
         shell: bash
         env:
-          CROSSINK_RELEASE_VERSION: "1"
+          CROSSINK_RC_ARTIFACTS: "1"
           CROSSINK_RC_BRANCH: ${{ env.RC_BRANCH_RAW }}
           CROSSINK_RC_HASH: ${{ env.RC_HASH_SHORT }}
         run: pio run -j1 -e ${{ matrix.environment }}

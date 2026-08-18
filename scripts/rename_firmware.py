@@ -110,7 +110,7 @@ def _get_rc_artifact_name(project_dir, env):
 
 
 def _is_rc_artifact_build(env):
-    flag = _get_project_option(env, 'custom_rc_artifacts') or os.environ.get('CROSSINK_RELEASE_VERSION')
+    flag = _get_project_option(env, 'custom_rc_artifacts') or os.environ.get('CROSSINK_RC_ARTIFACTS')
     return str(flag).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 

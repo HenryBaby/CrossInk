@@ -1,18 +1,17 @@
-name: Compile Release
+name: Publish Release
 
 on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Compile release builds"
-        required: true
-        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   prepare-release:
@@ -24,91 +23,35 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify release tag is on main
-        if: github.event_name == 'push'
+      - name: Verify exact commit is on main
+        shell: bash
         run: |
+          set -euo pipefail
           git fetch origin main:refs/remotes/origin/main
-          TAG_COMMIT="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
-          git merge-base --is-ancestor "$TAG_COMMIT" origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            test "$(git rev-list -n 1 "$GITHUB_REF_NAME")" = "$GITHUB_SHA"
+          fi
 
       - name: Resolve and verify release version
         id: version
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          VERSION="${VERSION#v}"
-          CONFIG_VERSION="$(python3 - <<'PY'
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          version="${version#v}"
+          config_version="$(python3 - <<'PY'
           import configparser
           config = configparser.ConfigParser()
           config.read('platformio.ini')
           print(config.get('crossink', 'version'))
           PY
           )"
-          if [ "$CONFIG_VERSION" != "$VERSION" ]; then
-            echo "platformio.ini version ($CONFIG_VERSION) must match release $VERSION" >&2
-            exit 1
-          fi
-          echo "release_version=$VERSION" >> "$GITHUB_OUTPUT"
-
-  build-release:
-    needs: prepare-release
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - environment: default
-            firmware: firmware-x3-x4
-          - environment: x4-pro
-            firmware: firmware-x4-pro
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          version: "latest"
-          enable-cache: true
-
-      - name: Cache PlatformIO packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.platformio/packages
-            ~/.platformio/platforms
-          key: ${{ runner.os }}-platformio-py3.14-core6.1.19-${{ matrix.environment }}-${{ hashFiles('platformio.ini', 'platformio.local.example.ini') }}
-          restore-keys: |
-            ${{ runner.os }}-platformio-py3.14-core6.1.19-${{ matrix.environment }}-
-
-      - name: Install PlatformIO Core
-        run: uv pip install --system -U https://github.com/pioarduino/platformio-core/archive/refs/tags/v6.1.19.zip
-
-      - name: Build CrossInk
-        env:
-          CROSSINK_RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
-        run: pio run -j1 -e ${{ matrix.environment }}
-
-      - name: Upload firmware artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: release-firmware-${{ matrix.environment }}
-          path: .pio/build/${{ matrix.environment }}/${{ matrix.firmware }}-v${{ needs.prepare-release.outputs.release_version }}.bin
-          if-no-files-found: error
+          test "$config_version" = "$version"
+          echo "release_version=$version" >> "$GITHUB_OUTPUT"
 
   publish-release:
-    needs:
-      - prepare-release
-      - build-release
+    needs: prepare-release
     runs-on: ubuntu-latest
     env:
       RELEASE_VERSION: ${{ needs.prepare-release.outputs.release_version }}
@@ -117,24 +60,58 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.14"
+      - name: Locate successful main CI run for exact commit
+        id: ci_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            run_id="$(gh run list --workflow ci.yml --event push --branch main --commit "$GITHUB_SHA" --status success --limit 20 --json databaseId,conclusion --jq '.[] | select(.conclusion == "success") | .databaseId' | head -n 1)"
+            if [ -n "$run_id" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "Promoting CI run $run_id"
+              echo "Promoting successful CI run `$run_id` for `$GITHUB_SHA`." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "No successful CI push/main run found for $GITHUB_SHA" >&2
+          exit 1
 
-      - name: Download firmware artifacts
+      - name: Download exact-commit firmware artifacts
         uses: actions/download-artifact@v7
         with:
-          pattern: release-firmware-*
-          merge-multiple: true
-          path: release-firmware
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.ci_run.outputs.run_id }}
+          name: promotable-firmware-default-${{ github.sha }}
+          path: release-firmware/default
+
+      - name: Download exact-commit X4 Pro artifact
+        uses: actions/download-artifact@v7
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.ci_run.outputs.run_id }}
+          name: promotable-firmware-x4-pro-${{ github.sha }}
+          path: release-firmware/x4-pro
+
+      - name: Validate provenance, checksums, and expected binaries
+        run: |
+          set -euo pipefail
+          python3 scripts/release_artifacts.py validate --directory release-firmware/default \
+            --commit "${{ github.sha }}" --version "$RELEASE_VERSION" --environment default
+          python3 scripts/release_artifacts.py validate --directory release-firmware/x4-pro \
+            --commit "${{ github.sha }}" --version "$RELEASE_VERSION" --environment x4-pro
+          cp release-firmware/default/firmware-x3-x4-v${RELEASE_VERSION}.bin release-firmware/
+          cp release-firmware/x4-pro/firmware-x4-pro-v${RELEASE_VERSION}.bin release-firmware/
 
       - name: Generate release notes
-        run: |
-          python3 scripts/generate_release_notes.py \
-            --version "${{ env.RELEASE_VERSION }}" \
-            --output "release-notes.md"
+        run: python3 scripts/generate_release_notes.py --version "$RELEASE_VERSION" --output release-notes.md
 
-      - name: Create GitHub Release
+      - name: Publish release with exactly two firmware files
         uses: softprops/action-gh-release@v3
         with:
           token: ${{ github.token }}
