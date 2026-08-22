@@ -7,7 +7,6 @@
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
-#include "components/UiAppHelpers.h"
 #include "components/icons/chart.h"
 #include "fontIds.h"
 
@@ -49,9 +48,7 @@ int listIndexForMenuIndex(const int menuIndex) { return menuIndex < NEARBY_SECTI
 }  // namespace
 
 NetworkModeSelectionActivity::NetworkModeSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput)
-    : Activity("NetworkModeSelection", renderer, mappedInput),
-      uiTarget(makeUiTarget(renderer)),
-      app(uiTarget, uiTarget.deviceContext()) {}
+    : Activity("NetworkModeSelection", renderer, mappedInput), ui(renderer) {}
 
 void NetworkModeSelectionActivity::selectCurrent() {
   if (selectedIndex >= 0 && selectedIndex < MENU_ITEM_COUNT) onModeSelected(menuModes[selectedIndex]);
@@ -63,7 +60,7 @@ void NetworkModeSelectionActivity::onRowEvent(const fui::ActionEvent& event, voi
   self->selectedIndex = event.value;
   // Selection leaves this screen; a lingering flash would gray an unrelated
   // element on the next render.
-  self->app.clearTapFlash();
+  self->ui.app.clearTapFlash();
   self->selectCurrent();
 }
 
@@ -71,12 +68,12 @@ void NetworkModeSelectionActivity::onEnter() {
   Activity::onEnter();
 
   selectedIndex = 0;
-  uiReady = false;
+  ui.closeRouting();
   visibleRows = 1;
   topIndex = 0;
-  applySharedUiTheme(app, uiTarget);
-  app.on(ACTION_ROW, &NetworkModeSelectionActivity::onRowEvent, this);
-  app.setScreen(&NetworkModeSelectionActivity::listScreen, this);
+  ui.reset();
+  ui.app.on(ACTION_ROW, &NetworkModeSelectionActivity::onRowEvent, this);
+  ui.app.setScreen(&NetworkModeSelectionActivity::listScreen, this);
   requestUpdate();
 }
 
@@ -102,11 +99,10 @@ void NetworkModeSelectionActivity::loop() {
 
   // Touch goes through the FreeInkApp: render() registered the row hit rects;
   // route the snapshot and let onRowEvent dispatch.
-  if (uiReady) {
-    const fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
-    if (snap.touchPressed || snap.touchReleased) {
-      const auto event = app.route(snap);
-      if (app.invalidated()) requestUpdate();
+  if (ui.routingReady()) {
+    fui::ActionEvent event{};
+    if (ui.routeTouch(mappedInput, event)) {
+      if (ui.app.invalidated()) requestUpdate();
       if (event) return;  // dispatched to onRowEvent
     }
   }
@@ -197,16 +193,15 @@ void NetworkModeSelectionActivity::render(RenderLock&&) {
   // indicator; the rest of the screen renders through the app.
   const Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInput);
   if (mappedInput.hasTouchHardware()) {
-    TouchHeaderBackButton::draw(renderer, uiTarget, header, tr(STR_FILE_TRANSFER), false);
+    TouchHeaderBackButton::draw(renderer, ui.target, header, tr(STR_FILE_TRANSFER), false);
   } else {
     GUI.drawHeader(renderer, header, tr(STR_FILE_TRANSFER));
   }
 
-  uiReady = false;
-  app.render();
-  uiReady = true;
+  ui.render();
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer(screenTransitionRefresh.modeFor(0));

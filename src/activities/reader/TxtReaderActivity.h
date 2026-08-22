@@ -8,6 +8,9 @@
 #include "ReaderProgressSaveDebouncer.h"
 #include "activities/Activity.h"
 #include "components/OptionPopup.h"
+#if CROSSINK_APP_CAP_TOUCH
+#include "activities/reader/ReaderPinchGesture.h"
+#endif
 
 class TxtReaderActivity final : public Activity {
   OptionPopup quickActionsPopup;
@@ -22,7 +25,11 @@ class TxtReaderActivity final : public Activity {
   bool frontButtonLongPressHandled = false;
   bool longPowerButtonHandled = false;
   bool longPressBackHandled = false;
+  bool longPressMenuHandled = false;
   ReaderProgressSaveDebouncer progressSaveDebouncer;
+#if CROSSINK_APP_CAP_TOUCH
+  ReaderPinchGesture pinchFontGesture;
+#endif
 
   // Streaming text reader - stores file offsets for each page
   std::vector<size_t> pageOffsets;  // File offset for start of each page
@@ -61,7 +68,14 @@ class TxtReaderActivity final : public Activity {
   bool executeReaderShortcutAction(CrossPointSettings::SHORT_PWRBTN action);
   bool executePowerButtonAction();
   bool executeLongPressBackAction();
+  bool changeReaderFontSize(bool larger, FontSizeStepMode mode = FontSizeStepMode::Wrap);
+  void cycleReaderFont();
+  void rebuildTextLayout();
   void openReaderMenu();
+#if CROSSINK_APP_CAP_TOUCH
+  bool handlePinchFontResize();
+  void resetPinchFontGesture();
+#endif
 
  public:
   explicit TxtReaderActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, std::unique_ptr<Txt> txt,
@@ -83,6 +97,7 @@ class TxtReaderActivity final : public Activity {
   bool canSnapshotForSleepOverlay() const override { return true; }
   bool allowPowerAsConfirmInReaderMode() const override { return quickActionsPopup.isActive(); }
   bool blocksGlobalInput() const override { return quickActionsPopup.isActive(); }
+  bool handleShortcutAction(uint8_t action) override;
   bool handleShortcutAction(CrossPointSettings::SHORT_PWRBTN action) override;
   std::string getCurrentBookPath() const override { return txt ? txt->getPath() : std::string{}; }
 

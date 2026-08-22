@@ -325,8 +325,13 @@ bool resolvePreferredSleepDirectory(std::string& sleepDir) {
     LOG_INF("SLP", "Preferred sleep folder missing, falling back: %s", APP_STATE.preferredSleepFolderPath.c_str());
   }
 
-  if (folderExists("/.sleep")) return true;
-  return folderExists("/sleep");
+  char defaultSleepDir[16];
+  if (FsHelpers::resolveRootDirectoryIgnoreCase("/.sleep", defaultSleepDir, sizeof(defaultSleepDir)) &&
+      folderExists(defaultSleepDir)) {
+    return true;
+  }
+  return FsHelpers::resolveRootDirectoryIgnoreCase("/sleep", defaultSleepDir, sizeof(defaultSleepDir)) &&
+         folderExists(defaultSleepDir);
 }
 
 bool openPreferredSleepDirectory(FsFile& dir, std::string& sleepDir) {
@@ -554,7 +559,9 @@ void SleepActivity::renderCustomSleepScreen() const {
 
     LOG_INF("SLP", "Loading custom sleep image: %s", selection.path.c_str());
     delay(100);
-    Bitmap bitmap(file, true);
+    // White is transparent for the overlay. Error-diffusion can turn a gray
+    // source pixel white, punching holes through the preserved reader page.
+    Bitmap bitmap(file);
     const BmpReaderError parseResult = bitmap.parseHeaders();
     if (parseResult != BmpReaderError::Ok) {
       LOG_ERR("SLP", "Failed to parse custom sleep BMP %s: %s", selection.path.c_str(),

@@ -10,7 +10,7 @@ class ThemeStub {
  public:
   void drawButtonHints(const GfxRenderer&, const char*, const char*, const char*, const char*, bool) const {}
   void drawOptionPopup(const GfxRenderer&, const char*, const std::vector<std::string>&, int, bool, const char*,
-                       const char*, bool, int) const {}
+                       const char*, bool, int, const char*, const char*) const {}
 };
 
 class UITheme {

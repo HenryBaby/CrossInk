@@ -136,6 +136,7 @@ class DictionaryLookupController {
   static constexpr freeink::ui::ActionId ACTION_ALT_FORM_NO = 1;
   static constexpr freeink::ui::ActionId ACTION_ALT_FORM_YES = 2;
   static constexpr freeink::ui::ActionId ACTION_CREATE_CLIPPING = 3;
+  static constexpr freeink::ui::ActionId ACTION_SWITCH_DICTIONARY = 4;
 
   static void altFormPromptScreen(AltFormUiApp::ScreenType& screen, void* user);
   void buildAltFormPromptScreen(AltFormUiApp::ScreenType& screen);

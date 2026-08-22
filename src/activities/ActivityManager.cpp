@@ -641,6 +641,19 @@ bool ActivityManager::isReaderActivity() const {
                      [](const auto& activity) { return activity && activity->isReaderActivity(); });
 }
 
+bool ActivityManager::openReaderSettingsForTouchscreenEscapeHatch() {
+  if (!mappedInput.hasTouchHardware() || !SETTINGS.disableReaderTouchscreen || !currentActivity ||
+      !currentActivity->isReaderActivity() || pendingAction != PendingAction::None) {
+    return false;
+  }
+
+  if (!currentActivity->openReaderSettingsMenu()) {
+    // TXT has no reader menu, so keep a reliable global Settings fallback.
+    goToSettings();
+  }
+  return true;
+}
+
 bool ActivityManager::hasActivityNamed(const char* activityName) const {
   const auto matches = [activityName](const auto& activity) { return activity && activity->name == activityName; };
   if (matches(currentActivity) || matches(pendingActivity)) {

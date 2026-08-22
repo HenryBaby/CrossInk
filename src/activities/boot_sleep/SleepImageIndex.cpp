@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -61,10 +62,18 @@ uint64_t fnv1a64(std::string_view value) {
   return hash;
 }
 
-bool pathHasPrefix(std::string_view path, std::string_view folder) {
+bool pathHasPrefix(std::string_view path, std::string_view folder, const bool ignoreCase = false) {
   if (folder.empty()) return false;
-  if (path == folder) return true;
-  return path.size() > folder.size() && path.compare(0, folder.size(), folder) == 0 && path[folder.size()] == '/';
+  if (path.size() < folder.size()) return false;
+  for (size_t i = 0; i < folder.size(); ++i) {
+    const char pathChar = path[i];
+    const char folderChar = folder[i];
+    if (ignoreCase ? tolower(static_cast<unsigned char>(pathChar)) != tolower(static_cast<unsigned char>(folderChar))
+                   : pathChar != folderChar) {
+      return false;
+    }
+  }
+  return path.size() == folder.size() || path[folder.size()] == '/';
 }
 
 bool pathsIntersect(std::string_view a, std::string_view b) { return pathHasPrefix(a, b) || pathHasPrefix(b, a); }
@@ -72,7 +81,9 @@ bool pathsIntersect(std::string_view a, std::string_view b) { return pathHasPref
 bool isSleepFolderPath(std::string_view path) {
   if (path.empty()) return false;
   const auto& preferred = APP_STATE.preferredSleepFolderPath;
-  return pathsIntersect(path, preferred) || pathsIntersect(path, "/.sleep") || pathsIntersect(path, "/sleep");
+  return pathsIntersect(path, preferred) || pathHasPrefix(path, "/.sleep", true) ||
+         pathHasPrefix("/.sleep", path, true) || pathHasPrefix(path, "/sleep", true) ||
+         pathHasPrefix("/sleep", path, true);
 }
 
 bool makeCachePath(const std::string& directory, const bool includePng, char* output, const size_t outputSize) {
@@ -264,7 +275,10 @@ bool buildIndex(const std::string& directory, const bool includePng, const bool 
   }
   directoryFile.close();
 
-  if (!output.seek(0) || !writeExact(output, &header, sizeof(header)) || !output.sync() || !output.close()) {
+  const bool finalized = output.seek(0) && writeExact(output, &header, sizeof(header)) && output.sync();
+  // Close before removing: the earlier error paths do the same, and deleting a
+  // still-open file is not safe on SdFat.
+  if (!output.close() || !finalized) {
     Storage.remove(tempPath);
     return false;
   }

@@ -203,17 +203,23 @@ void ControlsOptionsActivity::openEnumOptionPicker(const SettingInfo& setting) {
   if (currentIndex >= optionCount) currentIndex = 0;
 
   const SettingInfo selectedSetting = setting;
-  optionPopup.show(setting.nameId, options, currentIndex, [selectedSetting](int selectedIndex) {
-    if (selectedSetting.valuePtr != nullptr) {
-      SETTINGS.*(selectedSetting.valuePtr) =
-          enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
-      if (isTwoFingerSwipeSetting(selectedSetting.valuePtr)) {
-        CrossPointSettings::normalizeTwoFingerSwipeActions(SETTINGS, selectedSetting.valuePtr);
-      }
-      QuickActions::settingChanged(SETTINGS, selectedSetting.valuePtr);
-      SETTINGS.saveToFile();
-    }
-  });
+  const auto note = setting.valuePtr == &CrossPointSettings::sideButtonChordAction && mappedInput.hasTouchHardware()
+                        ? OptionPopup::Note{tr(STR_NOTE), tr(STR_TOUCHSCREEN_ESCAPE_HATCH_NOTE)}
+                        : OptionPopup::Note{};
+  optionPopup.show(
+      setting.nameId, options, currentIndex,
+      [selectedSetting](int selectedIndex) {
+        if (selectedSetting.valuePtr != nullptr) {
+          SETTINGS.*(selectedSetting.valuePtr) =
+              enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
+          if (isTwoFingerSwipeSetting(selectedSetting.valuePtr)) {
+            CrossPointSettings::normalizeTwoFingerSwipeActions(SETTINGS, selectedSetting.valuePtr);
+          }
+          QuickActions::settingChanged(SETTINGS, selectedSetting.valuePtr);
+          SETTINGS.saveToFile();
+        }
+      },
+      note);
   requestUpdate();
 }
 
@@ -442,8 +448,9 @@ void ControlsOptionsActivity::render(RenderLock&&) {
                                ((*currentSettings)[selectedIndex].type == SettingType::ACTION ||
                                 (*currentSettings)[selectedIndex].type == SettingType::SUBMENU ||
                                 currentSettingUsesOptionMenu((*currentSettings)[selectedIndex]));
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), currentIsAction ? tr(STR_SELECT) : tr(STR_TOGGLE),
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), currentIsAction ? tr(STR_SELECT) : tr(STR_TOGGLE),
+                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 
   renderer.displayBuffer();

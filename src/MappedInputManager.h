@@ -3,6 +3,7 @@
 #include <HalGPIO.h>
 
 #include <array>
+#include <cstddef>
 
 class GfxRenderer;
 
@@ -34,6 +35,29 @@ class MappedInputManager {
     const char* btn2;
     const char* btn3;
     const char* btn4;
+  };
+
+  // A label can be passed as plain text or as a localized arrow fragment plus
+  // text. The fragment may appear before or after the text, depending on the
+  // locale and the direction of the label.
+  struct Label {
+    enum class Placement { None, Prefix, Suffix };
+
+    // cppcheck-suppress noExplicitConstructor
+    constexpr Label(const char* text = nullptr) : text(text) {}
+    constexpr Label(const Placement placement, const char* arrow, const char* text)
+        : placement(placement), arrow(arrow), text(text) {}
+
+    static constexpr Label withPrefix(const char* arrow, const char* text) {
+      return Label(Placement::Prefix, arrow, text);
+    }
+    static constexpr Label withSuffix(const char* arrow, const char* text) {
+      return Label(Placement::Suffix, arrow, text);
+    }
+
+    Placement placement = Placement::None;
+    const char* arrow = nullptr;
+    const char* text = nullptr;
   };
 
   explicit MappedInputManager(HalGPIO& gpio, const GfxRenderer& renderer) : gpio(gpio), renderer(renderer) {}
@@ -197,7 +221,11 @@ class MappedInputManager {
   unsigned long getHeldTime() const;
   // True when reader-mode orientation handling swaps the logical front navigation buttons.
   bool isFrontNavButtonSwapActive() const;
-  Labels mapLabels(const char* back, const char* confirm, const char* previous, const char* next) const;
+  Label withBackArrow(const char* text) const;
+  Label withPreviousPageArrow(const char* text) const;
+  Label withNextPageArrow(const char* text) const;
+  const char* resolveLabel(Label label) const;
+  Labels mapLabels(Label back, Label confirm, Label previous, Label next) const;
   // Returns the raw front button index that was pressed this frame (or -1 if none).
   int getPressedFrontButton() const;
   // Returns the raw front button index that was released this frame (or -1 if none).
@@ -227,6 +255,8 @@ class MappedInputManager {
   mutable bool suppressConfirmRelease = false;
   mutable bool suppressPowerRelease = false;
   mutable bool suppressPowerConfirmRelease = false;
+  static constexpr size_t LABEL_BUFFER_SIZE = 128;
+  mutable std::array<std::array<char, LABEL_BUFFER_SIZE>, 4> labelBuffers{};
   // One-frame synthetic releases let a chord route through the existing
   // activity navigation path without allocating an event object.
   mutable std::array<bool, BUTTON_COUNT> injectedReleases{};

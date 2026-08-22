@@ -2318,6 +2318,66 @@ function rewriteImageSrcReferences(content, xhtmlPath, renamed, splitImages = {}
   return { content: rewritten, changed };
 }
 
+/** Remove XML comments from XHTML source text. Returns { text, count, bytes }. */
+function stripComments(xml) {
+  const skippedSections = [
+    { open: "<![CDATA[", close: "]]>" },
+    { open: "<?", close: "?>" },
+  ];
+  const encoder = new TextEncoder();
+  const out = [];
+  let index = 0;
+  let count = 0;
+  let bytes = 0;
+
+  const doctypeEnd = (from) => {
+    const gt = xml.indexOf(">", from);
+    const subset = xml.indexOf("[", from);
+    if (subset < 0 || (gt >= 0 && subset > gt)) return gt < 0 ? xml.length : gt + 1;
+    const close = xml.indexOf("]>", subset);
+    return close < 0 ? xml.length : close + 2;
+  };
+
+  while (index < xml.length) {
+    const next = xml.indexOf("<", index);
+    if (next < 0) {
+      out.push(xml.slice(index));
+      break;
+    }
+    if (next > index) out.push(xml.slice(index, next));
+
+    if (xml.startsWith("<!--", next)) {
+      const close = xml.indexOf("-->", next + 4);
+      const end = close < 0 ? xml.length : close + 3;
+      count++;
+      bytes += encoder.encode(xml.slice(next, end)).length;
+      index = end;
+      continue;
+    }
+
+    if (xml.startsWith("<!DOCTYPE", next)) {
+      const end = doctypeEnd(next + 9);
+      out.push(xml.slice(next, end));
+      index = end;
+      continue;
+    }
+
+    const skipped = skippedSections.find((section) => xml.startsWith(section.open, next));
+    if (skipped) {
+      const close = xml.indexOf(skipped.close, next + skipped.open.length);
+      const end = close < 0 ? xml.length : close + skipped.close.length;
+      out.push(xml.slice(next, end));
+      index = end;
+      continue;
+    }
+
+    out.push("<");
+    index = next + 1;
+  }
+
+  return { text: out.join(""), count, bytes };
+}
+
 /**
  * Serialize an XML doc back to string, preserving the original <?xml?> declaration
  * and cleaning up XMLSerializer namespace prefix noise (xmlns:ns0 etc).
@@ -4088,6 +4148,13 @@ async function convertEpubFile(file, progressCallback) {
   for (const [xhtmlPath, content] of Object.entries(xhtmlFiles)) {
     if (operationCancelled) throw new Error("Cancelled by user");
     let t = scrubEpubTextResource(xhtmlPath, content);
+
+    const stripped = stripComments(t);
+    if (stripped.count) {
+      t = stripped.text;
+      logFix(`Comments (${stripped.count}, ${formatBytes(stripped.bytes)})`, xhtmlPath.split("/").pop());
+    }
+
     const r = fixSvgCover(t);
     if (r.fixed) {
       t = r.c;

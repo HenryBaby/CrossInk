@@ -359,7 +359,7 @@ bool CompactTableLayout::wrapCell(const Cell& cell, const uint16_t maxWidth, Tab
     }
   }
 
-  if (!flush() && !emittedAny) return false;
+  if (!flush()) return false;
   return output.lines.size() <= MAX_LINES_PER_CELL;
 }
 
@@ -423,6 +423,9 @@ CompactTableLayout::RowResult CompactTableLayout::finishRowInternal(const bool f
       hasData = hasData || !cells_[i].isHeader;
       if (!wrapCell(cells_[i], innerWidthForSpan(columnCount_, logicalColumn, destination.colSpan), destination)) {
         if (allocationFailure_) return RowResult::Abort;
+        // Release the partially wrapped cells before re-wrapping as paragraphs;
+        // the flatten retry only runs when heap is already scarce.
+        gridRow.cells.clear();
         flatLines.clear();
         return finishRowInternal(true, gridRow, flatLines, footnotes, visibleTextOffset);
       }

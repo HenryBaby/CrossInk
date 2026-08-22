@@ -25,6 +25,38 @@ RTC_NOINIT_ATTR char panicMessage[256];
 RTC_NOINIT_ATTR HalSystem::StackFrame panicStack[MAX_PANIC_STACK_DEPTH];
 RTC_NOINIT_ATTR uint32_t panicBacktrace[MAX_PANIC_BACKTRACE_DEPTH];
 RTC_NOINIT_ATTR volatile size_t panicBacktraceDepth;
+
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+// Preserve the exception-frame values that identify a C3 panic. Unlike the raw
+// stack words below, MEPC is the actual faulting instruction and MTVAL is the
+// fault address/value reported by the CPU.
+struct RiscvPanicRegisters {
+  uint32_t mepc;
+  uint32_t ra;
+  uint32_t sp;
+  uint32_t fp;
+  uint32_t mcause;
+  uint32_t mtval;
+  uint32_t mstatus;
+  uint32_t captured;
+};
+RTC_NOINIT_ATTR RiscvPanicRegisters panicRiscvRegisters;
+#endif
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+// Preserve the X4 Pro/Sticky exception details alongside their existing
+// symbolizable backtrace. EXCVADDR identifies the bad address for memory
+// access faults, which the backtrace alone cannot show.
+struct XtensaPanicRegisters {
+  uint32_t pc;
+  uint32_t a0;
+  uint32_t a1;
+  uint32_t ps;
+  uint32_t exccause;
+  uint32_t excvaddr;
+  uint32_t captured;
+};
+RTC_NOINIT_ATTR XtensaPanicRegisters panicXtensaRegisters;
+#endif
 // RTC_NOINIT is uninitialized on cold boot, so only this exact marker proves a
 // panic diagnostic was captured before the reset.
 RTC_NOINIT_ATTR volatile uint32_t panicCaptureMarker;
@@ -39,6 +71,14 @@ static DRAM_ATTR const char PANIC_REASON_UNKNOWN[] = "(unknown panic reason)";
 #if CONFIG_IDF_TARGET_ARCH_XTENSA
 void IRAM_ATTR captureXtensaPanicBacktrace(const void* frame) {
   const auto* exceptionFrame = static_cast<const XtExcFrame*>(frame);
+  panicXtensaRegisters.pc = exceptionFrame->pc;
+  panicXtensaRegisters.a0 = exceptionFrame->a0;
+  panicXtensaRegisters.a1 = exceptionFrame->a1;
+  panicXtensaRegisters.ps = exceptionFrame->ps;
+  panicXtensaRegisters.exccause = exceptionFrame->exccause;
+  panicXtensaRegisters.excvaddr = exceptionFrame->excvaddr;
+  panicXtensaRegisters.captured = PANIC_CAPTURE_MAGIC;
+
   esp_backtrace_frame_t backtraceFrame = {
       .pc = static_cast<uint32_t>(exceptionFrame->pc),
       .sp = static_cast<uint32_t>(exceptionFrame->a1),
@@ -66,6 +106,20 @@ void IRAM_ATTR captureXtensaPanicBacktrace(const void* frame) {
 
   panicBacktraceDepth = depth;
   panicCaptureMarker = PANIC_CAPTURE_MAGIC;
+}
+#endif
+
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+void IRAM_ATTR captureRiscvPanicRegisters(const void* frame) {
+  const auto* exceptionFrame = static_cast<const esp_cpu_frame_t*>(frame);
+  panicRiscvRegisters.mepc = exceptionFrame->mepc;
+  panicRiscvRegisters.ra = exceptionFrame->ra;
+  panicRiscvRegisters.sp = exceptionFrame->sp;
+  panicRiscvRegisters.fp = exceptionFrame->s0;
+  panicRiscvRegisters.mcause = exceptionFrame->mcause;
+  panicRiscvRegisters.mtval = exceptionFrame->mtval;
+  panicRiscvRegisters.mstatus = exceptionFrame->mstatus;
+  panicRiscvRegisters.captured = PANIC_CAPTURE_MAGIC;
 }
 #endif
 
@@ -100,6 +154,8 @@ void IRAM_ATTR __wrap_panic_print_backtrace(const void* frame, int core) {
     panicStack[i].sp = 0;
   }
   panicBacktraceDepth = 0;
+
+  captureRiscvPanicRegisters(frame);
 
   // Copied from components/esp_system/port/arch/riscv/panic_arch.c
   uint32_t sp = (uint32_t)((RvExcFrame*)frame)->sp;
@@ -175,6 +231,12 @@ void clearPanic() {
     panicStack[i].sp = 0;
   }
   panicBacktraceDepth = 0;
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+  panicRiscvRegisters.captured = 0;
+#endif
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+  panicXtensaRegisters.captured = 0;
+#endif
   clearLastLogs();
 }
 
@@ -193,6 +255,29 @@ std::string getPanicInfo(bool full) {
       snprintf(buffer, sizeof(buffer), "%08X", value);
       return std::string(buffer);
     };
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+    if (panicRiscvRegisters.captured == PANIC_CAPTURE_MAGIC) {
+      info += "\n\nRISC-V exception registers:\n";
+      info += "MEPC (faulting instruction): 0x" + toHex(panicRiscvRegisters.mepc);
+      info += "\nRA (caller): 0x" + toHex(panicRiscvRegisters.ra);
+      info += "\nSP (stack pointer): 0x" + toHex(panicRiscvRegisters.sp);
+      info += "\nS0/FP (frame pointer): 0x" + toHex(panicRiscvRegisters.fp);
+      info += "\nMCAUSE: 0x" + toHex(panicRiscvRegisters.mcause);
+      info += "\nMTVAL (fault address/value): 0x" + toHex(panicRiscvRegisters.mtval);
+      info += "\nMSTATUS: 0x" + toHex(panicRiscvRegisters.mstatus);
+    }
+#endif
+#if CONFIG_IDF_TARGET_ARCH_XTENSA
+    if (panicXtensaRegisters.captured == PANIC_CAPTURE_MAGIC) {
+      info += "\n\nXtensa exception registers:\n";
+      info += "PC (faulting instruction): 0x" + toHex(panicXtensaRegisters.pc);
+      info += "A0 (return address): 0x" + toHex(panicXtensaRegisters.a0);
+      info += "A1 (stack pointer): 0x" + toHex(panicXtensaRegisters.a1);
+      info += "PS (processor state): 0x" + toHex(panicXtensaRegisters.ps);
+      info += "EXCCAUSE: 0x" + toHex(panicXtensaRegisters.exccause);
+      info += "\nEXCVADDR (fault address): 0x" + toHex(panicXtensaRegisters.excvaddr);
+    }
+#endif
     if (panicStack[0].sp != 0) {
       info += "\n\nStack memory:\n";
       for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {

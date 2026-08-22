@@ -195,7 +195,9 @@ bool renderFromCache(GfxRenderer& renderer, const std::string& cachePath, int x,
         retainedPxcCapacity = pixelBytes;
       }
     }
-    if (retainedPxcPixels && cacheFile.seek(4) &&
+    // A failed growth leaves the previous, smaller buffer in place; reading the
+    // new payload into it would overflow that allocation.
+    if (retainedPxcPixels && retainedPxcCapacity >= pixelBytes && cacheFile.seek(4) &&
         cacheFile.read(retainedPxcPixels.get(), pixelBytes) == static_cast<int>(pixelBytes)) {
       retainedPxcPath = cachePath;
       retainedPxcWidth = cachedWidth;

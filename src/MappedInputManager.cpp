@@ -1,8 +1,10 @@
 #include "MappedInputManager.h"
 
 #include <GfxRenderer.h>
+#include <I18n.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <utility>
 
@@ -903,8 +905,45 @@ unsigned long MappedInputManager::getHeldTime() const {
   return heldTime;
 }
 
-MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const char* confirm, const char* previous,
-                                                         const char* next) const {
+namespace {
+
+bool isRightToLeftUiLanguage() {
+  const auto language = I18N.getLanguage();
+  return language == Language::AR || language == Language::HE;
+}
+
+}  // namespace
+
+MappedInputManager::Label MappedInputManager::withBackArrow(const char* text) const {
+  if (isRightToLeftUiLanguage()) return Label::withSuffix(tr(STR_ARROW_RIGHT), text);
+  return Label::withPrefix(tr(STR_ARROW_LEFT), text);
+}
+
+MappedInputManager::Label MappedInputManager::withPreviousPageArrow(const char* text) const {
+  if (isRightToLeftUiLanguage()) return Label(text);
+  return Label::withPrefix(tr(STR_ARROW_LEFT), text);
+}
+
+MappedInputManager::Label MappedInputManager::withNextPageArrow(const char* text) const {
+  if (isRightToLeftUiLanguage()) return Label(text);
+  return Label::withSuffix(tr(STR_ARROW_RIGHT), text);
+}
+
+const char* MappedInputManager::resolveLabel(const Label label) const {
+  const char* text = label.text != nullptr ? label.text : "";
+  if (label.placement == Label::Placement::None || label.arrow == nullptr) return text;
+
+  auto& buffer = labelBuffers[0];
+  if (label.placement == Label::Placement::Prefix) {
+    std::snprintf(buffer.data(), buffer.size(), "%s%s", label.arrow, text);
+  } else {
+    std::snprintf(buffer.data(), buffer.size(), "%s%s", text, label.arrow);
+  }
+  return buffer.data();
+}
+
+MappedInputManager::Labels MappedInputManager::mapLabels(const Label back, const Label confirm, const Label previous,
+                                                         const Label next) const {
   const bool useReaderMapping = readerMode && SETTINGS.readerFrontButtonsEnabled;
   const ButtonIndex btnBack = useReaderMapping ? SETTINGS.readerFrontButtonBack : SETTINGS.frontButtonBack;
   const ButtonIndex btnConfirm = useReaderMapping ? SETTINGS.readerFrontButtonConfirm : SETTINGS.frontButtonConfirm;
@@ -915,12 +954,31 @@ MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const
   const ButtonIndex mappedLeft = mapFrontButtonForReaderOrientation(btnLeft, btnLeft, btnRight, readerMode);
   const ButtonIndex mappedRight = mapFrontButtonForReaderOrientation(btnRight, btnLeft, btnRight, readerMode);
 
+  // Compose arrow labels into instance-owned buffers so returned pointers
+  // remain valid until the next label mapping on this input manager.
+  auto resolveLabelToBuffer = [&](const Label label, const size_t bufferIndex) -> const char* {
+    const char* text = label.text != nullptr ? label.text : "";
+    if (label.placement == Label::Placement::None || label.arrow == nullptr) return text;
+
+    auto& buffer = labelBuffers[bufferIndex];
+    if (label.placement == Label::Placement::Prefix) {
+      std::snprintf(buffer.data(), buffer.size(), "%s%s", label.arrow, text);
+    } else {
+      std::snprintf(buffer.data(), buffer.size(), "%s%s", text, label.arrow);
+    }
+    return buffer.data();
+  };
+  const char* resolvedBack = resolveLabelToBuffer(back, 0);
+  const char* resolvedConfirm = resolveLabelToBuffer(confirm, 1);
+  const char* resolvedPrevious = resolveLabelToBuffer(previous, 2);
+  const char* resolvedNext = resolveLabelToBuffer(next, 3);
+
   // Build the label order based on the configured hardware mapping.
   auto labelForHardware = [&](ButtonIndex hw) -> const char* {
-    if (hw == mappedBack) return back;
-    if (hw == mappedConfirm) return confirm;
-    if (hw == mappedLeft) return previous;
-    if (hw == mappedRight) return next;
+    if (hw == mappedBack) return resolvedBack;
+    if (hw == mappedConfirm) return resolvedConfirm;
+    if (hw == mappedLeft) return resolvedPrevious;
+    if (hw == mappedRight) return resolvedNext;
     return "";
   };
 

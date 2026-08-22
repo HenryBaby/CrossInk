@@ -1,12 +1,52 @@
 #include "FsHelpers.h"
 
+#include <HalStorage.h>
+
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <string_view>
 #include <vector>
 
 namespace FsHelpers {
+
+bool resolveRootDirectoryIgnoreCase(const char* expectedPath, char* resolvedPath, const size_t resolvedPathSize) {
+  if (!expectedPath || expectedPath[0] != '/' || expectedPath[1] == '\0' || strchr(expectedPath + 1, '/') ||
+      !resolvedPath || resolvedPathSize == 0) {
+    return false;
+  }
+
+  HalFile exact = Storage.open(expectedPath);
+  if (exact && exact.isDirectory()) {
+    const int written = snprintf(resolvedPath, resolvedPathSize, "%s", expectedPath);
+    exact.close();
+    return written > 0 && static_cast<size_t>(written) < resolvedPathSize;
+  }
+  exact.close();
+
+  HalFile root = Storage.open("/");
+  if (!root || !root.isDirectory()) {
+    root.close();
+    return false;
+  }
+
+  char name[256];  // FAT long filenames are at most 255 bytes.
+  const char* expectedName = expectedPath + 1;
+  for (HalFile entry = root.openNextFile(); entry; entry = root.openNextFile()) {
+    const bool isDirectory = entry.isDirectory();
+    entry.getName(name, sizeof(name));
+    entry.close();
+    if (!isDirectory || strcasecmp(name, expectedName) != 0) continue;
+
+    const int written = snprintf(resolvedPath, resolvedPathSize, "/%s", name);
+    root.close();
+    return written > 0 && static_cast<size_t>(written) < resolvedPathSize;
+  }
+
+  root.close();
+  return false;
+}
 
 namespace {
 bool isHexDigit(const char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'); }

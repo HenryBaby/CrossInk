@@ -102,6 +102,7 @@ void OpdsServerStore::toJson(JsonDocument& doc) const {
     obj["downloadFolder"] = normalizeOpdsDownloadFolder(server.downloadFolder);
     obj["folderOrganization"] = opdsFolderOrganizationToJson(server.folderOrganization);
     obj["filenameFormat"] = opdsFilenameFormatToJson(server.filenameFormat);
+    obj["verifyTls"] = server.verifyTls;
   }
 }
 
@@ -129,6 +130,7 @@ bool OpdsServerStore::fromJson(JsonVariantConst doc) {
     }
     server.folderOrganization = opdsFolderOrganizationFromJson(obj["folderOrganization"] | "");
     server.filenameFormat = opdsFilenameFormatFromJson(obj["filenameFormat"] | "");
+    server.verifyTls = obj["verifyTls"] | true;
     obfuscation::DecodeStatus status = obfuscation::DecodeStatus::INVALID;
     server.password = obfuscation::deobfuscateFromBase64(obj["password_obf"] | "", &status);
     if (status == obfuscation::DecodeStatus::LEGACY && !server.password.empty()) {

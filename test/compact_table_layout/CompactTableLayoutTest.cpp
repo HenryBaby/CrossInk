@@ -34,7 +34,13 @@ TEST(CompactTableLayoutTest, SourceFixtureModelsLargeAndUnsupportedTables) {
   ASSERT_NE(gridStart, std::string::npos);
   ASSERT_NE(gridEnd, std::string::npos);
   const std::string grid = source.substr(gridStart, gridEnd - gridStart);
+  const size_t captionStart = grid.find("<caption>");
+  const size_t firstRowStart = grid.find("<tr>");
 
+  ASSERT_NE(captionStart, std::string::npos);
+  ASSERT_NE(firstRowStart, std::string::npos);
+  EXPECT_LT(captionStart, firstRowStart);
+  EXPECT_NE(grid.find("Table 2-1: Compact table caption"), std::string::npos);
   EXPECT_EQ(countOccurrences(grid, "<tr>"), 33u);  // group heading + header + 31 data rows
   EXPECT_EQ(countOccurrences(grid, "<td"), 31u * 8u);
   EXPECT_EQ(countOccurrences(grid, "<th"), 9u);  // eight headers plus the full-width heading

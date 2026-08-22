@@ -740,7 +740,8 @@ void ParsedText::setRubyGroupAt(size_t startIndex, size_t count, const std::stri
     rubyTexts[idx] = "";
     wordStyles[idx] =
         static_cast<EpdFontFamily::Style>(static_cast<uint8_t>(wordStyles[idx]) | EpdFontFamily::RUBY_CONTINUE);
-    wordContinues[idx] = true;  // Prevent page breaker from splitting the Group Ruby!
+    wordContinues[idx] = true;       // Prevent the page breaker from splitting group ruby.
+    wordNoSpaceBefore[idx] = false;  // Keep allowsBreak() disabled for the continuation.
   }
 }
 
@@ -1444,10 +1445,13 @@ bool ParsedText::splitTokenAtCodepointBoundary(const size_t wordIndex, const int
     prefix.assign(word.data(), candidateOffset);
     const BionicTokenMetadata prefixBionic = computeBionicMetadata(prefix, style, bionicReadingEnabled);
     const int prefixWidth = measureTokenWidth(renderer, fontId, prefix, prefixBionic.style, prefixBionic.boundary);
-    if (prefixWidth <= availableWidth) {
-      chosenOffset = candidateOffset;
-      chosenWidth = prefixWidth;
+    if (prefixWidth > availableWidth) {
+      // Prefix widths grow with the prefix, so every longer candidate is also
+      // too wide. Stop here instead of measuring the rest of a huge token.
+      break;
     }
+    chosenOffset = candidateOffset;
+    chosenWidth = prefixWidth;
     cursor = next;
   }
 
@@ -1587,11 +1591,16 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
   int activeJustifyExtra = justifyExtra;
 
   if (willReorder) {
+    ArenaVector<uint16_t> reorderedWidths(scratchArena);
+    if (!reorderedWidths.reserve(visualOrderScratch.size())) {
+      LOG_ERR("PTX", "OOM allocating reordered word-width scratch (%u words)",
+              static_cast<unsigned>(visualOrderScratch.size()));
+      return false;
+    }
     std::vector<std::string> reorderedRubyTexts;
     if (!lineRubyTexts.empty()) reorderedRubyTexts.reserve(visualOrderScratch.size());
     reorderedWordsScratch.clear();
     reorderedStylesScratch.clear();
-    reorderedWidthsScratch.clear();
     reorderedContinuesScratch.clear();
     reorderedNoSpaceBeforeScratch.clear();
     reorderedBionicBoundaryScratch.clear();
@@ -1599,7 +1608,6 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
     reorderedBackgroundBlackScratch.clear();
     reorderedWordsScratch.reserve(visualOrderScratch.size());
     reorderedStylesScratch.reserve(visualOrderScratch.size());
-    reorderedWidthsScratch.reserve(visualOrderScratch.size());
     reorderedContinuesScratch.reserve(visualOrderScratch.size());
     reorderedNoSpaceBeforeScratch.reserve(visualOrderScratch.size());
     reorderedBionicBoundaryScratch.reserve(visualOrderScratch.size());
@@ -1610,7 +1618,10 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
       const uint16_t src = visualOrderScratch[i];
       reorderedWordsScratch.push_back(std::move(lineWords[src]));
       reorderedStylesScratch.push_back(lineWordStyles[src]);
-      reorderedWidthsScratch.push_back(lineWordWidths[src]);
+      if (!reorderedWidths.push_back(lineWordWidths[src])) {
+        LOG_ERR("PTX", "OOM growing reordered word-width scratch");
+        return false;
+      }
       reorderedBionicBoundaryScratch.push_back(lineBionicBoundary[src]);
       reorderedBackgroundBlackScratch.push_back(lineBackgroundBlack[src]);
       if (!lineRubyTexts.empty()) reorderedRubyTexts.push_back(std::move(lineRubyTexts[src]));
@@ -1639,8 +1650,8 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
     int reorderedWordWidthSum = 0;
     size_t reorderedGapCount = 0;
     int reorderedNaturalGaps = 0;
-    for (size_t wordIdx = 0; wordIdx < reorderedWidthsScratch.size(); ++wordIdx) {
-      reorderedWordWidthSum += reorderedWidthsScratch[wordIdx];
+    for (size_t wordIdx = 0; wordIdx < reorderedWidths.size(); ++wordIdx) {
+      reorderedWordWidthSum += reorderedWidths[wordIdx];
       if (wordIdx > 0) {
         reorderedGapCount +=
             gapSlotsBeforeToken(reorderedWordsScratch[wordIdx], reorderedContinuesScratch[wordIdx],
@@ -1679,14 +1690,14 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
       }
     }
 
-    for (size_t wordIdx = 0; wordIdx < reorderedWidthsScratch.size(); ++wordIdx) {
+    for (size_t wordIdx = 0; wordIdx < reorderedWidths.size(); ++wordIdx) {
       if (!lineXPos.push_back(static_cast<int16_t>(xpos))) {
         LOG_ERR("PTX", "OOM growing RTL line x-position scratch");
         return false;
       }
-      xpos += reorderedWidthsScratch[wordIdx];
+      xpos += reorderedWidths[wordIdx];
 
-      if (wordIdx + 1 < reorderedWidthsScratch.size()) {
+      if (wordIdx + 1 < reorderedWidths.size()) {
         const bool nextContinues = reorderedContinuesScratch[wordIdx + 1];
         const bool nextNoSpace = reorderedNoSpaceBeforeScratch[wordIdx + 1];
         const bool nextGuideDot = reorderedGuideDotBeforeScratch[wordIdx + 1];
@@ -1701,7 +1712,6 @@ bool ParsedText::extractLine(Arena& scratchArena, const size_t breakIndex, const
 
     lineWords.swap(reorderedWordsScratch);
     lineWordStyles.swap(reorderedStylesScratch);
-    lineWordWidths.swap(reorderedWidthsScratch);
     lineBionicBoundary.swap(reorderedBionicBoundaryScratch);
     lineGuideDotBefore.swap(reorderedGuideDotBeforeScratch);
     lineBackgroundBlack.swap(reorderedBackgroundBlackScratch);

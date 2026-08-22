@@ -192,6 +192,7 @@ void EndOfBookOptions::render(GfxRenderer& renderer, const MappedInputManager& i
   app.render();
   uiReady.store(true, std::memory_order_release);
 
-  const auto labels = input.mapLabels(tr(STR_BACK), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      input.mapLabels(input.withBackArrow(tr(STR_BACK)), tr(STR_OPEN), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }

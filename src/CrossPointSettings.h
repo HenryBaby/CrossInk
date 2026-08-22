@@ -459,6 +459,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Power + Up shortcut action. Disabled by default so the established
   // Power + Down screenshot chord remains screenshot-only.
   uint8_t powerChordAction = CHORD_DISABLED;
+  // Up + Down shortcut action. On touch hardware, while the reader touchscreen
+  // is disabled, this chord instead opens Settings as the recovery route.
+  uint8_t sideButtonChordAction = CHORD_DISABLED;
   // X4 Pro capacitive Home-key actions. Values below SHORT_PWRBTN_COUNT map
   // directly to the matching power-button shortcut action.
   uint8_t homeButtonTapAction = HOME_BUTTON_BACK_HOME;

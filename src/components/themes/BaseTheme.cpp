@@ -1091,7 +1091,8 @@ void BaseTheme::drawTextField(const GfxRenderer& renderer, Rect rect, const int 
 
 void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, const std::vector<std::string>& options,
                                 int selectedIndex, const bool showConfirmationFooter, const char* cancelLabel,
-                                const char* saveLabel, const bool saveFocused, const int primaryOptionIndex) const {
+                                const char* saveLabel, const bool saveFocused, const int primaryOptionIndex,
+                                const char* noteLabel, const char* noteBody) const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   const auto pageWidth = renderer.getScreenWidth();
   const auto pageHeight = renderer.getScreenHeight();
@@ -1112,6 +1113,9 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
 
   const int optionLineHeight = renderer.getLineHeight(optionFontId);
   const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const bool hasNote = noteLabel && noteBody;
+  const int noteLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+  const int noteHeight = hasNote ? noteLineHeight * 2 + metrics.optionPopupTitleGap : 0;
 #if CROSSINK_APP_CAP_TOUCH
   const int rowHeight =
       touchActionStyle ? TouchActionButtons::kDefaultHeight : optionLineHeight + selectionVPadding * 2;
@@ -1126,6 +1130,12 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
     int w = renderer.getTextWidth(optionFontId, opt.c_str(), style);
     if (w > maxTextWidth) maxTextWidth = w;
   }
+  if (hasNote) {
+    const int noteLabelWidth = renderer.getTextWidth(UI_10_FONT_ID, noteLabel, EpdFontFamily::BOLD);
+    const int noteBodyWidth = renderer.getTextWidth(UI_10_FONT_ID, noteBody);
+    const int noteWidth = noteLabelWidth + renderer.getSpaceWidth(UI_10_FONT_ID) + noteBodyWidth;
+    maxTextWidth = std::max(maxTextWidth, noteWidth);
+  }
 
   const int optionCount = static_cast<int>(options.size());
   if (optionCount <= 0) {
@@ -1135,7 +1145,7 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
   constexpr int footerHeight = 56;
   const int footerSpace = showConfirmationFooter ? footerHeight : 0;
   const int maxDialogH =
-      std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + innerPadding * 2 + footerSpace,
+      std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + noteHeight + innerPadding * 2 + footerSpace,
                pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
   // Reserve the narrow scroll gutter up front. A wrapped title may reduce the
   // number of visible options, so deciding this after title layout would make
@@ -1145,13 +1155,14 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
                                    12 / 10,
                                pageWidth - metrics.optionPopupDialogSideMargin * 2);
   const int titleContentWidth = std::max(1, dialogW - innerPadding * 2);
-  const int maxTitleLines = std::max(
-      1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - rowHeight - footerSpace) / titleLineHeight);
+  const int maxTitleLines =
+      std::max(1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - noteHeight - rowHeight - footerSpace) /
+                      titleLineHeight);
   const auto titleLines =
       renderer.wrappedText(UI_12_FONT_ID, title, titleContentWidth, maxTitleLines, EpdFontFamily::BOLD);
   const int titleHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
-  const int maxListHeight =
-      std::max(rowHeight, maxDialogH - innerPadding * 2 - titleHeight - metrics.optionPopupTitleGap - footerSpace);
+  const int maxListHeight = std::max(
+      rowHeight, maxDialogH - innerPadding * 2 - titleHeight - metrics.optionPopupTitleGap - noteHeight - footerSpace);
   const int rowStep = rowHeight + itemSpacing;
   const int maxVisibleOptions = std::max(1, std::min(optionCount, (maxListHeight + itemSpacing) / rowStep));
   const int safeSelectedIndex = std::clamp(selectedIndex, 0, optionCount - 1);
@@ -1162,7 +1173,7 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
   const bool hasHiddenOptions = visibleCount < optionCount;
   const int scrollBarGutter =
       hasHiddenOptions ? metrics.scrollBarWidth + metrics.scrollBarRightOffset + selectionHPadding : 0;
-  const int contentHeight = titleHeight + metrics.optionPopupTitleGap + listHeight;
+  const int contentHeight = titleHeight + metrics.optionPopupTitleGap + noteHeight + listHeight;
   const int dialogH = contentHeight + innerPadding * 2 + footerSpace;
   const int dialogX = (pageWidth - dialogW) / 2;
   const int dialogY = (pageHeight - dialogH) / 2;
@@ -1191,12 +1202,44 @@ void BaseTheme::drawOptionPopup(const GfxRenderer& renderer, const char* title, 
     y += titleLineHeight;
   }
 
-  if (metrics.optionPopupTitleSeparator) {
+  if (metrics.optionPopupTitleSeparator || hasNote) {
     const int sepY = y + metrics.optionPopupTitleGap / 2;
     renderer.drawLine(dialogX + innerPadding, sepY, dialogX + dialogW - innerPadding, sepY, true);
   }
 
   y += metrics.optionPopupTitleGap;
+
+  if (hasNote) {
+    const int noteContentWidth = std::max(1, dialogW - innerPadding * 2);
+    const std::string noteText = std::string(noteLabel) + " " + noteBody;
+    const auto noteLines = renderer.wrappedText(UI_10_FONT_ID, noteText.c_str(), noteContentWidth, 2);
+    const int labelWidth = renderer.getTextWidth(UI_10_FONT_ID, noteLabel, EpdFontFamily::BOLD);
+    const int spaceWidth = renderer.getSpaceWidth(UI_10_FONT_ID);
+    const std::string labelPrefix = std::string(noteLabel) + " ";
+    for (size_t i = 0; i < noteLines.size(); ++i) {
+      const auto& line = noteLines[i];
+      if (i == 0 && (line == noteLabel || line.rfind(labelPrefix, 0) == 0)) {
+        const std::string bodyLine = line.size() > labelPrefix.size() ? line.substr(labelPrefix.size()) : std::string();
+        const int bodyWidth =
+            bodyLine.empty() ? 0 : spaceWidth + renderer.getTextWidth(UI_10_FONT_ID, bodyLine.c_str());
+        const int lineWidth = labelWidth + bodyWidth;
+        const int noteX = dialogX + (dialogW - lineWidth) / 2;
+        renderer.drawText(UI_10_FONT_ID, noteX, y, noteLabel, true, EpdFontFamily::BOLD);
+        if (!bodyLine.empty()) {
+          renderer.drawText(UI_10_FONT_ID, noteX + labelWidth + spaceWidth, y, bodyLine.c_str());
+        }
+      } else {
+        const int lineWidth = renderer.getTextWidth(UI_10_FONT_ID, line.c_str());
+        renderer.drawText(UI_10_FONT_ID, dialogX + (dialogW - lineWidth) / 2, y, line.c_str());
+      }
+      y += noteLineHeight;
+    }
+    while (noteLines.size() < 2) y += noteLineHeight;
+
+    const int separatorY = y + metrics.optionPopupTitleGap / 2;
+    renderer.drawLine(dialogX + innerPadding, separatorY, dialogX + dialogW - innerPadding, separatorY, true);
+    y += metrics.optionPopupTitleGap;
+  }
 
   const int itemRectX = dialogX + innerPadding;
   const int itemRectW = std::max(1, dialogW - innerPadding * 2 - scrollBarGutter);
