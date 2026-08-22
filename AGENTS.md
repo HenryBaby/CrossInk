@@ -5,6 +5,52 @@ This is the canonical repo instruction file.
 
 Project: Open-source e-reader firmware for ESP32-C3 and ESP32-S3 devices.
 
+## Architecture And Fast Navigation
+
+Start narrow. Read the named entry point and its direct collaborators before
+scanning a whole subsystem; `rg` exact symbols and `rg --files <directory>`
+are the default discovery tools. The repository is intentionally split between
+application policy here and reusable hardware/UI implementation in the nested
+SDK.
+
+| Area | Read first | Owns |
+| --- | --- | --- |
+| Boot/runtime | `src/main.cpp`, `src/CrossPointSettings.h`, `src/CrossPointState.h` | Hardware startup, app singletons, global input/power routing, resume and sleep policy. |
+| Screen flow | `src/activities/Activity.h`, `src/activities/ActivityManager.{h,cpp}` | The activity stack, lifecycle, result callbacks, render scheduling, and top-level navigation factories. |
+| Reading | `src/activities/reader/ReaderActivity.h`, the matching `EpubReaderActivity`, `TxtReaderActivity`, or `XtcReaderActivity` | Reader UI, controls, progress, dictionary/clipping flows, and format dispatch. |
+| EPUB engine | `lib/Epub/Epub.{h,cpp}`, `lib/Epub/Epub/` | ZIP/OPF/HTML/CSS parsing, layout, page model, hyphenation, images, and SD cache serialization. |
+| UI and input | `src/components/UITheme.{h,cpp}`, `src/MappedInputManager.{h,cpp}`, `src/QuickActions.{h,cpp}` | App theme policy, logical buttons/gestures, shortcuts, and app-specific touch components. |
+| Hardware boundary | `lib/hal/`, `include/AppCapabilities.h`, `include/DeviceCapabilities.h`, then `freeink-sdk/` | CrossInk HAL wrappers and capability gating; display, storage, input, power, and board drivers live in the SDK. |
+| Network and transfers | `src/activities/network/`, `src/network/CrossPointWebServer.{h,cpp}` | Wi-Fi flow, web/WebDAV/WebSocket transfer, OTA, Calibre, Nearby, and USB Drive activities. |
+| Persistence | `lib/Serialization/`, `src/*Store.*`, `src/clippings/`, `docs/data-cache.md` | Settings/session data plus per-feature SD stores; EPUB cache is a separate layout/cache concern. |
+
+### Runtime Boundaries
+
+- `main.cpp` owns the global `renderer`, `mappedInputManager`, and `activityManager`; it initializes the device and calls the activity loop.
+- `ActivityManager` owns activities with `std::unique_ptr`, applies push/pop/replace changes on the main loop, and renders on a dedicated FreeRTOS task. Do not mutate activity stack or renderer state from arbitrary tasks; use its request/navigation APIs and `RenderLock` contract.
+- Activities are foreground-only screen controllers. Put durable setup in `onEnter()`, release resources in `onExit()`, and use `startActivityForResult()`/`setResult()` for nested flows rather than hand-rolled global state.
+- The app uses `SETTINGS` for persisted preferences and `APP_STATE` for persisted session/runtime context. Before adding another store or global, search these and the existing `*Store` classes.
+- Readers own reader interaction and persistence coordination; `lib/Epub` owns content parsing/layout/cache data. Keep UI policy out of the EPUB library and reusable device behavior out of app activities.
+- App code should use `lib/hal` and FreeInkUI-facing abstractions. Change `freeink-sdk` only when behavior is broadly hardware/UI reusable; a parent-repo change must also advance the submodule gitlink to integrate an SDK fix.
+
+### Directory And Generated-Asset Map
+
+- `src/activities/{boot_sleep,home,reader,settings,network,util}`: screen controllers grouped by user flow.
+- `src/components/`: shared app UI, themes, touch helpers, and generated icon headers. `src/util/` holds app-domain helpers such as dictionaries, cache utilities, navigation, and string/layout helpers.
+- `lib/EpdFont`, `lib/GfxRenderer`, `lib/FsHelpers`, `lib/Memory`, `lib/I18n`, `lib/Serialization`, `lib/Txt`, and `lib/Xtc` are focused local libraries. Prefer extending the closest existing library over adding a cross-cutting helper.
+- `freeink-sdk/` is a submodule providing the FreeInkUI, HAL-backed device drivers, board profiles, and network primitives. Check its pinned SHA with `git submodule status` before diagnosing or claiming an SDK integration.
+- `test/` is a native CMake/CTest suite with isolated target folders; `test/epubs-src/` contains fixture sources and `test/device/` contains device-oriented checks. `scripts/run_simulator_smoke_test.py` is the broad app-flow regression tripwire.
+- `web/templates/`, `web/pages/`, and `web/assets/` are the editable web portal sources. `site/` is repository website content, not firmware UI.
+- Do not edit generated outputs: `src/network/html/*.generated.h` (from `scripts/build_web.py`), `lib/I18n/I18nKeys.h`, `I18nStrings.h`, and `I18nStrings.cpp` (from `scripts/gen_i18n.py`), icon headers listed by `src/components/icons/*.manifest` (from `scripts/generate_icons.py`), or EPUB hyphenation tries under `lib/Epub/Epub/hyphenation/generated/`.
+
+### Target Selection
+
+- `default`: Xteink X3/X4, ESP32-C3, buttons, SPI SD, no touch/PSRAM/USB Drive.
+- `sticky`: reTerminal Sticky, ESP32-S3, touch, SPI SD, PSRAM framebuffer.
+- `x4-pro`: Xteink X4 Pro, ESP32-S3, touch, SDMMC, PSRAM framebuffer, and USB Drive capability.
+- `simulator`, `simulator-X3`, `sticky-simulator`, and `x4-pro-simulator`: native profiles. Match the simulator profile to the capability/device branch being changed.
+- `platformio.ini` is the capability-source build matrix. Read the matching environment's flags before adding `#if` branches; use `AppCapabilities`/device capability helpers rather than duplicating macro checks in activities.
+
 ## Core Rules
 
 - Role: Senior Embedded Systems Engineer for ESP-IDF / Arduino-ESP32 work.
@@ -37,10 +83,10 @@ Project: Open-source e-reader firmware for ESP32-C3 and ESP32-S3 devices.
 ## Hardware Constraints
 
 - ESP32-C3 targets (Xteink X3/X4): single-core RISC-V at 160 MHz, no PSRAM, and about 380 KB usable internal RAM.
-- The supported ESP32-S3R8 target (Seeed reTerminal Sticky) uses dual-core Xtensa at up to 240 MHz with 8 MB PSRAM. PSRAM is slower than internal DRAM and is not suitable for every DMA, ISR, or latency-sensitive buffer. X4 Pro code paths and a simulator profile exist upstream, but v1.5.0 does not provide a supported X4 Pro firmware target.
+- The supported ESP32-S3 targets include the reTerminal Sticky and Xteink X4 Pro, with touch and PSRAM framebuffer support. The X4 Pro uses SDMMC and has a supported `x4-pro` firmware target plus `x4-pro-simulator`; Sticky remains outside this downstream fork's validation scope.
 - Current displays use an 800x480 1-bit e-ink framebuffer: `800 * 480 / 8 = 48000` bytes. Use runtime renderer dimensions because orientation and future device profiles may differ.
 - Use one framebuffer only. C3 targets keep it in internal RAM; current S3 targets place it in PSRAM via `FREEINK_FB_PSRAM`.
-- Storage is exposed through SdFat and uses SPI SD on the supported X3/X4/Sticky targets. On real hardware, only one reader can hold a file open at a time.
+- Storage is exposed through SdFat: SPI SD on X3/X4/Sticky and SDMMC on the supported X4 Pro. On real hardware, only one reader can hold a file open at a time.
 
 ## Resource Rules
 
@@ -84,7 +130,7 @@ Project: Open-source e-reader firmware for ESP32-C3 and ESP32-S3 devices.
 
 ## Activity Lifecycle
 
-- Activities are heap-allocated and deleted on exit.
+- Activities are heap-allocated but owned by `ActivityManager` `std::unique_ptr`s; do not manually delete them.
 - Allocate long-lived buffers and tasks in `onEnter()`.
 - Free resources in reverse order in `onExit()`.
 - Delete FreeRTOS tasks before the activity is destroyed.
@@ -111,8 +157,8 @@ Project: Open-source e-reader firmware for ESP32-C3 and ESP32-S3 devices.
 - Common validation commands:
   - `pio run -e simulator` for simulator-facing UI/reader work.
   - `pio run -e default` for the ESP32-C3 X3/X4 firmware.
-  - `pio run -e sticky` for the ESP32-S3 Sticky firmware.
-  - `pio run -e x4-pro-simulator` only for the unsupported X4 Pro simulator profile; v1.5.0 has no X4 Pro firmware environment.
+  - `pio run -e x4-pro` for the ESP32-S3 X4 Pro firmware.
+  - `pio run -e x4-pro-simulator` for the X4 Pro simulator profile.
   - `pio check -e default --fail-on-defect low --fail-on-defect medium --fail-on-defect high` for static analysis.
   - `find src lib include test -name "*.cpp" -o -name "*.h" | xargs clang-format -i` for formatting touched C++ files.
 - For crash debugging, check serial logs, internal heap with `ESP.getFreeHeap()` and `ESP.getMaxAllocHeap()`, task stack high-water marks, and whether cache files need clearing. On S3 targets, also inspect PSRAM free space and largest allocatable block; abundant PSRAM does not prove that internal-RAM or DMA-capable allocations can succeed.
@@ -123,6 +169,7 @@ Project: Open-source e-reader firmware for ESP32-C3 and ESP32-S3 devices.
 - Do not edit generated files directly.
 - Web portal headers under `src/network/html/*.generated.h` are built by `scripts/build_web.py` from sources in `web/`: pages compose `web/templates/base.html` (shared chrome) with `web/pages/<slug>.{html,css,js}`, plus shared assets `web/assets/style.css` (served at `/style.css`) and `web/assets/logo.png` (served at `/logo.png`). Edit the `web/` sources, never the generated headers.
 - I18n generated files under `lib/I18n/` come from `lib/I18n/translations/*.yaml` via `scripts/gen_i18n.py`.
+- Icon headers are generated from the manifests in `src/components/icons/` with `scripts/generate_icons.py`; hyphenation trie headers are generated under `lib/Epub/Epub/hyphenation/generated/`. Edit their source manifests/data and regenerate.
 
 ## Cache Format
 

@@ -345,7 +345,8 @@ void FontSelectionActivity::render(RenderLock&&) {
 
   const bool onPreviewed = selectedIndex_ == previewFontIndex_;
   const char* confirmLabel = onPreviewed ? tr(STR_SELECT) : tr(STR_PREVIEW);
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   renderer.displayBuffer();

@@ -529,8 +529,9 @@ void renderPerBookStatsPage(GfxRenderer& renderer, const MappedInputManager* map
   }
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_BACK), showEditButton ? tr(STR_EDIT) : "", "",
-                                               showMoreButton ? tr(STR_MORE) : "");
+    const auto labels =
+        mappedInput->mapLabels(mappedInput->withBackArrow(tr(STR_BACK)), showEditButton ? tr(STR_EDIT) : "", "",
+                               showMoreButton ? tr(STR_MORE) : "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -589,7 +590,9 @@ void renderGlobalStatsPage(GfxRenderer& renderer, const MappedInputManager* mapp
   }
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_EXIT), "", tr(STR_BACK), showMoreButton ? tr(STR_MORE) : "");
+    const auto labels =
+        mappedInput->mapLabels(mappedInput->withBackArrow(tr(STR_EXIT)), "", mappedInput->withBackArrow(tr(STR_BACK)),
+                               showMoreButton ? tr(STR_MORE) : "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -640,7 +643,7 @@ void renderNoRtcCombinedStatsPage(GfxRenderer& renderer, const MappedInputManage
   }
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput->mapLabels(mappedInput->withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -747,7 +750,8 @@ void renderEditBookDatesPage(GfxRenderer& renderer, const MappedInputManager* ma
 #endif
 
   if (showButtonHints && mappedInput) {
-    const auto labels = mappedInput->mapLabels(tr(STR_BACK), tr(STR_NEXT_FIELD), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    const auto labels = mappedInput->mapLabels(mappedInput->withBackArrow(tr(STR_BACK)), tr(STR_NEXT_FIELD),
+                                               tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }

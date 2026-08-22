@@ -5,13 +5,31 @@ class HalGPIO;
 
 class MappedInputManager {
  public:
-  enum class Button { Back, Confirm, Left, Right, Up, Down };
+  enum class Button { Back, Confirm, Left, Right, Up, Down, Power };
   enum class SwipeDir { None, Left, Right, Up, Down };
   struct Labels {
     const char* btn1;
     const char* btn2;
     const char* btn3;
     const char* btn4;
+  };
+  struct Label {
+    enum class Placement { None, Prefix, Suffix };
+
+    constexpr Label(const char* text = nullptr) : text(text) {}
+    constexpr Label(const Placement placement, const char* arrow, const char* text)
+        : placement(placement), arrow(arrow), text(text) {}
+
+    static constexpr Label withPrefix(const char* arrow, const char* text) {
+      return Label(Placement::Prefix, arrow, text);
+    }
+    static constexpr Label withSuffix(const char* arrow, const char* text) {
+      return Label(Placement::Suffix, arrow, text);
+    }
+
+    Placement placement = Placement::None;
+    const char* arrow = nullptr;
+    const char* text = nullptr;
   };
 
   MappedInputManager(HalGPIO&, const GfxRenderer& renderer) : renderer(renderer) {}
@@ -39,15 +57,24 @@ class MappedInputManager {
   }
 
   SwipeDir wasSwipe() const { return SwipeDir::None; }
-  bool wasPressed(Button) const { return false; }
+  bool wasPressed(const Button button) const {
+    if (button != Button::Confirm || !confirmPressed) return false;
+    confirmPressed = false;
+    return true;
+  }
   bool wasReleased(Button) const { return false; }
-  Labels mapLabels(const char* back, const char* confirm, const char* previous, const char* next) const {
-    return {back, confirm, previous, next};
+  bool isPressed(const Button button) const { return button == Button::Power && powerPressed; }
+  Label withBackArrow(const char* text) const { return Label(text); }
+  Label withPreviousPageArrow(const char* text) const { return Label(text); }
+  Label withNextPageArrow(const char* text) const { return Label(text); }
+  Labels mapLabels(const Label back, const Label confirm, const Label previous, const Label next) const {
+    return {back.text, confirm.text, previous.text, next.text};
   }
 
   void suppressNextTouchTap() { suppressTouchTap = true; }
   void suppressNextConfirmRelease() {}
   void suppressNextBackRelease() {}
+  void suppressNextPowerRelease() { powerReleaseSuppressed = true; }
 
   void injectTouchDown(const int x, const int y) {
     touchX = x;
@@ -61,11 +88,21 @@ class MappedInputManager {
     touchRelease = true;
   }
 
+  void injectPowerConfirmPress() {
+    confirmPressed = true;
+    powerPressed = true;
+  }
+
+  bool isPowerReleaseSuppressed() const { return powerReleaseSuppressed; }
+
  private:
   const GfxRenderer& renderer;
   mutable bool touchDown = false;
   mutable bool touchRelease = false;
   mutable bool suppressTouchTap = false;
+  mutable bool confirmPressed = false;
+  mutable bool powerPressed = false;
+  mutable bool powerReleaseSuppressed = false;
   mutable int touchX = 0;
   mutable int touchY = 0;
 };

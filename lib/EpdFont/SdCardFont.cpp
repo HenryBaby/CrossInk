@@ -933,6 +933,57 @@ int SdCardFont::prewarmStyle(uint8_t styleIdx, const uint32_t* codepoints, uint3
     }
   }
 
+  // Preserve the glyphs already resident in the mini arena when rebuilding.
+  // A page body and its CJK status-bar title are warmed separately; replacing
+  // the arena made each pass evict the other and repeat SD reads forever.
+  // Bound the union to MAX_PAGE_GLYPHS so the retained render cache remains
+  // within the same memory ceiling as a single dense page.
+  std::unique_ptr<uint32_t[]> unionCps;
+  if (s.miniGlyphCount > 0 && s.miniIntervalCount > 0 && ESP.getFreeHeap() < MINI_RETAIN_MIN_FREE_HEAP) {
+    const uint32_t unionMaxCount = s.miniGlyphCount + cpCount;
+    const uint32_t avgBitmapBytes =
+        (s.miniBitmapUsed > 0 && s.miniGlyphCount > 0) ? s.miniBitmapUsed / s.miniGlyphCount : 64;
+    const uint32_t estimatedArenaBytes = unionMaxCount * (static_cast<uint32_t>(sizeof(EpdGlyph)) + avgBitmapBytes);
+    constexpr uint32_t UNION_PRESSURE_HEADROOM = 12U * 1024U;
+    if (estimatedArenaBytes + UNION_PRESSURE_HEADROOM > ESP.getFreeHeap()) {
+      freeStyleMiniData(s);
+    }
+  }
+  if (s.miniGlyphCount > 0 && s.miniIntervalCount > 0) {
+    const uint32_t unionMax = s.miniGlyphCount + cpCount;
+    unionCps.reset(new (std::nothrow) uint32_t[unionMax]);
+    if (unionCps) {
+      uint32_t count = 0;
+      uint32_t intervalIndex = 0;
+      uint32_t intervalCodepoint = s.miniIntervals[0].first;
+      bool intervalActive = true;
+      uint32_t requestIndex = 0;
+      while ((intervalActive || requestIndex < cpCount) && count < unionMax) {
+        uint32_t next;
+        if (intervalActive && (requestIndex >= cpCount || intervalCodepoint <= codepoints[requestIndex])) {
+          next = intervalCodepoint;
+          if (requestIndex < cpCount && codepoints[requestIndex] == intervalCodepoint) requestIndex++;
+          if (intervalCodepoint < s.miniIntervals[intervalIndex].last) {
+            intervalCodepoint++;
+          } else if (++intervalIndex < s.miniIntervalCount) {
+            intervalCodepoint = s.miniIntervals[intervalIndex].first;
+          } else {
+            intervalActive = false;
+          }
+        } else {
+          next = codepoints[requestIndex++];
+        }
+        unionCps[count++] = next;
+      }
+      if (!intervalActive && requestIndex >= cpCount && count <= MAX_PAGE_GLYPHS) {
+        // A full resident mini cannot be replaced with metadata-only entries.
+        metadataOnly = metadataOnly && s.miniMetadataOnly;
+        codepoints = unionCps.get();
+        cpCount = count;
+      }
+    }
+  }
+
   // Map codepoints to global glyph indices for this style
   struct CpGlyphMapping {
     uint32_t codepoint;

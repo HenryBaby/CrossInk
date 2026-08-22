@@ -18,9 +18,9 @@
 namespace fui = freeink::ui;
 
 namespace {
-// Editable fields: Name, URL, Username, Password, Folder, layout, Filename.
+// Editable fields: Name, URL, Username, Password, Folder, layout, Filename, TLS verification.
 // Existing servers also show a Delete option (BASE_ITEMS + 1).
-constexpr int BASE_ITEMS = 7;
+constexpr int BASE_ITEMS = 8;
 constexpr fui::ActionId ACTION_ROW = 1;
 }  // namespace
 
@@ -222,6 +222,10 @@ void OpdsSettingsActivity::handleSelection() {
     editServer.filenameFormat = static_cast<OpdsFilenameFormat>((static_cast<int>(editServer.filenameFormat) + 1) % 4);
     saveServer();
     requestUpdate();
+  } else if (selectedIndex == 7) {
+    editServer.verifyTls = !editServer.verifyTls;
+    saveServer();
+    requestUpdate();
   } else if (selectedIndex == BASE_ITEMS && !isNewServer) {
     // Delete flow is only available for existing servers.
     if (!OPDS_STORE.removeServer(static_cast<size_t>(serverIndex))) {
@@ -253,7 +257,7 @@ void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
 
   const StrId fieldNames[] = {StrId::STR_SERVER_NAME, StrId::STR_OPDS_SERVER_URL, StrId::STR_USERNAME,
                               StrId::STR_PASSWORD,    StrId::STR_DOWNLOAD_FOLDER, StrId::STR_FOLDER_LAYOUT,
-                              StrId::STR_FILENAME};
+                              StrId::STR_FILENAME,    StrId::STR_VERIFY_TLS};
   const int menuItems = getMenuItemCount();
   const char* filenameFormat = tr(STR_AUTHOR_TITLE);
   switch (editServer.filenameFormat) {
@@ -280,6 +284,7 @@ void OpdsSettingsActivity::buildListScreen(UiApp::ScreenType& screen) {
       editServer.downloadFolder.c_str(),
       editServer.folderOrganization == OpdsFolderOrganization::AUTHOR ? tr(STR_AUTHOR_FOLDERS) : tr(STR_SINGLE_FOLDER),
       filenameFormat,
+      editServer.verifyTls ? tr(STR_STATE_ON) : tr(STR_STATE_OFF),
   };
   for (int i = 0; i < BASE_ITEMS; ++i) values[i] = rawValues[i];
 
@@ -328,7 +333,8 @@ void OpdsSettingsActivity::render(RenderLock&&) {
   app.render();
   uiReady = true;
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 
   if (showSaveError) {

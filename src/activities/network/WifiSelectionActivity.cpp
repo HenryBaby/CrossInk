@@ -227,7 +227,9 @@ void WifiSelectionActivity::onEnter() {
   Activity::onEnter();
   LOG_INF("WIFI", "selection enter free=%u maxAlloc=%u stack=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap(),
           static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
-  sdFontSystem.releaseLoadedFont(renderer);
+  // WiFi startup needs several contiguous driver buffers. Release the SD-font
+  // catalog as well as the active font before the radio allocates them.
+  sdFontSystem.releaseForNetwork(renderer);
   ensureWifiEventLoggingRegistered();
   LOG_INF("WIFI", "event logging registered free=%u maxAlloc=%u", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
 
@@ -1313,7 +1315,8 @@ void WifiSelectionActivity::renderNetworkList(const Rect* screen, const ThemeMet
   const bool hasSavedPassword = !networks.empty() && networks[selectedNetworkIndex].hasSavedPassword;
   const char* forgetLabel = hasSavedPassword ? tr(STR_FORGET_BUTTON) : "";
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_CONNECT), forgetLabel, tr(STR_RETRY));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_CONNECT), forgetLabel, tr(STR_RETRY));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
 }
 
@@ -1344,7 +1347,7 @@ void WifiSelectionActivity::renderConnecting(const Rect* screen, const ThemeMetr
   }
 
   if (!autoConnecting) {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
   }
 }
@@ -1387,6 +1390,27 @@ void WifiSelectionActivity::renderSavePrompt(const Rect* screen, const ThemeMetr
     const auto actions = promptActionLayout(*screen, *metrics, height);
     const char* labels[] = {tr(STR_YES), tr(STR_NO)};
     TouchActionButtons::draw(renderer, actions, labels, 0, savePromptSelection, UI_10_FONT_ID);
+  } else {
+    // Button-only readers still need visible choices for Left/Right selection.
+    const int buttonY = top + 80;
+    constexpr int buttonWidth = 60;
+    constexpr int buttonSpacing = 30;
+    constexpr int totalWidth = buttonWidth * 2 + buttonSpacing;
+    const int startX = screen->x + (screen->width - totalWidth) / 2;
+
+    if (savePromptSelection == 0) {
+      const std::string text = "[" + std::string(tr(STR_YES)) + "]";
+      renderer.drawText(UI_10_FONT_ID, startX, buttonY, text.c_str());
+    } else {
+      renderer.drawText(UI_10_FONT_ID, startX + 4, buttonY, tr(STR_YES));
+    }
+
+    if (savePromptSelection == 1) {
+      const std::string text = "[" + std::string(tr(STR_NO)) + "]";
+      renderer.drawText(UI_10_FONT_ID, startX + buttonWidth + buttonSpacing, buttonY, text.c_str());
+    } else {
+      renderer.drawText(UI_10_FONT_ID, startX + buttonWidth + buttonSpacing + 4, buttonY, tr(STR_NO));
+    }
   }
 
   // Use centralized button hints
@@ -1407,7 +1431,7 @@ void WifiSelectionActivity::renderConnectionFailed(const Rect* screen, const The
   UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top + height + 10, connectionError.c_str(), 3);
 
   // Use centralized button hints
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DONE), "", "");
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_DONE), "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
 }
 
@@ -1431,10 +1455,32 @@ void WifiSelectionActivity::renderForgetPrompt(const Rect* screen, const ThemeMe
     const char* labels[] = {tr(STR_FORGET_BUTTON), tr(STR_CANCEL)};
     const int selectedVisualIndex = forgetPromptSelection == 1 ? 0 : 1;
     TouchActionButtons::draw(renderer, actions, labels, 0, selectedVisualIndex, UI_10_FONT_ID);
+  } else {
+    // Button-only readers still need visible choices for Left/Right selection.
+    const int buttonY = top + 80;
+    constexpr int buttonWidth = 120;
+    constexpr int buttonSpacing = 30;
+    constexpr int totalWidth = buttonWidth * 2 + buttonSpacing;
+    const int startX = screen->x + (screen->width - totalWidth) / 2;
+
+    if (forgetPromptSelection == 0) {
+      const std::string text = "[" + std::string(tr(STR_CANCEL)) + "]";
+      renderer.drawText(UI_10_FONT_ID, startX, buttonY, text.c_str());
+    } else {
+      renderer.drawText(UI_10_FONT_ID, startX + 4, buttonY, tr(STR_CANCEL));
+    }
+
+    if (forgetPromptSelection == 1) {
+      const std::string text = "[" + std::string(tr(STR_FORGET_BUTTON)) + "]";
+      renderer.drawText(UI_10_FONT_ID, startX + buttonWidth + buttonSpacing, buttonY, text.c_str());
+    } else {
+      renderer.drawText(UI_10_FONT_ID, startX + buttonWidth + buttonSpacing + 4, buttonY, tr(STR_FORGET_BUTTON));
+    }
   }
 
   // Use centralized button hints
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_LEFT), tr(STR_DIR_RIGHT));
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), tr(STR_DIR_LEFT),
+                                            tr(STR_DIR_RIGHT));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, useReaderButtonHints);
 }
 

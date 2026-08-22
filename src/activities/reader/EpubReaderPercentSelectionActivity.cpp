@@ -289,7 +289,7 @@ void EpubReaderPercentSelectionActivity::render(RenderLock&&) {
   uiReady = true;
 
   // Button hints follow the current front button layout and auto-hide on touch devices.
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "-", "+");
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), "-", "+");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 
   renderer.displayBuffer();

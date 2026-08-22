@@ -57,7 +57,6 @@ class ParsedText {
   bool allowCharacterBreaks_ = false;
   std::vector<std::string> reorderedWordsScratch;
   std::vector<EpdFontFamily::Style> reorderedStylesScratch;
-  std::vector<uint16_t> reorderedWidthsScratch;
   std::vector<bool> reorderedContinuesScratch;
   std::vector<bool> reorderedNoSpaceBeforeScratch;
   std::vector<uint8_t> reorderedBionicBoundaryScratch;

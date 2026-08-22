@@ -225,10 +225,16 @@ Binary layout:
   - version 3 only: reader layout signature (`uint32_t` LE; font, spacing,
     viewport, and other section-layout inputs)
   - `chapterTitle` (`char[48]`, null-terminated/truncated)
-  - version 1: selected text (`String`, truncated to `512` bytes for the
-    in-app store)
+  - version 1: selected text (`String`; legacy files were written with a
+    `512`-byte in-app limit)
   - versions 2-3: selected-text length (`uint16_t` LE) followed by that many
-    UTF-8 bytes (maximum `512`)
+    UTF-8 bytes (the current in-app limit is `4096` bytes, defined by
+    `CLIPPING_TEXT_MAX`)
+
+The clipping selector has a separate navigation bound: it exposes at most
+`240` visible words from at most three pages. This is a bounded in-memory
+selection window for low-memory devices, not a character-count limit. The
+selected text is still stored separately and is limited to `4096` UTF-8 bytes.
 
 CrossInk uses the stored spine/page/paragraph fields as anchors, then searches
 near that location for the stored clipping text after relayout. This is similar
@@ -288,38 +294,14 @@ Binary layout:
 
 ## `section.bin`
 
-### Version 64
+### Version 61
 
-Version 64 lets narrow table cells split an oversized word at a safe UTF-8
-boundary when normal hyphenation cannot fit it. Complete and suspended section
-caches rebuild together; suspended partial caches use version `0xF7`.
-
-### Version 63
-
-Version 63 changes dense eight-column table geometry so the leading label
-column has enough width to wrap its text without clipping. Existing section
-caches rebuild to recalculate their table lines and grid boundaries. Suspended
-partial caches use version `0xF9` and rebuild as well.
-
-### Version 62
-
-Version 62 adds a `protectedImageUnits` (`uint32_t` LE) header field immediately
-after `pageCount`. It stores the cumulative fixed-point image contribution of
-the cached pages (256 units per physical page), allowing partial and finalized
-sections to estimate only their non-image pages from XHTML byte density. The
-serialized page payload and all page lookup tables are unchanged. Version 61
-clamped an inline image's top margin after the page-break decision; caches from
-older versions are rebuilt for the new image-aware estimate.
-
-Suspended incremental section caches use version `0xFA` and carry the same
-`protectedImageUnits` field. The previous partial sentinel was `0xF9`.
-
-Version 61 adds compact low-memory table rows and stores each table cell's
-column span in the page fragment payload. Full and suspended partial section
-caches rebuild together because the table grid representation is part of the
-serialized page layout. Complete files use version byte `61`; suspended
-partials use sentinel byte `0xF8`; both values invalidate older full and
-partial caches.
+Version 61 is the v1.5.1 cache update. It stores `protectedImageUnits`
+(`uint32_t` LE) after `pageCount`, so image-heavy sections estimate their
+remaining non-image pages accurately. It also updates table fragments and
+geometry, oversized-word wrapping, inline-image margins, and ruby continuation
+layout. Full and suspended section caches rebuild together; complete files use
+version byte `61`, and suspended partials use sentinel byte `0xF8`.
 
 Each file in `sections/*.bin` stores one laid-out spine section. The header is
 also the cache-busting key: if any layout-affecting setting differs from the
@@ -370,7 +352,6 @@ anchor behavior introduced in version 45. It includes:
   forced paragraph indents, paragraph alignment, viewport size, hyphenation,
   embedded CSS, image rendering mode, Bionic Reading, Guide Dots, word spacing,
   and EPUB render mode
-- section header `protectedImageUnits` (`uint32_t` fixed-point units, 256 per page)
 - page offset LUT
 - anchor-to-page map for fragment and footnote navigation
 - paragraph and list-item LUTs used by KOReader sync page refinement
@@ -398,7 +379,7 @@ import std.mem;
 import std.string;
 import std.core;
 
-#define EXPECTED_VERSION 64
+#define EXPECTED_VERSION 61
 #define MAX_STRING_LENGTH 65535
 #define FOOTNOTE_NUMBER_LEN 32
 #define FOOTNOTE_HREF_LEN 96

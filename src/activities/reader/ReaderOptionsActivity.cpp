@@ -290,17 +290,23 @@ void ReaderOptionsActivity::openEnumOptionPicker(const SettingInfo& setting) {
   if (currentIndex >= optionCount) currentIndex = 0;
 
   const SettingInfo selectedSetting = setting;
-  optionPopup.show(setting.nameId, options, currentIndex, [this, selectedSetting](int selectedIndex) {
-    if (selectedSetting.valuePtr != nullptr) {
-      SETTINGS.*(selectedSetting.valuePtr) =
-          enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
-    } else if (selectedSetting.valueSetter) {
-      selectedSetting.valueSetter(static_cast<uint8_t>(selectedIndex));
-    }
+  const auto note = setting.valuePtr == &CrossPointSettings::sideButtonChordAction && mappedInput.hasTouchHardware()
+                        ? OptionPopup::Note{tr(STR_NOTE), tr(STR_TOUCHSCREEN_ESCAPE_HATCH_NOTE)}
+                        : OptionPopup::Note{};
+  optionPopup.show(
+      setting.nameId, options, currentIndex,
+      [this, selectedSetting](int selectedIndex) {
+        if (selectedSetting.valuePtr != nullptr) {
+          SETTINGS.*(selectedSetting.valuePtr) =
+              enumRawValueForDisplayIndex(selectedSetting, static_cast<uint8_t>(selectedIndex));
+        } else if (selectedSetting.valueSetter) {
+          selectedSetting.valueSetter(static_cast<uint8_t>(selectedIndex));
+        }
 
-    persistReaderSettings();
-    requestUpdate();
-  });
+        persistReaderSettings();
+        requestUpdate();
+      },
+      note);
   requestUpdate();
 }
 
@@ -764,8 +770,9 @@ void ReaderOptionsActivity::render(RenderLock&&) {
       ((*currentSettings)[selectedIndex].valuePtr == &CrossPointSettings::screenMarginVertical ||
        (*currentSettings)[selectedIndex].valuePtr == &CrossPointSettings::screenMarginHorizontal);
   const auto labels = mappedInput.mapLabels(
-      tr(STR_BACK), (currentIsAction || selectedLineHeight || selectedScreenMargin) ? tr(STR_SELECT) : tr(STR_TOGGLE),
-      tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+      mappedInput.withBackArrow(tr(STR_BACK)),
+      (currentIsAction || selectedLineHeight || selectedScreenMargin) ? tr(STR_SELECT) : tr(STR_TOGGLE), tr(STR_DIR_UP),
+      tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 
   renderer.displayBuffer();

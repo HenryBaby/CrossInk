@@ -17,35 +17,47 @@
 
 class OptionPopup {
  public:
-  void show(StrId titleId, const StrId* optionIds, int optionCount, int currentIndex,
-            std::function<void(int)> onSelect) {
+  struct Note {
+    constexpr Note(const char* label = nullptr, const char* body = nullptr) : boldLabel(label), body(body) {}
+
+    const char* boldLabel;
+    const char* body;
+
+    bool visible() const { return boldLabel && body; }
+  };
+
+  void show(StrId titleId, const StrId* optionIds, int optionCount, int currentIndex, std::function<void(int)> onSelect,
+            Note note = Note()) {
     title = I18N.get(titleId);
     ownedStrings.resize(optionCount);
     for (int i = 0; i < optionCount; i++) {
       ownedStrings[i] = I18N.get(optionIds[i]);
     }
     onSelectCallback = std::move(onSelect);
+    popupNote = note;
     prepareStandardShow();
     activate(currentIndex);
   }
 
   void show(const char* titleStr, const char* const* options, int optionCount, int currentIndex,
-            std::function<void(int)> onSelect) {
+            std::function<void(int)> onSelect, Note note = Note()) {
     title = titleStr;
     ownedStrings.resize(optionCount);
     for (int i = 0; i < optionCount; i++) {
       ownedStrings[i] = options[i];
     }
     onSelectCallback = std::move(onSelect);
+    popupNote = note;
     prepareStandardShow();
     activate(currentIndex);
   }
 
-  void show(StrId titleId, const std::vector<std::string>& options, int currentIndex,
-            std::function<void(int)> onSelect) {
+  void show(StrId titleId, const std::vector<std::string>& options, int currentIndex, std::function<void(int)> onSelect,
+            Note note = Note()) {
     title = I18N.get(titleId);
     ownedStrings = options;
     onSelectCallback = std::move(onSelect);
+    popupNote = note;
     prepareStandardShow();
     activate(currentIndex);
   }
@@ -59,6 +71,7 @@ class OptionPopup {
     onSaveCallback = std::move(onSave);
     onCancelCallback = std::move(onCancel);
     primaryOptionIndex = -1;
+    popupNote = Note();
     confirmationMode = true;
     activate(currentIndex);
   }
@@ -73,10 +86,11 @@ class OptionPopup {
   }
 
   void show(const char* titleStr, const std::vector<std::string>& options, int currentIndex,
-            std::function<void(int)> onSelect) {
+            std::function<void(int)> onSelect, Note note = Note()) {
     title = titleStr;
     ownedStrings = options;
     onSelectCallback = std::move(onSelect);
+    popupNote = note;
     prepareStandardShow();
     activate(currentIndex);
   }
@@ -229,9 +243,9 @@ class OptionPopup {
 
   bool processRender(GfxRenderer& renderer, const MappedInputManager& input) const {
     if (!active) return false;
-    const auto popupLabels = input.mapLabels(confirmationMode ? tr(STR_CANCEL) : tr(STR_BACK),
-                                             confirmationMode && footerFocused ? tr(STR_SAVE) : tr(STR_SELECT),
-                                             tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    const auto popupLabels = input.mapLabels(
+        confirmationMode ? MappedInputManager::Label(tr(STR_CANCEL)) : input.withBackArrow(tr(STR_BACK)),
+        confirmationMode && footerFocused ? tr(STR_SAVE) : tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, popupLabels.btn1, popupLabels.btn2, popupLabels.btn3, popupLabels.btn4, true);
     render(renderer);
     renderer.displayBuffer();
@@ -241,7 +255,7 @@ class OptionPopup {
   void render(const GfxRenderer& renderer) const {
     if (!active) return;
     GUI.drawOptionPopup(renderer, title.c_str(), ownedStrings, selectedIndex, confirmationMode, tr(STR_CANCEL),
-                        tr(STR_SAVE), footerFocused, primaryOptionIndex);
+                        tr(STR_SAVE), footerFocused, primaryOptionIndex, popupNote.boldLabel, popupNote.body);
   }
 
   bool isActive() const { return active; }
@@ -279,6 +293,8 @@ class OptionPopup {
 
     const int optionLineHeight = renderer.getLineHeight(optionFontId);
     const int titleLineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+    const int noteLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int noteHeight = popupNote.visible() ? noteLineHeight * 2 + metrics.optionPopupTitleGap : 0;
     const int rowHeight =
         touchActionStyle ? TouchActionButtons::kDefaultHeight : optionLineHeight + selectionVPadding * 2;
 
@@ -289,25 +305,32 @@ class OptionPopup {
       const int width = renderer.getTextWidth(optionFontId, opt.c_str(), style);
       if (width > maxTextWidth) maxTextWidth = width;
     }
+    if (popupNote.visible()) {
+      const int noteLabelWidth = renderer.getTextWidth(UI_10_FONT_ID, popupNote.boldLabel, EpdFontFamily::BOLD);
+      const int noteBodyWidth = renderer.getTextWidth(UI_10_FONT_ID, popupNote.body);
+      const int noteWidth = noteLabelWidth + renderer.getSpaceWidth(UI_10_FONT_ID) + noteBodyWidth;
+      maxTextWidth = std::max(maxTextWidth, noteWidth);
+    }
 
     const int optionCount = static_cast<int>(ownedStrings.size());
     constexpr int footerHeight = 56;
     const int footerSpace = confirmationMode ? footerHeight : 0;
-    const int maxDialogH =
-        std::max(rowHeight + titleLineHeight + metrics.optionPopupTitleGap + innerPadding * 2 + footerSpace,
-                 pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
+    const int maxDialogH = std::max(
+        rowHeight + titleLineHeight + metrics.optionPopupTitleGap + noteHeight + innerPadding * 2 + footerSpace,
+        pageHeight - metrics.buttonHintsHeight - metrics.optionPopupDialogSideMargin * 2);
     const int dialogW = std::min((maxTextWidth + innerPadding * 2 + selectionHPadding * 2 + metrics.scrollBarWidth +
                                   metrics.scrollBarRightOffset + selectionHPadding) *
                                      12 / 10,
                                  pageWidth - metrics.optionPopupDialogSideMargin * 2);
     const int titleContentWidth = std::max(1, dialogW - innerPadding * 2);
     const int maxTitleLines = std::max(
-        1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - rowHeight - footerSpace) / titleLineHeight);
+        1, (maxDialogH - innerPadding * 2 - metrics.optionPopupTitleGap - noteHeight - rowHeight - footerSpace) /
+               titleLineHeight);
     const auto titleLines =
         renderer.wrappedText(UI_12_FONT_ID, title.c_str(), titleContentWidth, maxTitleLines, EpdFontFamily::BOLD);
     const int titleHeight = static_cast<int>(titleLines.size()) * titleLineHeight;
-    const int maxListHeight =
-        std::max(rowHeight, maxDialogH - innerPadding * 2 - titleHeight - metrics.optionPopupTitleGap - footerSpace);
+    const int maxListHeight = std::max(rowHeight, maxDialogH - innerPadding * 2 - titleHeight -
+                                                      metrics.optionPopupTitleGap - noteHeight - footerSpace);
     const int rowStep = rowHeight + itemSpacing;
     const int visibleCount = std::max(1, std::min(optionCount, (maxListHeight + itemSpacing) / rowStep));
     const int safeSelectedIndex = std::clamp(selectedIndex, 0, optionCount - 1);
@@ -316,13 +339,13 @@ class OptionPopup {
     const bool hasHiddenOptions = visibleCount < optionCount;
     const int scrollBarGutter =
         hasHiddenOptions ? metrics.scrollBarWidth + metrics.scrollBarRightOffset + selectionHPadding : 0;
-    const int contentHeight = titleHeight + metrics.optionPopupTitleGap + listHeight;
+    const int contentHeight = titleHeight + metrics.optionPopupTitleGap + noteHeight + listHeight;
     const int dialogH = contentHeight + innerPadding * 2 + footerSpace;
     const int dialogX = (pageWidth - dialogW) / 2;
     const int dialogY = (pageHeight - dialogH) / 2;
     const int itemRectX = dialogX + innerPadding;
     const int itemRectW = std::max(1, dialogW - innerPadding * 2 - scrollBarGutter);
-    const int firstItemY = dialogY + innerPadding + titleHeight + metrics.optionPopupTitleGap;
+    const int firstItemY = dialogY + innerPadding + titleHeight + metrics.optionPopupTitleGap + noteHeight;
 
     layout.dialog = Rect{dialogX, dialogY, dialogW, dialogH};
     layout.firstOptionIndex = visibleStart;
@@ -372,6 +395,7 @@ class OptionPopup {
   std::function<void(int)> onSelectCallback;
   std::function<void()> onSaveCallback;
   std::function<void()> onCancelCallback;
+  Note popupNote;
   bool skipPostSelectionUpdate_ = false;
   int primaryOptionIndex = -1;
   ButtonNavigator buttonNavigator;
@@ -413,21 +437,21 @@ class OptionPopup {
   void activateSelection(MappedInputManager& input, const std::function<void()>& requestUpdate,
                          const bool suppressRelease) {
     active = false;
-    if (suppressRelease) input.suppressNextConfirmRelease();
+    suppressSelectionRelease(input, suppressRelease);
     if (onSelectCallback) onSelectCallback(selectedIndex);
     requestUpdate();
   }
 
   void confirm(MappedInputManager& input, const std::function<void()>& requestUpdate, const bool suppressRelease) {
     active = false;
-    if (suppressRelease) input.suppressNextConfirmRelease();
+    suppressSelectionRelease(input, suppressRelease);
     if (onSaveCallback) onSaveCallback();
     requestUpdate();
   }
 
   void save(MappedInputManager& input, const std::function<void()>& requestUpdate, const bool suppressRelease) {
     active = false;
-    if (suppressRelease) input.suppressNextConfirmRelease();
+    suppressSelectionRelease(input, suppressRelease);
     if (onSelectCallback) onSelectCallback(selectedIndex);
     const bool skipUpdate = skipPostSelectionUpdate_;
     skipPostSelectionUpdate_ = false;
@@ -439,6 +463,18 @@ class OptionPopup {
       activateSelection(input, requestUpdate, false);
     } else {
       save(input, requestUpdate, false);
+    }
+  }
+
+  static void suppressSelectionRelease(MappedInputManager& input, const bool suppressRelease) {
+    if (!suppressRelease) return;
+
+    input.suppressNextConfirmRelease();
+    // Some boards expose Power as Confirm directly. Consume its matching Power
+    // release too, otherwise it can immediately re-run the shortcut that opened
+    // this popup after the selection callback closes it.
+    if (input.isPressed(MappedInputManager::Button::Power)) {
+      input.suppressNextPowerRelease();
     }
   }
 

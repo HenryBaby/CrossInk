@@ -2016,7 +2016,8 @@ void HomeActivity::render(RenderLock&&) {
           [&menuItems](int index) { return menuItems[index].label; },
           [&menuItems](int index) { return menuItems[index].icon; });
       if (showMinimalHomeButtonHints(mappedInput)) {
-        const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+        const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT),
+                                                  tr(STR_DIR_UP), tr(STR_DIR_DOWN));
         GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
       }
       displayHomeBuffer();

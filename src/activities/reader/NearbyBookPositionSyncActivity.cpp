@@ -212,8 +212,9 @@ void NearbyBookPositionSyncActivity::render(RenderLock&&) {
                              state_ == State::SYNCED && sourceMode_);
     } else {
       const auto labels = state_ == State::SYNCED && sourceMode_
-                              ? mappedInput.mapLabels(tr(STR_BACK), "", "", "")
-                              : mappedInput.mapLabels(tr(STR_BACK), tr(STR_NEARBY_POSITION_SHARE_BUTTON), "", "");
+                              ? mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "")
+                              : mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)),
+                                                      tr(STR_NEARBY_POSITION_SHARE_BUTTON), "", "");
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     }
     renderer.displayBuffer(screenTransitionRefresh_.modeFor(static_cast<uint8_t>(state_)));
@@ -226,7 +227,7 @@ void NearbyBookPositionSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top + renderer.getLineHeight(UI_10_FONT_ID) + 8,
                               detail.c_str());
   }
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   renderer.displayBuffer(screenTransitionRefresh_.modeFor(static_cast<uint8_t>(state_)));
 }
@@ -413,7 +414,7 @@ void NearbyBookPositionSyncActivity::renderComparison() const {
   if (mappedInput.hasTouch() && !sourceMode_) {
     drawTouchActionButtons(renderer, screen, metrics, tr(STR_CONFIRM));
   } else {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }
@@ -1303,8 +1304,9 @@ void NearbyBookPositionSyncActivity::render(RenderLock&&) {
                              state_ == State::SYNCED && sourceMode_);
     } else {
       const auto labels = state_ == State::SYNCED && sourceMode_
-                              ? mappedInput.mapLabels(tr(STR_BACK), "", "", "")
-                              : mappedInput.mapLabels(tr(STR_BACK), tr(STR_NEARBY_POSITION_SHARE_BUTTON), "", "");
+                              ? mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "")
+                              : mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)),
+                                                      tr(STR_NEARBY_POSITION_SHARE_BUTTON), "", "");
       GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     }
     renderer.displayBuffer(screenTransitionRefresh_.modeFor(static_cast<uint8_t>(state_)));
@@ -1317,7 +1319,7 @@ void NearbyBookPositionSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top + renderer.getLineHeight(UI_10_FONT_ID) + 8,
                               detail.c_str());
   }
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   renderer.displayBuffer(screenTransitionRefresh_.modeFor(static_cast<uint8_t>(state_)));
 }
@@ -1395,7 +1397,7 @@ void NearbyBookPositionSyncActivity::renderComparison() const {
   if (mappedInput.hasTouch() && !sourceMode_) {
     drawTouchActionButtons(renderer, screen, metrics, tr(STR_CONFIRM));
   } else {
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   }
 }

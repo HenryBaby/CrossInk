@@ -1307,8 +1307,9 @@ void FontDownloadActivity::render(RenderLock&&) {
                                : isSelectedFamilyDeletable()    ? tr(STR_DELETE)
                                : isUpdateAllRow(selectedIndex_) ? tr(STR_UPDATE)
                                                                 : tr(STR_DOWNLOAD);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, families_.empty() ? "" : tr(STR_DIR_UP),
-                                              families_.empty() ? "" : tr(STR_DIR_DOWN));
+    const auto labels =
+        mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), confirmLabel,
+                              families_.empty() ? "" : tr(STR_DIR_UP), families_.empty() ? "" : tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state_ == DOWNLOADING) {
     const char* familyName = activeDownloadFamilyName_.empty() ? "" : activeDownloadFamilyName_.c_str();
@@ -1346,7 +1347,7 @@ void FontDownloadActivity::render(RenderLock&&) {
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state_ == COMPLETE) {
     renderer.drawCenteredText(UI_10_FONT_ID, centerY, tr(STR_FONT_INSTALLED), true, EpdFontFamily::BOLD);
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else if (state_ == ERROR) {
     renderer.drawCenteredText(UI_10_FONT_ID, centerY - lineHeight, tr(STR_FONT_INSTALL_FAILED), true,
@@ -1363,7 +1364,7 @@ void FontDownloadActivity::render(RenderLock&&) {
       UITheme::drawCenteredWrappedText(renderer, textArea, SMALL_FONT_ID, messageY, errorHint_.c_str(), 2, true,
                                        EpdFontFamily::REGULAR, 2);
     }
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_RETRY), "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_RETRY), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   }
 

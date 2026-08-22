@@ -9,6 +9,10 @@
 
 namespace FsHelpers {
 
+// Resolves a direct child of the SD-card root regardless of ASCII case and
+// writes its on-disk path to resolvedPath.
+bool resolveRootDirectoryIgnoreCase(const char* expectedPath, char* resolvedPath, size_t resolvedPathSize);
+
 std::string decodeUriEscapes(const std::string& path);
 
 std::string normalisePath(const std::string& path);

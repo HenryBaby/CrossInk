@@ -14,11 +14,13 @@ namespace {
 constexpr StrId triggerLabels[] = {
     StrId::STR_NONE_OPT,          StrId::STR_SHORT_PRESS_POWER,        StrId::STR_LONG_PRESS_POWER,
     StrId::STR_LONG_PRESS_BACK,   StrId::STR_LONG_PRESS_MENU_SHORTCUT, StrId::STR_POWER_BUTTON_CHORD,
-    StrId::STR_TAP_HOME_SHORTCUT, StrId::STR_LONG_PRESS_HOME_SHORTCUT, StrId::STR_DOUBLE_TAP_HOME_SHORTCUT};
+    StrId::STR_TAP_HOME_SHORTCUT, StrId::STR_LONG_PRESS_HOME_SHORTCUT, StrId::STR_DOUBLE_TAP_HOME_SHORTCUT,
+    StrId::STR_SIDE_BUTTON_CHORD};
 
 std::vector<QuickActions::Trigger> availableTriggers() {
   std::vector<QuickActions::Trigger> triggers = {QuickActions::Trigger::None, QuickActions::Trigger::ShortPower,
                                                  QuickActions::Trigger::LongPower, QuickActions::Trigger::PowerUp};
+  if (gpio.hasTouch()) triggers.push_back(QuickActions::Trigger::UpDown);
   if (gpio.hasHomeKey()) {
     triggers.push_back(QuickActions::Trigger::TapHome);
     triggers.push_back(QuickActions::Trigger::LongPressHome);

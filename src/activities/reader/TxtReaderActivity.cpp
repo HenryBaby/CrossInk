@@ -26,6 +26,7 @@
 
 namespace {
 constexpr size_t CHUNK_SIZE = 8 * 1024;  // 8KB chunk for reading
+constexpr unsigned long LONG_PRESS_MENU_MS = 600;
 // Cache file magic and version
 constexpr uint32_t CACHE_MAGIC = 0x54585449;  // "TXTI"
 constexpr uint8_t CACHE_VERSION = 4;          // Increment when cache format changes
@@ -187,6 +188,9 @@ void TxtReaderActivity::openReaderMenu() {
 
 void TxtReaderActivity::loop() {
   if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
+#if CROSSINK_APP_CAP_TOUCH
+  if (handlePinchFontResize()) return;
+#endif
   const auto touch = ReaderUtils::detectTouchPageTurn(renderer, mappedInput);
   if (touch.tapped &&
       ReaderUtils::isBottomStatusBarTap(renderer, touch.y, UITheme::getInstance().getStatusBarHeight())) {
@@ -198,6 +202,21 @@ void TxtReaderActivity::loop() {
     return;
   }
   if (executePowerButtonAction()) {
+    return;
+  }
+
+  if (longPressMenuHandled) {
+    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) ||
+        !mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
+      longPressMenuHandled = false;
+    }
+    return;
+  }
+
+  if (SETTINGS.longPressMenuAction == CrossPointSettings::LONG_MENU_CHANGE_FONT &&
+      mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= LONG_PRESS_MENU_MS) {
+    longPressMenuHandled = true;
+    cycleReaderFont();
     return;
   }
 
@@ -229,7 +248,11 @@ void TxtReaderActivity::loop() {
     return;
   }
 
-  if (SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_ORIENTATION_CHANGE) {
+  const bool sideLongPressChangesFont =
+      SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_FONT_SIZE;
+  const bool sideLongPressChangesOrientation =
+      SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_ORIENTATION_CHANGE;
+  if (sideLongPressChangesFont || sideLongPressChangesOrientation) {
     const bool topReleased = mappedInput.wasReleased(MappedInputManager::Button::Up);
     const bool bottomReleased = mappedInput.wasReleased(MappedInputManager::Button::Down);
     if (sideButtonLongPressHandled && (topReleased || bottomReleased)) {
@@ -245,6 +268,10 @@ void TxtReaderActivity::loop() {
 
     if (!sideButtonLongPressHandled && (topLongPressed || bottomLongPressed)) {
       sideButtonLongPressHandled = !(topReleased || bottomReleased);
+      if (sideLongPressChangesFont) {
+        changeReaderFontSize(/*larger=*/topLongPressed);
+        return;
+      }
       SETTINGS.orientation = ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/bottomLongPressed);
       SETTINGS.saveToFile();
       {
@@ -274,17 +301,7 @@ void TxtReaderActivity::loop() {
     if (!frontButtonLongPressHandled && (prevLongPressed || nextLongPressed)) {
       frontButtonLongPressHandled = true;
       if (frontLongPressChangesFont) {
-        if (sdFontSystem.changeReaderFontSize(/*larger=*/nextLongPressed)) {
-          SETTINGS.saveToFile();
-          sdFontSystem.ensureLoaded(renderer);
-          {
-            RenderLock lock(*this);
-            pageOffsets.clear();
-            currentPageLines.clear();
-            initialized = false;
-          }
-          requestUpdate();
-        }
+        changeReaderFontSize(/*larger=*/nextLongPressed);
         return;
       }
 
@@ -303,6 +320,8 @@ void TxtReaderActivity::loop() {
   }
 
   auto [prevTriggered, nextTriggered, fromSideBtn, fromTilt] = ReaderUtils::detectPageTurn(mappedInput);
+  prevTriggered = prevTriggered || touch.prev;
+  nextTriggered = nextTriggered || touch.next;
   (void)fromSideBtn;
   (void)fromTilt;
   if (!prevTriggered && !nextTriggered) {
@@ -320,18 +339,24 @@ void TxtReaderActivity::loop() {
   }
 }
 
-bool TxtReaderActivity::handleTwoFingerSwipeAction(const CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) {
-  if (action != CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_FONT_SIZE &&
-      action != CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_FONT_SIZE) {
-    // TXT has no chapter model; ActivityManager still consumes configured
-    // chapter swipes so they cannot fall through as one-finger navigation.
-    return true;
+bool TxtReaderActivity::changeReaderFontSize(const bool larger, const FontSizeStepMode mode) {
+  if (!sdFontSystem.changeReaderFontSize(larger, mode)) return false;
+  rebuildTextLayout();
+  return true;
+}
+
+void TxtReaderActivity::cycleReaderFont() {
+  const CrossPointSettings::FONT_SIZE effectiveSize = SETTINGS.getEffectiveReaderFontSize();
+  SETTINGS.fontFamily = (SETTINGS.fontFamily + 1) % CrossPointSettings::FONT_FAMILY_COUNT;
+  SETTINGS.sdFontFamilyName[0] = '\0';
+  SETTINGS.readerFontPointSize = CrossPointSettings::getReaderFontPointSize(effectiveSize);
+  rebuildTextLayout();
+}
+
+void TxtReaderActivity::rebuildTextLayout() {
+  if (!SETTINGS.saveToFile()) {
+    LOG_ERR("TXT", "Failed to save reader font setting");
   }
-
-  const bool larger = action == CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_FONT_SIZE;
-  if (!sdFontSystem.changeReaderFontSize(larger, FontSizeStepMode::Clamp)) return true;
-
-  SETTINGS.saveToFile();
   sdFontSystem.ensureLoaded(renderer);
   {
     RenderLock lock(*this);
@@ -340,6 +365,44 @@ bool TxtReaderActivity::handleTwoFingerSwipeAction(const CrossPointSettings::TWO
     initialized = false;
   }
   requestUpdate();
+}
+
+#if CROSSINK_APP_CAP_TOUCH
+bool TxtReaderActivity::handlePinchFontResize() {
+  if (!SETTINGS.pinchFontResizeEnabled || !SETTINGS.touchReaderControls || !mappedInput.supportsMultiTouch()) {
+    resetPinchFontGesture();
+    return false;
+  }
+
+  int x1 = 0;
+  int y1 = 0;
+  int x2 = 0;
+  int y2 = 0;
+  if (!mappedInput.getTwoFingerTouch(x1, y1, x2, y2)) {
+    resetPinchFontGesture();
+    return false;
+  }
+
+  const auto action = pinchFontGesture.update(x1, y1, x2, y2);
+  if (action == ReaderPinchGesture::Action::None) return true;
+
+  mappedInput.suppressCurrentTouchContact();
+  changeReaderFontSize(action == ReaderPinchGesture::Action::Increase, FontSizeStepMode::Clamp);
+  return true;
+}
+
+void TxtReaderActivity::resetPinchFontGesture() { pinchFontGesture.reset(); }
+#endif
+
+bool TxtReaderActivity::handleTwoFingerSwipeAction(const CrossPointSettings::TWO_FINGER_SWIPE_ACTION action) {
+  if (action != CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_FONT_SIZE &&
+      action != CrossPointSettings::TWO_FINGER_SWIPE_DECREASE_FONT_SIZE) {
+    // TXT has no chapter model; ActivityManager still consumes configured
+    // chapter swipes so they cannot fall through as one-finger navigation.
+    return true;
+  }
+
+  changeReaderFontSize(action == CrossPointSettings::TWO_FINGER_SWIPE_INCREASE_FONT_SIZE, FontSizeStepMode::Clamp);
   return true;
 }
 
@@ -396,6 +459,7 @@ bool TxtReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRB
     case CrossPointSettings::SHORT_PWRBTN::JOIN_NETWORK:
     case CrossPointSettings::SHORT_PWRBTN::CREATE_HOTSPOT:
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_DARK_MODE:
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
     case CrossPointSettings::SHORT_PWRBTN::FILE_BROWSER:
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FRONTLIGHT:
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_TOUCHSCREEN:
@@ -407,6 +471,9 @@ bool TxtReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRB
 
 bool TxtReaderActivity::executeReaderShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
   switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
+      cycleReaderFont();
+      return true;
     case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
       activityManager.goToFileTransfer(txt ? txt->getPath() : "");
       return true;
@@ -474,6 +541,9 @@ bool TxtReaderActivity::executeLongPressBackAction() {
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_SLEEP:
       enterDeepSleep();
       return true;
+    case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_CHANGE_FONT:
+      cycleReaderFont();
+      return true;
     case CrossPointSettings::LONG_PRESS_MENU_ACTION::LONG_MENU_REFRESH_SCREEN:
       prepareManualRefresh();
       requestUpdate();
@@ -501,6 +571,10 @@ bool TxtReaderActivity::executeLongPressBackAction() {
     default:
       return false;
   }
+}
+
+bool TxtReaderActivity::handleShortcutAction(const uint8_t action) {
+  return executeReaderShortcutAction(static_cast<CrossPointSettings::SHORT_PWRBTN>(action));
 }
 
 bool TxtReaderActivity::handleShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {

@@ -50,8 +50,10 @@ class ReaderPinchGesture {
     // A swipe moves the two-contact midpoint farther than it changes the
     // contact separation. Once that evidence is clear, keep the sequence out
     // of pinch handling until both contacts leave the screen.
-    if (centerTravelTwiceSq > distanceChangeSq &&
-        centerTravelTwiceSq >= static_cast<uint64_t>(MIN_DISTANCE_CHANGE_PX) * MIN_DISTANCE_CHANGE_PX) {
+    // centerDelta* is twice the midpoint travel, so both comparisons scale the
+    // right-hand side by 2^2 rather than halving (and rounding) the deltas.
+    if (centerTravelTwiceSq > 4 * distanceChangeSq &&
+        centerTravelTwiceSq >= 4 * static_cast<uint64_t>(MIN_DISTANCE_CHANGE_PX) * MIN_DISTANCE_CHANGE_PX) {
       translationLocked_ = true;
       return Action::None;
     }

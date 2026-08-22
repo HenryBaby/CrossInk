@@ -323,6 +323,11 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       return JSON_ERROR;
     }
 
+    if (doc["progress"].isNull()) {
+      LOG_DBG("KOSync", "No stored progress in successful response");
+      return NOT_FOUND;
+    }
+
     outProgress.document = documentHash;
     outProgress.progress = doc["progress"].as<std::string>();
     outProgress.percentage = doc["percentage"].as<float>();
@@ -378,6 +383,12 @@ KOReaderSyncClient::Error KOReaderSyncClient::getProgress(const std::string& doc
       logJsonParseFailure("Get progress", error, body.c_str());
       http.end();
       return JSON_ERROR;
+    }
+
+    if (doc["progress"].isNull()) {
+      http.end();
+      LOG_DBG("KOSync", "No stored progress in successful response");
+      return NOT_FOUND;
     }
 
     outProgress.document = documentHash;

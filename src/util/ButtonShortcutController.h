@@ -39,7 +39,7 @@ class ButtonShortcutController {
     ToggleTouchscreen = 28,
   };
 
-  enum class Event : uint8_t { None, QuickLockChanged, Screenshot, PageTurn, ConfiguredAction };
+  enum class Event : uint8_t { None, QuickLockChanged, Screenshot, PageTurn, ConfiguredAction, TouchscreenEscapeHatch };
 
   struct Result {
     Event event = Event::None;
@@ -56,23 +56,10 @@ class ButtonShortcutController {
 
     if (powerPressed && chordButtonPressed && action != ChordAction::Disabled) {
       chordActive_ = true;
-      if (quickLockState_.isLocked() &&
-          (action != ChordAction::QuickLock || quickLockTrigger_ != QuickLockTrigger::PowerUp)) {
+      if (quickLockState_.isLocked() && !canRunChordWhileQuickLocked(action, QuickLockTrigger::PowerUp)) {
         return {Event::None, true};
       }
-      switch (action) {
-        case ChordAction::Screenshot:
-          return {Event::Screenshot, true};
-        case ChordAction::QuickLock:
-          toggleQuickLock(nowMs, QuickLockTrigger::PowerUp);
-          return {Event::QuickLockChanged, true};
-        case ChordAction::PageTurn:
-          return {Event::PageTurn, true};
-        case ChordAction::Disabled:
-          break;
-        default:
-          return {Event::ConfiguredAction, true, action};
-      }
+      return dispatchChord(nowMs, action, QuickLockTrigger::PowerUp);
     }
 
     if (shortPowerRelease) {
@@ -83,6 +70,25 @@ class ButtonShortcutController {
       }
     }
     return {Event::None, quickLockState_.isLocked()};
+  }
+
+  Result updateUpDown(uint32_t nowMs, bool upPressed, bool downPressed, ChordAction action,
+                      bool touchscreenEscapeHatch) {
+    if (upDownChordActive_) {
+      if (!upPressed && !downPressed) upDownChordActive_ = false;
+      return {Event::None, true};
+    }
+
+    if (!upPressed || !downPressed || (!touchscreenEscapeHatch && action == ChordAction::Disabled)) {
+      return {Event::None, quickLockState_.isLocked()};
+    }
+
+    upDownChordActive_ = true;
+    if (quickLockState_.isLocked() && !canRunChordWhileQuickLocked(action, QuickLockTrigger::UpDown)) {
+      return {Event::None, true};
+    }
+    if (touchscreenEscapeHatch) return {Event::TouchscreenEscapeHatch, true};
+    return dispatchChord(nowMs, action, QuickLockTrigger::UpDown);
   }
 
   bool isQuickLocked() const { return quickLockState_.isLocked(); }
@@ -116,8 +122,29 @@ class ButtonShortcutController {
   }
 
  private:
+  bool canRunChordWhileQuickLocked(ChordAction action, QuickLockTrigger trigger) const {
+    return action == ChordAction::QuickLock && quickLockTrigger_ == trigger;
+  }
+
+  Result dispatchChord(uint32_t nowMs, ChordAction action, QuickLockTrigger trigger) {
+    switch (action) {
+      case ChordAction::Screenshot:
+        return {Event::Screenshot, true};
+      case ChordAction::QuickLock:
+        toggleQuickLock(nowMs, trigger);
+        return {Event::QuickLockChanged, true};
+      case ChordAction::PageTurn:
+        return {Event::PageTurn, true};
+      case ChordAction::Disabled:
+        return {Event::None, true};
+      default:
+        return {Event::ConfiguredAction, true, action};
+    }
+  }
+
   QuickLockState quickLockState_;
   QuickLockTrigger quickLockTrigger_ = QuickLockTrigger::None;
   bool chordActive_ = false;
+  bool upDownChordActive_ = false;
   bool unlockTriggerReleased_ = true;
 };

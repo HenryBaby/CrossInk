@@ -257,7 +257,7 @@ void SdFirmwareUpdateActivity::render(RenderLock&&) {
       UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top + lineHeight + metrics.verticalSpacing,
                                        errorMessage.c_str(), 3);
     }
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   } else {
     // PICKING / CONFIRMING: a sub-activity is on top, nothing to draw.

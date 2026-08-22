@@ -432,8 +432,9 @@ void StatusBarSettingsActivity::render(RenderLock&&) {
   const int previewLabelLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
   constexpr int previewLabelGap = 18;
 
-  const auto labels = mappedInput.mapLabels(
-      tr(STR_BACK), selectedItemUsesOptionMenu() ? tr(STR_SELECT) : tr(STR_TOGGLE), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)),
+                                            selectedItemUsesOptionMenu() ? tr(STR_SELECT) : tr(STR_TOGGLE),
+                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
 
   int bottomPreviewPadding = metrics.buttonHintsHeight + metrics.verticalSpacing;
 

@@ -109,6 +109,8 @@ void XtcParser::close() {
   m_chapterInfoLoaded = false;
   m_chapterCount = 0;
   m_chapterOffset = 0;
+  m_chapterTableDense = true;
+  m_chapterCursorValid = false;
   m_title.clear();
   m_author.clear();
   m_hasChapters = false;
@@ -265,6 +267,8 @@ bool XtcParser::readPageTableEntry(uint32_t pageIndex, PageInfo& info) {
 XtcError XtcParser::readChapterTableInfo() {
   m_chapterCount = 0;
   m_chapterOffset = 0;
+  m_chapterTableDense = true;
+  m_chapterCursorValid = false;
 
   if (!ensureFileOpen()) {
     return XtcError::READ_ERROR;
@@ -324,21 +328,25 @@ XtcError XtcParser::readChapterTableInfo() {
 
   const uint64_t chaptersToScan = std::min<uint64_t>(rawChapterCount, std::numeric_limits<uint16_t>::max());
   uint8_t chapterBuf[chapterSize];
+  ChapterInfo scratch{};
+  uint64_t scannedRows = 0;
   for (uint64_t i = 0; i < chaptersToScan; i++) {
     if (m_file.read(chapterBuf, chapterSize) != chapterSize) {
       return XtcError::READ_ERROR;
     }
 
-    uint16_t startPage = 0;
-    uint16_t endPage = 0;
-    memcpy(&startPage, chapterBuf + 0x50, sizeof(startPage));
-    memcpy(&endPage, chapterBuf + 0x52, sizeof(endPage));
-
-    if (chapterBuf[0] == '\0' && startPage == 0 && endPage == 0) {
+    bool isTerminator = false;
+    const bool usable = parseChapterRow(chapterBuf, scratch, isTerminator);
+    if (isTerminator) {
       break;
     }
-    ++m_chapterCount;
+    ++scannedRows;
+    // Count only rows the reader can actually open. Rows with an out-of-range
+    // page span are skipped here and by readChapter, so the chapter list stays
+    // contiguous instead of stopping at the first unusable row.
+    if (usable) ++m_chapterCount;
   }
+  m_chapterTableDense = m_chapterCount == scannedRows;
 
   if (rawChapterCount > chaptersToScan) {
     LOG_ERR("XTC", "Chapter table exceeds supported row count (%llu)",
@@ -365,25 +373,14 @@ size_t XtcParser::getChapterCount() {
   return m_chapterCount;
 }
 
-bool XtcParser::readChapter(const size_t index, ChapterInfo& chapter) {
-  constexpr size_t chapterSize = 96;
-  if (index >= m_chapterCount || !ensureFileOpen()) {
-    return false;
-  }
-
-  const uint64_t offset = m_chapterOffset + static_cast<uint64_t>(index) * chapterSize;
-  uint8_t chapterBuf[chapterSize];
-  if (!m_file.seek64(offset) || m_file.read(chapterBuf, chapterSize) != chapterSize) {
-    return false;
-  }
-
+bool XtcParser::parseChapterRow(const uint8_t* const row, ChapterInfo& chapter, bool& isTerminator) const {
   uint16_t startPage = 0;
   uint16_t endPage = 0;
-  memcpy(&startPage, chapterBuf + 0x50, sizeof(startPage));
-  memcpy(&endPage, chapterBuf + 0x52, sizeof(endPage));
-  if (chapterBuf[0] == '\0' && startPage == 0 && endPage == 0) {
-    return false;
-  }
+  memcpy(&startPage, row + 0x50, sizeof(startPage));
+  memcpy(&endPage, row + 0x52, sizeof(endPage));
+
+  isTerminator = row[0] == '\0' && startPage == 0 && endPage == 0;
+  if (isTerminator) return false;
 
   if (startPage > 0) --startPage;
   if (endPage > 0) --endPage;
@@ -391,12 +388,53 @@ bool XtcParser::readChapter(const size_t index, ChapterInfo& chapter) {
   if (endPage >= m_header.pageCount) endPage = m_header.pageCount - 1;
   if (startPage > endPage) return false;
 
-  memcpy(chapter.name, chapterBuf, XTC_CHAPTER_NAME_MAX);
+  memcpy(chapter.name, row, XTC_CHAPTER_NAME_MAX);
   chapter.name[XTC_CHAPTER_NAME_MAX] = '\0';
   chapter.name[strnlen(chapter.name, XTC_CHAPTER_NAME_MAX)] = '\0';
   chapter.startPage = startPage;
   chapter.endPage = endPage;
   return true;
+}
+
+bool XtcParser::readChapter(const size_t index, ChapterInfo& chapter) {
+  constexpr size_t chapterSize = 96;
+  if (index >= m_chapterCount || !ensureFileOpen()) {
+    return false;
+  }
+
+  // A dense table needs one seek and one read. A table containing unusable rows
+  // has no direct index mapping, so walk forward from the cached cursor, which
+  // keeps a sequential window at one row read per entry.
+  size_t sourceRow = index;
+  size_t logicalIndex = index;
+  if (!m_chapterTableDense) {
+    const bool resume = m_chapterCursorValid && m_chapterCursorLogical <= index;
+    sourceRow = resume ? m_chapterCursorSource : 0;
+    logicalIndex = resume ? m_chapterCursorLogical : 0;
+  }
+
+  if (!m_file.seek64(m_chapterOffset + static_cast<uint64_t>(sourceRow) * chapterSize)) {
+    return false;
+  }
+
+  uint8_t chapterBuf[chapterSize];
+  while (true) {
+    if (m_file.read(chapterBuf, chapterSize) != chapterSize) return false;
+
+    bool isTerminator = false;
+    const bool usable = parseChapterRow(chapterBuf, chapter, isTerminator);
+    if (isTerminator) return false;
+    if (usable) {
+      if (logicalIndex == index) {
+        m_chapterCursorLogical = logicalIndex;
+        m_chapterCursorSource = sourceRow;
+        m_chapterCursorValid = true;
+        return true;
+      }
+      ++logicalIndex;
+    }
+    ++sourceRow;
+  }
 }
 
 size_t XtcParser::getChapters(const size_t firstIndex, ChapterInfo* chapters, const size_t capacity) {

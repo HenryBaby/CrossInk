@@ -8,6 +8,7 @@ enum class QuickLockTrigger : uint8_t {
   ShortPower,
   LongPower,
   PowerUp,
+  UpDown,
   LongBack,
   LongMenu,
 };

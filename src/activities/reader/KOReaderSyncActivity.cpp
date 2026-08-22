@@ -637,7 +637,7 @@ void KOReaderSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top + 40, tr(STR_KOREADER_SETUP_HINT), true,
                               EpdFontFamily::BOLD);
 
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
     return;
@@ -712,7 +712,8 @@ void KOReaderSyncActivity::render(RenderLock&&) {
     }
 
     // Bottom button hints
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), tr(STR_DIR_UP),
+                                              tr(STR_DIR_DOWN));
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
     return;
@@ -722,7 +723,7 @@ void KOReaderSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top, tr(STR_NO_REMOTE_MSG), true, EpdFontFamily::BOLD);
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top + 40, tr(STR_UPLOAD_PROMPT));
 
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_UPLOAD), "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_UPLOAD), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
     return;
@@ -733,7 +734,7 @@ void KOReaderSyncActivity::render(RenderLock&&) {
                               state == UPLOAD_COMPLETE ? tr(STR_UPLOAD_SUCCESS) : tr(STR_ALREADY_SYNCED), true,
                               EpdFontFamily::BOLD);
 
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_DONE), "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_DONE), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
     return;
@@ -747,7 +748,7 @@ void KOReaderSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredWrappedText(renderer, textArea, UI_10_FONT_ID, top + 40, statusMessage.c_str(), 3, true,
                                      EpdFontFamily::REGULAR, 4);
 
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
     return;

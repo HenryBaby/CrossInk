@@ -695,7 +695,8 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
   uiReady = true;
 
   const auto confirmLabel = selectedIndex < 0 ? tr(STR_NEXT_FIELD) : tr(STR_SELECT);
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), confirmLabel, tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 
   renderer.displayBuffer();

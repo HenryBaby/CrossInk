@@ -340,7 +340,7 @@ void IntervalSelectionActivity::render(RenderLock&&) {
     drawStepHintLine(barY + 30, StrId::STR_STEP_HINT_FRONT, smallStep);
     drawStepHintLine(barY + 52, StrId::STR_STEP_HINT_SIDE, largeStep);
 
-    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), "-", "+");
+    const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_SELECT), "-", "+");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, readerActivity);
   }
 

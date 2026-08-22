@@ -53,4 +53,25 @@ TEST(OptionPopup, ConsecutiveTouchSelectionsDoNotLoseSecondRelease) {
   EXPECT_FALSE(popup.isActive());
 }
 
+TEST(OptionPopup, PowerConfirmSelectionSuppressesItsPowerRelease) {
+  GfxRenderer renderer;
+  HalGPIO gpio;
+  MappedInputManager input(gpio, renderer);
+  OptionPopup popup;
+  int selections = 0;
+
+  const char* options[] = {"Toggle Frontlight"};
+  popup.show("Quick Actions", options, 1, 0, [&](const int selectedIndex) {
+    EXPECT_EQ(selectedIndex, 0);
+    ++selections;
+  });
+
+  input.injectPowerConfirmPress();
+  EXPECT_TRUE(popup.handleInput(input, [] {}));
+
+  EXPECT_EQ(selections, 1);
+  EXPECT_FALSE(popup.isActive());
+  EXPECT_TRUE(input.isPowerReleaseSuppressed());
+}
+
 }  // namespace

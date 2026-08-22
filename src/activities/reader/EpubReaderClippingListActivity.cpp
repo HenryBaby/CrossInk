@@ -607,8 +607,9 @@ void EpubReaderClippingListActivity::renderDetail() {
   }
 #endif
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_OPEN), detailPage > 0 ? tr(STR_DIR_UP) : "",
-                                            detailPage < detailPageCount - 1 ? tr(STR_DIR_DOWN) : "");
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_OPEN), detailPage > 0 ? tr(STR_DIR_UP) : "",
+                            detailPage < detailPageCount - 1 ? tr(STR_DIR_DOWN) : "");
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
 }
 
@@ -633,8 +634,9 @@ void EpubReaderClippingListActivity::render(RenderLock&&) {
   app.render();
   uiReady = true;
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), CLIPPINGS.clippingCount() == 0 ? "" : tr(STR_OPEN),
-                                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+  const auto labels =
+      mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), CLIPPINGS.clippingCount() == 0 ? "" : tr(STR_OPEN),
+                            tr(STR_DIR_UP), tr(STR_DIR_DOWN));
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
   renderer.displayBuffer();
 }

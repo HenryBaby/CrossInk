@@ -194,6 +194,9 @@ void XtcReaderActivity::loop() {
   }
   if (quickActionsPopup.handleInput(mappedInput, [this] { requestUpdate(); })) return;
 
+  const bool shortcutPageTurn = shortcutPageTurnPending;
+  shortcutPageTurnPending = false;
+
   const auto touch = ReaderUtils::detectTouchPageTurn(renderer, mappedInput);
   const int statusBarHeight = UITheme::getInstance().getStatusBarHeight();
   const auto statusBarMode = static_cast<CrossPointSettings::XTC_STATUS_BAR_MODE>(SETTINGS.xtcStatusBarMode);
@@ -305,6 +308,64 @@ void XtcReaderActivity::loop() {
     return;
   }
 
+  const bool sideLongPressSkipsChapter =
+      SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_CHAPTER_SKIP;
+  if (sideLongPressSkipsChapter) {
+    const bool sidePrevReleased = mappedInput.wasReleased(MappedInputManager::Button::PageBack);
+    const bool sideNextReleased = mappedInput.wasReleased(MappedInputManager::Button::PageForward);
+    if (sideButtonLongPressHandled && (sidePrevReleased || sideNextReleased)) {
+      sideButtonLongPressHandled = false;
+      return;
+    }
+
+    const bool longPressReady = mappedInput.getHeldTime() > ReaderUtils::SKIP_HOLD_MS;
+    const bool prevLongPressed = longPressReady && mappedInput.isPressed(MappedInputManager::Button::PageBack);
+    const bool nextLongPressed = longPressReady && mappedInput.isPressed(MappedInputManager::Button::PageForward);
+    if (!sideButtonLongPressHandled && (prevLongPressed || nextLongPressed)) {
+      sideButtonLongPressHandled = true;
+
+      bool goHome = false;
+      bool needsUpdate = false;
+      {
+        RenderLock lock(*this);
+        const uint32_t pageCount = xtc->getPageCount();
+        if (currentPage >= pageCount) {
+          if (nextLongPressed) {
+            goHome = true;
+          } else {
+            currentPage = pageCount > 0 ? pageCount - 1 : 0;
+            needsUpdate = true;
+          }
+        } else {
+          uint32_t forwardReadSeconds = 0;
+          const bool shouldRecordForwardRead =
+              nextLongPressed && forwardPageReadElapsed(forwardReadSeconds, "side_long_press");
+          recordCurrentPageReadingTime("side_long_press");
+          if (prevLongPressed) {
+            currentPage = currentPage >= 10 ? currentPage - 10 : 0;
+          } else {
+            currentPage += 10;
+            if (currentPage >= pageCount) {
+              currentPage = pageCount;
+            }
+            if (shouldRecordForwardRead) {
+              recordForwardPageTurn(forwardReadSeconds, false);
+            }
+          }
+          needsUpdate = true;
+        }
+      }
+      if (goHome) {
+        onGoHome();
+        return;
+      }
+      if (needsUpdate) {
+        requestUpdate();
+      }
+      return;
+    }
+  }
+
   // Side buttons fire on press only when long-press action is OFF.
   const bool sideUsePress = SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_OFF;
 
@@ -411,13 +472,17 @@ void XtcReaderActivity::loop() {
   bool prevTriggered = tiltPrev || sidePrev || frontPrev;
   bool nextTriggered = tiltNext || sideNext || frontNext;
   prevTriggered = prevTriggered || touch.prev;
-  nextTriggered = nextTriggered || touch.next;
+  nextTriggered = nextTriggered || touch.next || shortcutPageTurn;
 
   if (!prevTriggered && !nextTriggered) {
     return;
   }
 
-  const unsigned long heldMs = (touch.prev || touch.next) ? touch.heldMs : mappedInput.getHeldTime();
+  // Touch page turns deliberately ignore the physical-button long-press
+  // settings. Keep those saved settings intact for a later move back to a
+  // button device, but never let a held screen tap skip pages.
+  const bool fromTouch = touch.prev || touch.next;
+  const unsigned long heldMs = fromTouch ? touch.heldMs : mappedInput.getHeldTime();
 
   // XTC pages are fixed-size bitmaps, so the orientation long-press action is
   // consumed here instead of rotating/clipping the pre-rendered page image.
@@ -438,7 +503,7 @@ void XtcReaderActivity::loop() {
   lastPageTurnTime = now;
 
   const bool skipPages =
-      !fromTilt && !powerPageTurn && heldMs > ReaderUtils::SKIP_HOLD_MS &&
+      !fromTouch && !fromTilt && !powerPageTurn && heldMs > ReaderUtils::SKIP_HOLD_MS &&
       (fromSideBtn ? SETTINGS.sideButtonLongPress == CrossPointSettings::SIDE_LONG_PRESS::SIDE_LONG_CHAPTER_SKIP
                    : SETTINGS.longPressButtonBehavior == CrossPointSettings::CHAPTER_SKIP);
   const int skipAmount = skipPages ? 10 : 1;
@@ -894,6 +959,9 @@ bool XtcReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRB
 
 bool XtcReaderActivity::executeReaderShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
   switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::PAGE_TURN:
+      shortcutPageTurnPending = true;
+      return true;
     case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
       activityManager.goToFileTransfer(xtc ? xtc->getPath() : "");
       return true;
