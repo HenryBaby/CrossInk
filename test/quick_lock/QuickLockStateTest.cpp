@@ -91,6 +91,17 @@ TEST(ButtonShortcutController, UpDownChordWorksWithoutTouchscreenEscapeHatch) {
   EXPECT_EQ(result.action, Action::QuickActions);
 }
 
+TEST(ButtonShortcutController, IdleUpDownDoesNotPreemptReaderQuickLockUnlock) {
+  ButtonShortcutController controller;
+  controller.toggleQuickLock(1U, QuickLockTrigger::LongMenu);
+
+  const auto result = controller.updateUpDown(2U, false, false, ButtonShortcutController::ChordAction::Disabled, false);
+
+  EXPECT_EQ(result.event, ButtonShortcutController::Event::None);
+  EXPECT_FALSE(result.consumeInput);
+  EXPECT_TRUE(controller.isQuickLocked());
+}
+
 TEST(ButtonShortcutController, EveryChordActionConsumesBothReleaseOrders) {
   using Action = ButtonShortcutController::ChordAction;
   constexpr Action actions[] = {

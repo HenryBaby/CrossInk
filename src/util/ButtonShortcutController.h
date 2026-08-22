@@ -80,7 +80,11 @@ class ButtonShortcutController {
     }
 
     if (!upPressed || !downPressed || (!touchscreenEscapeHatch && action == ChordAction::Disabled)) {
-      return {Event::None, quickLockState_.isLocked()};
+      // An idle Up + Down controller must not preempt the reader's permitted
+      // Quick Lock unlock trigger (for example, long-press Menu or Back).
+      // Locked input is consumed by the main Quick Lock path after it has
+      // given that trigger a chance to run.
+      return {};
     }
 
     upDownChordActive_ = true;
