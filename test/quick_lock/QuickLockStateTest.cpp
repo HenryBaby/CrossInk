@@ -80,6 +80,17 @@ TEST(ButtonShortcutController, PageTurnChordEmitsPageTurn) {
   EXPECT_EQ(controller.update(1U, true, true, false, false, Action::PageTurn).event, Event::PageTurn);
 }
 
+TEST(ButtonShortcutController, UpDownChordWorksWithoutTouchscreenEscapeHatch) {
+  ButtonShortcutController controller;
+  using Action = ButtonShortcutController::ChordAction;
+  using Event = ButtonShortcutController::Event;
+
+  const auto result = controller.updateUpDown(1U, true, true, Action::QuickActions, false);
+  EXPECT_EQ(result.event, Event::ConfiguredAction);
+  EXPECT_TRUE(result.consumeInput);
+  EXPECT_EQ(result.action, Action::QuickActions);
+}
+
 TEST(ButtonShortcutController, EveryChordActionConsumesBothReleaseOrders) {
   using Action = ButtonShortcutController::ChordAction;
   constexpr Action actions[] = {

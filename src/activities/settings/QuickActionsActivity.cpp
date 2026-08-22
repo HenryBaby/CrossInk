@@ -19,8 +19,8 @@ constexpr StrId triggerLabels[] = {
 
 std::vector<QuickActions::Trigger> availableTriggers() {
   std::vector<QuickActions::Trigger> triggers = {QuickActions::Trigger::None, QuickActions::Trigger::ShortPower,
-                                                 QuickActions::Trigger::LongPower, QuickActions::Trigger::PowerUp};
-  if (gpio.hasTouch()) triggers.push_back(QuickActions::Trigger::UpDown);
+                                                 QuickActions::Trigger::LongPower, QuickActions::Trigger::PowerUp,
+                                                 QuickActions::Trigger::UpDown};
   if (gpio.hasHomeKey()) {
     triggers.push_back(QuickActions::Trigger::TapHome);
     triggers.push_back(QuickActions::Trigger::LongPressHome);

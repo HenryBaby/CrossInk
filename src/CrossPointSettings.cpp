@@ -700,10 +700,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   const bool unavailableHomeTrigger =
       !gpio.hasHomeKey() && persistedQuickActionsTrigger >= static_cast<uint8_t>(QuickActions::Trigger::TapHome) &&
       persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::DoubleTapHome);
-  const bool unavailableUpDownTrigger =
-      !gpio.hasTouch() && persistedQuickActionsTrigger == static_cast<uint8_t>(QuickActions::Trigger::UpDown);
-  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::UpDown) && !unavailableHomeTrigger &&
-      !unavailableUpDownTrigger) {
+  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::UpDown) && !unavailableHomeTrigger) {
     quickActionsTrigger = persistedQuickActionsTrigger;
   } else {
     quickActionsTrigger = static_cast<uint8_t>(QuickActions::Trigger::None);
