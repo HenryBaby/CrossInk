@@ -239,10 +239,10 @@ EpubReaderMenuActivity::TabMenuItems EpubReaderMenuActivity::buildMenuItems(
     mainItems.push_back({MenuAction::LOOKUP_HISTORY, StrId::STR_LOOKUP_HISTORY});
   }
   mainItems.push_back({MenuAction::SELECT_CHAPTER, StrId::STR_SELECT_CHAPTER});
-  mainItems.push_back({MenuAction::READER_OPTIONS, StrId::STR_READER_OPTIONS});
   mainItems.push_back({MenuAction::GO_TO_PERCENT, StrId::STR_GO_TO_PERCENT});
   mainItems.push_back({MenuAction::AUTO_PAGE_TURN, StrId::STR_AUTO_TURN_INTERVAL_SECONDS});
   mainItems.push_back({MenuAction::READING_STATS, StrId::STR_READING_STATS});
+  mainItems.push_back({MenuAction::READER_OPTIONS, StrId::STR_READER_OPTIONS});
   bookmarkItems.push_back({MenuAction::SAVE_CLIPPING, StrId::STR_SAVE_CLIPPING});
   if (hasClippings) {
     bookmarkItems.push_back({MenuAction::VIEW_CLIPPINGS, StrId::STR_VIEW_CLIPPINGS});

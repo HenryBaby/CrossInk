@@ -20,10 +20,10 @@
 - Wi-Fi passwords are now shown while entering them, making corrections easier on-device.
 - EPUB progress calculations now reuse a bounded in-memory spine-size index while reading, reducing repeated SD-card seeks.
 - Waking from deep sleep now keeps the selected sleep screen visible until Home or the reader is ready, removing the boot-up splash screen.
-- Reader menu settings now group Controls and Mark as Finished with the gear-tab actions in a consistent order.
+- Controls and Mark as Finished has moved to the settings gear tab in the reader menu.
 - Font Family choices now identify built-in and SD-card fonts by their available point-size ranges, and the downloadable-font manager is labeled “Download Fonts”.
 - Touch controls are easier to use, with taller on-screen keyboard keys, a heavier header Back chevron, and reader-menu icons that show whether the touchscreen is enabled.
-- Frontlight schedules now support one-minute start and end times.
+- Book Options is now the final item in the in-reader menu.
 
 ### Removed
 
