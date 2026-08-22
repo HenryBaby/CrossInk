@@ -2,6 +2,7 @@
 
 ### Added
 
+- Frontlit readers can choose Never for periodic full-screen refreshes, and Night Mode now applies across the interface.
 - Full Xteink X4 Pro support, including USB Drive access to its SD card and direct USB file transfers.
 - Tapping the reader status bar on touch devices now toggles it for the current reading session without changing the page layout.
 - Touchscreen readers can choose tap, swipe, inverted tap, or disabled page-turn gestures, and assign two-finger swipes to frontlight, chapter, or font-size actions.

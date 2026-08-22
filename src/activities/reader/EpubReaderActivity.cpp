@@ -1105,7 +1105,7 @@ void captureReaderSettings(EpubReaderActivity::ReaderSettingsSnapshot& out) {
   out.embeddedStyle = SETTINGS.embeddedStyle;
   out.hyphenationEnabled = SETTINGS.hyphenationEnabled;
   out.textAntiAliasing = SETTINGS.textAntiAliasing;
-  out.readerDarkMode = SETTINGS.readerDarkMode;
+  out.readerDarkMode = 0;
   out.imageRendering = SETTINGS.imageRendering;
   out.extraParagraphSpacing = SETTINGS.extraParagraphSpacing;
   out.forceParagraphIndents = SETTINGS.forceParagraphIndents;
@@ -1145,7 +1145,7 @@ void applyReaderSettings(const EpubReaderActivity::ReaderSettingsSnapshot& in) {
   SETTINGS.embeddedStyle = in.embeddedStyle ? 1 : 0;
   SETTINGS.hyphenationEnabled = in.hyphenationEnabled ? 1 : 0;
   SETTINGS.textAntiAliasing = in.textAntiAliasing ? 1 : 0;
-  SETTINGS.readerDarkMode = in.readerDarkMode ? 1 : 0;
+  SETTINGS.readerDarkMode = 0;
   SETTINGS.imageRendering =
       in.imageRendering < CrossPointSettings::IMAGE_RENDERING_COUNT ? in.imageRendering : SETTINGS.imageRendering;
   SETTINGS.extraParagraphSpacing = in.extraParagraphSpacing ? 1 : 0;
@@ -4380,8 +4380,8 @@ void EpubReaderActivity::executeReaderQuickAction(CrossPointSettings::LONG_PRESS
     case CrossPointSettings::LONG_MENU_TOGGLE_DARK_MODE: {
       {
         RenderLock lock(*this);
-        SETTINGS.readerDarkMode = !SETTINGS.readerDarkMode;
-        saveCurrentBookReaderSettings();
+        SETTINGS.screenInverted = !SETTINGS.screenInverted;
+        saveGlobalSettingsPreservingBookOverrides();
       }
       requestUpdate();
       break;

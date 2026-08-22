@@ -421,7 +421,7 @@ bool TxtReaderActivity::handleTwoFingerRotation(const bool clockwise) {
 }
 
 void TxtReaderActivity::toggleDarkMode() {
-  SETTINGS.readerDarkMode = !SETTINGS.readerDarkMode;
+  SETTINGS.screenInverted = !SETTINGS.screenInverted;
   SETTINGS.saveToFile();
   requestUpdate();
 }

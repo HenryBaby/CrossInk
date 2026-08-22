@@ -154,6 +154,9 @@ void ActivityManager::renderTaskLoop() {
     TouchRegistry::getInstance().beginFrame();
     if (currentActivity) {
       HalPowerManager::Lock powerLock;  // Ensure we don't go into low-power mode while rendering
+      // Apply Night Mode to each activity's normal-polarity frame. SleepActivity
+      // explicitly clears inversion for its normal sleep screen.
+      display.setInverted(SETTINGS.screenInverted != 0);
       currentActivity->render(std::move(lock));
     }
     TouchRegistry::getInstance().publish();

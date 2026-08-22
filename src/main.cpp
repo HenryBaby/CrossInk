@@ -499,8 +499,10 @@ void notifyQuickLockChanged() {
     constexpr int badgeSize = 40;
     const int x = std::max(left, renderer.getScreenWidth() - right - badgeSize);
     const int y = std::max(top, renderer.getScreenHeight() - bottom - badgeSize);
-    const bool background = SETTINGS.readerDarkMode != 0;
-    const bool foreground = !background;
+    // ActivityManager applies Night Mode at the display boundary, so direct
+    // framebuffer writes retain the normal palette.
+    constexpr bool background = false;
+    constexpr bool foreground = true;
     RenderLock lock;
     renderer.fillRect(x, y, badgeSize, badgeSize, background);
     freeink::ui::GfxRendererTarget target(renderer);
@@ -1240,12 +1242,7 @@ void setup() {
         }
 
         const auto pageHeight = renderer.getScreenHeight();
-        if (SETTINGS.readerDarkMode != 0) {
-          renderer.drawImageInverted(LoadingIcon, 0, pageHeight - LOADINGICON_HEIGHT, LOADINGICON_WIDTH,
-                                     LOADINGICON_HEIGHT);
-        } else {
-          renderer.drawImage(LoadingIcon, 0, pageHeight - LOADINGICON_HEIGHT, LOADINGICON_WIDTH, LOADINGICON_HEIGHT);
-        }
+        renderer.drawImage(LoadingIcon, 0, pageHeight - LOADINGICON_HEIGHT, LOADINGICON_WIDTH, LOADINGICON_HEIGHT);
         if (useDifferentialRefresh) {
           renderer.displayGrayscaleBase(HalDisplay::FAST_REFRESH);
           allowFastInitialReaderRefresh = true;
