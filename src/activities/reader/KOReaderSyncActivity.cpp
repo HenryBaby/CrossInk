@@ -79,6 +79,16 @@ ResultActionLayout resultActionLayout(const Rect& screen, const ThemeMetrics& me
   return result;
 }
 
+TouchActionButtons::Layout noRemoteProgressActionLayout(const Rect& screen, const ThemeMetrics& metrics) {
+  constexpr uint8_t buttonCount = 2;
+  constexpr int totalHeight =
+      TouchActionButtons::kDefaultHeight * buttonCount + TouchActionButtons::kDefaultGap * (buttonCount - 1);
+  const Rect container{screen.x + metrics.contentSidePadding,
+                       screen.y + screen.height - metrics.verticalSpacing - totalHeight,
+                       std::max(1, screen.width - metrics.contentSidePadding * 2), totalHeight};
+  return TouchActionButtons::vertical(container, buttonCount);
+}
+
 std::string calculateDocumentHashForMethod(const std::string& path, const DocumentMatchMethod method) {
   return method == DocumentMatchMethod::FILENAME ? KOReaderDocumentId::calculateFromFilename(path)
                                                  : KOReaderDocumentId::calculate(path);
@@ -723,6 +733,12 @@ void KOReaderSyncActivity::render(RenderLock&&) {
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top, tr(STR_NO_REMOTE_MSG), true, EpdFontFamily::BOLD);
     UITheme::drawCenteredText(renderer, screen, UI_10_FONT_ID, top + 40, tr(STR_UPLOAD_PROMPT));
 
+    if (mappedInput.hasTouch()) {
+      const auto actions = noRemoteProgressActionLayout(screen, metrics);
+      const char* actionLabels[] = {tr(STR_UPLOAD), tr(STR_CANCEL)};
+      TouchActionButtons::draw(renderer, actions, actionLabels, 0, -1, UI_10_FONT_ID);
+    }
+
     const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), tr(STR_UPLOAD), "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4, true);
     renderer.displayBuffer(screenTransitionRefresh.modeFor(static_cast<uint8_t>(state)));
@@ -842,14 +858,33 @@ void KOReaderSyncActivity::loop() {
   }
 
   if (state == NO_REMOTE_PROGRESS) {
+    if (mappedInput.hasTouch()) {
+      const auto& metrics = UITheme::getInstance().getMetrics();
+      const Rect screen = UITheme::getInstance().getScreenSafeArea(renderer, true, false);
+      const auto actions = noRemoteProgressActionLayout(screen, metrics);
+      int touchedOption = -1;
+      const auto touch = mappedInput.rowTouch(
+          touchedOption, actions.buttons[0].y, TouchActionButtons::kDefaultHeight + TouchActionButtons::kDefaultGap,
+          actions.count, actions.buttons[0].x, actions.buttons[0].x + actions.buttons[0].width,
+          actions.buttons[0].height);
+      if (touch == MappedInputManager::RowTouch::Down) return;
+      if (touch == MappedInputManager::RowTouch::Tap) {
+        if (touchedOption == 0) {
+          if (documentHash.empty()) {
+            documentHash = calculateDocumentHashForMethod(epubPath, primaryMatchMethod);
+          }
+          performUpload();
+        } else if (touchedOption == 1) {
+          returnToReader();
+        }
+        return;
+      }
+    }
+
     if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
       // Calculate hash if not done yet
       if (documentHash.empty()) {
-        if (primaryMatchMethod == DocumentMatchMethod::FILENAME) {
-          documentHash = KOReaderDocumentId::calculateFromFilename(epubPath);
-        } else {
-          documentHash = KOReaderDocumentId::calculate(epubPath);
-        }
+        documentHash = calculateDocumentHashForMethod(epubPath, primaryMatchMethod);
       }
       performUpload();
     }
