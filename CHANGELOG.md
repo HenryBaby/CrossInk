@@ -55,6 +55,8 @@
 - Network connections no longer trigger repeated full-panel flashes.
 - Crash reports now include the faulting instruction and CPU exception details needed to diagnose failures on X3/X4, X4 Pro, and Sticky readers.
 - The web EPUB optimizer removes oversized XHTML comments that could stop low-memory chapter indexing, and mixed reader fonts are warmed together to avoid slow redraws.
+- EPUB books left open on a footnote now reopen at the reading position instead of jumping to the end of the chapter, and keep showing their real progress percentage on the Home screen.
+- Reading position is no longer lost when leaving an EPUB from the end-of-book screen.
 
 ## [v1.5.0] - 2026-08-08
 

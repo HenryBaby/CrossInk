@@ -17,6 +17,9 @@ namespace ReaderUtils {
 
 constexpr unsigned long SKIP_HOLD_MS = 700;
 constexpr unsigned long GO_HOME_MS = 1000;
+// Hold duration to delete a row in the bookmark and clipping lists. Shared so the
+// same gesture cannot drift apart between the two lists.
+constexpr unsigned long DELETE_HOLD_MS = 1000;
 constexpr uint8_t STATUS_BAR_TEXT_PADDING = 3;
 // Gap between the top clock status bar band and the first line of book text.
 // Signed so negative values pull the text up toward the clock (unsigned would wrap
@@ -43,6 +46,11 @@ inline GfxRenderer::Orientation toRendererOrientation(const uint8_t orientation)
 inline void applyOrientation(GfxRenderer& renderer, const uint8_t orientation) {
   renderer.setOrientation(toRendererOrientation(orientation));
 }
+
+// Vertical position for the readers' full-screen fallback messages (empty chapter,
+// page load error, out of bounds). Derived from the live screen height so the text
+// stays centered in every orientation instead of sitting at a fixed portrait offset.
+inline int messageCenterY(const GfxRenderer& renderer) { return renderer.getScreenHeight() / 2; }
 
 inline bool shouldShowTopClockStatusBar() { return halClock.isAvailable() && SETTINGS.shouldShowClockInReader(); }
 

@@ -348,7 +348,11 @@ class EpubReaderActivity final : public Activity {
   // (used after a settings change re-paginates a chapter). Returns true if currentPage moved.
   bool isRelayoutCatchUpComplete() const;
   bool applyDeferredReposition();
-  bool saveProgress(int spineIndex, int currentPage, int pageCount);
+  // Saves are suppressed while a footnote preview is on screen so the preview's own
+  // position cannot overwrite the reader's. Set allowDuringFootnotePreview for the
+  // deliberate on-exit save of the pre-footnote origin, which is the position the
+  // suppression exists to protect.
+  bool saveProgress(int spineIndex, int currentPage, int pageCount, bool allowDuringFootnotePreview = false);
   bool queueProgressSave(int spineIndex, int currentPage, int pageCount, bool forceSave = false);
   bool flushQueuedProgress();
   void cacheCurrentSectionPosition();
@@ -431,6 +435,8 @@ class EpubReaderActivity final : public Activity {
   void setBookCompleted(bool isCompleted);
   void showCompletedFeedback(bool isCompleted);
   void showTiltPageTurnFeedback(bool enabled);
+  // Shared dismissal rule for the transient bookmark/completed/tilt confirmations.
+  bool transientFeedbackDismissed(unsigned long showTimeMs) const;
   void toggleHomeButtonInReader();
   void showRenderModeToast(uint8_t renderMode);
   void showSafeModeToast();

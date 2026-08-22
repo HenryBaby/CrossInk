@@ -107,7 +107,7 @@ void EpubReaderPercentSelectionActivity::loop() {
   // Touch goes through the FreeInkApp: render() registered the slider, step controls,
   // and actions; the slider follows the finger via InputDrag (dragPermille per held frame).
   // Runs before the Back handler because the release of a drag can also register as a
-  // swipe (e.g. the left-edge rightward back gesture) — the drag must consume it so it
+  // swipe (e.g. the left-edge rightward back gesture), so the drag must consume it so it
   // can't cancel the dialog or step the percent.
   fui::InputSnapshot snap{};
   if (uiReady) {

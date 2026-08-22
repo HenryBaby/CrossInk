@@ -276,8 +276,9 @@ class BaseTheme {
                                bool saveFocused = false, int primaryOptionIndex = -1, const char* noteLabel = nullptr,
                                const char* noteBody = nullptr) const;
   virtual void fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, const int progress) const;
+  // title is borrowed and must stay alive for the call; pass nullptr or "" for none.
   virtual void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage,
-                             const int pageCount, std::string title, const int paddingBottom = 0,
+                             const int pageCount, const char* title, const int paddingBottom = 0,
                              const int textYOffset = 0, const bool isPageBookmarked = false,
                              const char* timeLeftLabel = nullptr, bool darkMode = false,
                              float chapterProgressPercent = -1.0f, int stableCurrentPage = 0, int stablePageCount = 0,

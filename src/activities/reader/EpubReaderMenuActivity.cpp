@@ -159,7 +159,7 @@ Rect readerMenuHeaderActionTouchRect(const Rect& header, const Rect& actionRect)
   const int touchWidth = std::min(headerActionTouchSize, header.width);
   const int touchX = actionRect.x + actionRect.width - touchWidth;
   // The title reserves the space left of touchX. Treat the remaining header
-  // corner—including the non-interactive battery area—as Home so the icon is
+  // corner, including the non-interactive battery area, as Home so the icon is
   // easy to hit without changing its visual placement.
   return Rect{touchX, header.y, header.x + header.width - touchX, header.height};
 }
@@ -530,7 +530,7 @@ void EpubReaderMenuActivity::loop() {
 
   // A home-key long press toggles the reader menu: the same hold that opens it
   // closes it. The SDK fires the long event once per hold, so the opening hold
-  // (still down as the menu appears) does not immediately re-close it — only a
+  // (still down as the menu appears) does not immediately re-close it, only a
   // fresh press-and-hold does.
   if (mappedInput.wasReaderMenuHold()) {
     finishCancelled();
