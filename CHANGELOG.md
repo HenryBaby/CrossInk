@@ -33,6 +33,7 @@
 
 - Quick Lock can be unlocked again with its assigned long-press Menu or Back shortcut on X3/X4 readers.
 - Custom sleep images retain their grayscale detail, and newer X3 devices no longer retain or stripe the sleep screen after waking.
+- Directory listings now report SD read failures instead of silently hiding later files, and newly created folders are verified as visible before file-transfer clients receive success.
 - KOReader Sync shows Upload and Cancel touch buttons when no remote reading position is found.
 - The Refresh Screen shortcut on X4 now uses its less disruptive clean refresh waveform.
 - Reader Dark Mode toggles only once on a Power-button hold, and dictionary selection remains visible in dark mode and follows the physical front-button direction in counter-clockwise landscape.
