@@ -202,10 +202,6 @@ EpdFontFamily ui12FontFamily(&ui12RegularFont, &ui12BoldFont);
 unsigned long t1 = 0;
 unsigned long t2 = 0;
 
-// Power + Down is an established screenshot-only shortcut. Keep its release
-// separate from configurable chords so it cannot trigger another Power action.
-static bool screenshotComboHandled = false;
-
 const char* resetReasonName(const esp_reset_reason_t reason) {
   switch (reason) {
     case ESP_RST_POWERON:
@@ -464,12 +460,6 @@ CrossPointSettings::SHORT_PWRBTN getPowerButtonAction() {
   if (mappedInputManager.wasReleased(MappedInputManager::Button::Power)) {
     if (longPowerButtonHandled) {
       longPowerButtonHandled = false;
-      screenshotComboHandled = false;
-      return CrossPointSettings::SHORT_PWRBTN::IGNORE;
-    }
-
-    if (screenshotComboHandled) {
-      screenshotComboHandled = false;
       return CrossPointSettings::SHORT_PWRBTN::IGNORE;
     }
 
@@ -770,6 +760,15 @@ bool handleX4ProHomeKeyShortcuts() {
 #else
   if (!mappedInputManager.hasHomeKey()) {
     return false;
+  }
+
+  // A modal owns Home too. Clear a pending single tap so a gesture started
+  // while Quick Actions is open cannot fire after the popup closes.
+  if (activityManager.blocksGlobalInput()) {
+    const bool hadPendingTap = x4ProHomeKeyTapPending;
+    x4ProHomeKeyTapPending = false;
+    mappedInputManager.clearDeferredHomeGesture();
+    return hadPendingTap || gpio.wasHomeKeyTapped() || gpio.wasHomeKeyLongPressed();
   }
 
   // Reader menus set the touchscreen override while they are active, which
@@ -1506,37 +1505,27 @@ void loop() {
     return;
   }
 
+  const bool modalOwnsInput = activityManager.blocksGlobalInput();
+
   // Keep Power + Down screenshot-only. The configurable chord below uses Up,
-  // so it cannot replace or double-fire this one.
-  static bool screenshotButtonsReleased = true;
-  static bool screenshotComboActive = false;
-  // Consume both halves of the screenshot chord through their releases. In
-  // particular, releasing Power first must not let the later Down release
-  // navigate a newly opened overlay or reader page.
-  if (screenshotComboActive) {
-    if (gpio.isPressed(HalGPIO::BTN_POWER) || gpio.isPressed(HalGPIO::BTN_DOWN)) return;
-    screenshotButtonsReleased = true;
-    screenshotComboActive = false;
-    return;
+  // so it cannot replace or double-fire this one. The controller consumes both
+  // release orders even when an open modal blocks the screenshot itself.
+  const bool screenshotActionBlocked = modalOwnsInput || buttonShortcutController.isQuickLocked();
+  const auto screenshotChordResult = buttonShortcutController.updatePowerDown(
+      gpio.isPressed(HalGPIO::BTN_POWER), gpio.isPressed(HalGPIO::BTN_DOWN), screenshotActionBlocked);
+  if (screenshotChordResult.event == ButtonShortcutController::Event::Screenshot) {
+    RenderLock lock;
+    ScreenshotUtil::takeScreenshot(renderer);
   }
-  if (!buttonShortcutController.isQuickLocked() && gpio.isPressed(HalGPIO::BTN_POWER) &&
-      gpio.isPressed(HalGPIO::BTN_DOWN)) {
-    screenshotComboActive = true;
-    if (screenshotButtonsReleased) {
-      screenshotButtonsReleased = false;
-      screenshotComboHandled = true;
-      mappedInputManager.suppressNextPowerConfirmRelease();
-      RenderLock lock;
-      ScreenshotUtil::takeScreenshot(renderer);
-    }
+  if (screenshotChordResult.consumeInput) {
     return;
   }
 
   const bool touchscreenEscapeHatch =
-      gpio.hasTouch() && SETTINGS.disableReaderTouchscreen && activityManager.isReaderActivity();
+      !modalOwnsInput && gpio.hasTouch() && SETTINGS.disableReaderTouchscreen && activityManager.isReaderActivity();
   const auto sideButtonShortcutResult = buttonShortcutController.updateUpDown(
       millis(), gpio.isPressed(HalGPIO::BTN_UP), gpio.isPressed(HalGPIO::BTN_DOWN), configuredSideButtonChordAction(),
-      touchscreenEscapeHatch);
+      touchscreenEscapeHatch, modalOwnsInput);
   if (dispatchButtonShortcut(sideButtonShortcutResult) || sideButtonShortcutResult.consumeInput) {
     lastActivityTime = millis();
     return;
@@ -1548,8 +1537,9 @@ void loop() {
                                  gpio.getPowerButtonHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
   const bool quickLockOnShortPower =
       shortPowerRelease && SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::QUICK_LOCK;
-  const auto shortcutResult = buttonShortcutController.update(
-      millis(), powerPressed, chordButtonPressed, shortPowerRelease, quickLockOnShortPower, configuredChordAction());
+  const auto shortcutResult =
+      buttonShortcutController.update(millis(), powerPressed, chordButtonPressed, shortPowerRelease,
+                                      quickLockOnShortPower, configuredChordAction(), modalOwnsInput);
   if (dispatchButtonShortcut(shortcutResult)) {
     lastActivityTime = millis();
     return;

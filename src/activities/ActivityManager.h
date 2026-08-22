@@ -133,6 +133,9 @@ class ActivityManager {
 
   bool preventAutoSleep() const;
   bool requiresExclusiveStorageLoop() const;
+  // The active activity has an open modal that owns all global shortcuts and
+  // gestures until it is dismissed.
+  bool blocksGlobalInput() const;
   bool isHomeActivity() const;
   bool isReaderActivity() const;
   bool openReaderSettingsForTouchscreenEscapeHatch();

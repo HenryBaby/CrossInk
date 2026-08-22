@@ -813,6 +813,10 @@ bool MappedInputManager::wasReleased(const Button button) const {
       return false;
     }
 
+    // Only consume a release belonging to a Power press that was actually
+    // routed to Confirm. `powerAsConfirmInReaderMode` is an activity
+    // capability, not evidence that this particular click confirmed a modal:
+    // global Power actions must still work in reader menus.
     if (suppressPowerRelease) {
       suppressPowerRelease = false;
       return false;

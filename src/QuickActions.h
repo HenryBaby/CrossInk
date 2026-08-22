@@ -100,10 +100,11 @@ inline bool isActionAvailable(const uint8_t action) {
   return action == CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER && gpio.hasHomeKey();
 }
 
-// Quick Lock needs a single physical shortcut to unlock. Quick Actions are a
-// menu, so they cannot provide that one-to-one input contract.
+// Quick Lock needs a single physical shortcut to unlock. Quick Actions opens
+// this same menu, so neither belongs in a menu slot.
 inline bool isQuickActionSlotActionAvailable(const uint8_t action) {
-  return action != CrossPointSettings::QUICK_LOCK && isActionAvailable(action);
+  return action != CrossPointSettings::QUICK_LOCK && action != CrossPointSettings::QUICK_ACTIONS &&
+         isActionAvailable(action);
 }
 
 inline StrId actionLabel(const uint8_t action) {
