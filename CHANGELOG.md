@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [v1.5.5] - 2026-08-22
+
+### Upstream CrossInk v1.5.1-rc-4
+
+This release incorporates [`uxjulia/CrossInk v1.5.1-rc-4`](https://github.com/uxjulia/CrossInk/releases/tag/v1.5.1-rc-4).
+
 ## [v1.5.4] - 2026-08-18
 
 ### Upstream CrossInk v1.5.1-rc-3
