@@ -483,6 +483,8 @@ STR_NEARBY_STATS_VERSION_MISMATCH: "Versies komen niet overeen. Statistieken nie
 STR_PWR_BTN_FOOTNOTE_BACK: "Snel terug uit voetnoten"
 STR_DELETE_BOOKMARKS: "Bladwijzerlijst wissen"
 STR_STATS_TOTAL_READING_TIME_LBL: "Totale leestijd"
+STR_STATS_THIS_DEVICE_SCREEN: "Dit apparaat"
+STR_STATS_ALL_DEVICES_SCREEN: "Alle apparaten"
 STR_NEARBY_POSITION_SYNC: "Dichtbij positie syncen"
 STR_NEARBY_POSITION_VERSION_MISMATCH: "Versies komen niet overeen. Positie niet gesynchroniseerd"
 STR_NEARBY_POSITION_BOOK_MISMATCH: "Ander boek. Positie niet gesynchroniseerd"

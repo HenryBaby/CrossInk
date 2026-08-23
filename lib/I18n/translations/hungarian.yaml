@@ -486,6 +486,8 @@ STR_NEARBY_STATS_VERSION_MISMATCH: "Verzióeltérés. A statisztikák nem szinkr
 STR_PWR_BTN_FOOTNOTE_BACK: "Gyors vissza a jegyzetből"
 STR_DELETE_BOOKMARKS: "Könyvjelzőlista törlése"
 STR_STATS_TOTAL_READING_TIME_LBL: "Teljes olvasási idő"
+STR_STATS_THIS_DEVICE_SCREEN: "Ez az eszköz"
+STR_STATS_ALL_DEVICES_SCREEN: "Minden eszköz"
 STR_NEARBY_POSITION_SYNC: "Közeli pozíció szinkron"
 STR_NEARBY_POSITION_VERSION_MISMATCH: "Verzióeltérés. A pozíció nem szinkronizálódott"
 STR_NEARBY_POSITION_BOOK_MISMATCH: "Másik könyv. A pozíció nem szinkronizálódott"

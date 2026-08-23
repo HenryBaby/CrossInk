@@ -483,6 +483,8 @@ STR_NEARBY_STATS_VERSION_MISMATCH: "Versiuni incompatibile. Statisticile nu au f
 STR_PWR_BTN_FOOTNOTE_BACK: "Revenire rapidă din note"
 STR_DELETE_BOOKMARKS: "Golește lista de semne de carte"
 STR_STATS_TOTAL_READING_TIME_LBL: "Timp total de lectură"
+STR_STATS_THIS_DEVICE_SCREEN: "Acest disp."
+STR_STATS_ALL_DEVICES_SCREEN: "Toate disp."
 STR_NEARBY_POSITION_SYNC: "Sincronizare poziție apropiată"
 STR_NEARBY_POSITION_VERSION_MISMATCH: "Versiuni incompatibile. Poziția nu a fost sincronizată"
 STR_NEARBY_POSITION_BOOK_MISMATCH: "Carte diferită. Poziția nu a fost sincronizată"

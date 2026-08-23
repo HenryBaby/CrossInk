@@ -538,6 +538,8 @@ STR_TOGGLE_GUIDE_DOTS: "Направляющие точки"
 
 STR_NEARBY_STATS_VERSION_MISMATCH: "Несовпадение версий. Статистика не синхронизирована"
 STR_STATS_TOTAL_READING_TIME_LBL: "Общее время чтения"
+STR_STATS_THIS_DEVICE_SCREEN: "Это устр."
+STR_STATS_ALL_DEVICES_SCREEN: "Все устр."
 STR_STATS_TOTAL_READING_TIME_LBL_SHORT: "Время чтения"
 STR_STATS_PAGES_PER_MIN: "Стр./мин."
 STR_STATS_COMPLETED_LBL: "Прочитано"

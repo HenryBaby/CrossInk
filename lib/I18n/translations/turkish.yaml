@@ -483,6 +483,8 @@ STR_NEARBY_STATS_VERSION_MISMATCH: "Sürüm uyuşmazlığı. İstatistikler senk
 STR_PWR_BTN_FOOTNOTE_BACK: "Dipnotlardan hızlı dönüş"
 STR_DELETE_BOOKMARKS: "Yer imi listesini temizle"
 STR_STATS_TOTAL_READING_TIME_LBL: "Toplam okuma süresi"
+STR_STATS_THIS_DEVICE_SCREEN: "Bu cihaz"
+STR_STATS_ALL_DEVICES_SCREEN: "Tüm cihazlar"
 STR_NEARBY_POSITION_SYNC: "Yakındaki konum senkronu"
 STR_NEARBY_POSITION_VERSION_MISMATCH: "Sürüm uyuşmazlığı. Konum senkronize edilmedi"
 STR_NEARBY_POSITION_BOOK_MISMATCH: "Farklı kitap. Konum senkronize edilmedi"
