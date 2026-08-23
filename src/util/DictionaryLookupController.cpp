@@ -330,6 +330,7 @@ bool DictionaryLookupController::render() {
   }
 
   if (state == LookupState::AltFormPrompt) {
+    renderer.clearScreen();
     const int pageWidth = renderer.getScreenWidth();
     const Rect header{0, metrics.topPadding, pageWidth, TouchHeaderBackButton::height(metrics, mappedInput)};
 #if CROSSINK_APP_CAP_TOUCH
@@ -387,6 +388,7 @@ bool DictionaryLookupController::render() {
   }
 
   if (state == LookupState::NotFound) {
+    renderer.clearScreen();
     const int pageWidth = renderer.getScreenWidth();
     const Rect header{0, metrics.topPadding, pageWidth, TouchHeaderBackButton::height(metrics, mappedInput)};
     char title[kDictionaryNotFoundTitleCapacity];

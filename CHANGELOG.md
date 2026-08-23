@@ -40,6 +40,7 @@
 - KOReader Sync shows Upload and Cancel touch buttons when no remote reading position is found.
 - The Refresh Screen shortcut on X4 now uses its less disruptive clean refresh waveform.
 - Reader Dark Mode toggles only once on a Power-button hold, and dictionary selection remains visible in dark mode and follows the physical front-button direction in counter-clockwise landscape.
+- Dictionary miss screens stay readable in Dark Mode on all readers.
 - Touch input remains reliable while screens redraw; font downloads can be cancelled from their progress screen or header Back button; and long popup lists page on an Up or Down hold.
 - Power-button shortcuts continue to work while the touchscreen is disabled, and the Previous Chapter two-finger swipe opens the first page of the previous chapter.
 - Quick Actions reliably shows the selected cover or sleep screen, and chapter-skip holds act immediately instead of waiting for release.
