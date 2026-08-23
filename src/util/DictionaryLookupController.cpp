@@ -202,7 +202,11 @@ DictionaryLookupController::LookupEvent DictionaryLookupController::handleInput(
     ) {
       state = LookupState::Idle;
       nextIsSuggestion = false;
-      return LookupEvent::Cancelled;
+      // Declining the optional alternate-form lookup completes this lookup.
+      // The word-selection activity treats this the same as dismissing a
+      // not-found result, so it returns to the reader instead of restoring
+      // the selected word underneath the prompt.
+      return LookupEvent::NotFoundDismissedBack;
     }
 #if CROSSINK_APP_CAP_TOUCH
     if (allowCreateClipping_ && touchAction == ACTION_CREATE_CLIPPING) {

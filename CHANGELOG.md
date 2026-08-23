@@ -31,6 +31,7 @@
 
 ### Fixed
 
+- Declining an alternate dictionary-form lookup now returns to the reader instead of leaving the selected word active.
 - Quick Actions now consumes its own taps and button releases without blocking unrelated Power shortcuts in reader menus.
 - Quick Lock can be unlocked again with its assigned long-press Menu or Back shortcut on X3/X4 readers.
 - Custom sleep images retain their grayscale detail, and newer X3 devices no longer retain or stripe the sleep screen after waking.
