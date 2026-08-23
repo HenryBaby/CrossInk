@@ -10,6 +10,7 @@
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "platform/UsbSerialJtagHandoff.h"
 
 void UsbDriveActivity::onEnter() {
   Activity::onEnter();
@@ -135,6 +136,7 @@ void UsbDriveActivity::restartToHome() {
   activityManager.goHome();
 #else
   delay(20);
+  handoffUsbOtgToSerialJtag();
   ESP.restart();
 #endif
 }
