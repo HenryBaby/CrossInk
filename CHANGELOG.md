@@ -54,7 +54,7 @@
 - EPUB image pages remain responsive while decoding, retain full-height images with top margins, and estimate mixed image/text chapters accurately.
 - Clearing an EPUB cache now returns Home so it rebuilds safely, and cancelling a chapter, footnote, location, or QR screen returns to the EPUB menu.
 - EPUB and XTC readers retain less memory during ordinary reading; Change Font shortcuts also switch away from an active SD-card font before reindexing.
-- Saved EPUB clipping highlights preserve contrast, continue through ellipses and reflowed hyphens, and clipping previews retain complete multi-paragraph selections.
+- Saved EPUB clipping highlights preserve contrast, remain continuous through ellipses and reflowed hyphens, and clipping previews retain complete multi-paragraph selections.
 - Holding page-turn buttons while browsing saved clippings no longer crashes.
 - Dictionary definition popups return directly to the reader when dismissed, no longer leave empty hint blocks, and retry font switches safely when memory is tight.
 - XTC and XTCH readers prevent overlapping or in-progress page turns from corrupting pages, show covers across Home layouts, include full table-of-contents entries, stay within memory limits while building covers and thumbnails, and support X4 Pro Home-button page turns.

@@ -7,6 +7,7 @@
 #include "Epub/Epub/ReaderRenderSpec.h"
 #include "activities/reader/WordRef.h"
 #include "clippings/ClipTextBuilder.h"
+#include "clippings/ClippingHighlightGeometry.h"
 #include "clippings/ClippingTextMatcher.h"
 
 TEST(ClipWordStore, StoresNullTerminatedUtf8TextWithStableOffsets) {
@@ -85,6 +86,26 @@ TEST(ClippingTextMatcher, MatchesNonBreakingSpaceBeforeAdjacentEllipsisFragment)
       "\xC2\xA0\xE2\x80\xA6", false, token, sizeof(token) - 1, firstFragment.tokenBytes);
   EXPECT_EQ(ellipsisFragment.match, ClippingTextMatcher::TokenFragmentMatch::COMPLETES_TOKEN);
   EXPECT_EQ(ellipsisFragment.tokenBytes, 4);
+}
+
+TEST(ClippingHighlightGeometry, BridgesVisibleWordsSeparatedByHiddenLayoutSpace) {
+  const ClippingHighlightGeometry::WordRect wordBeforeEllipsis{12, 100, 200, 32, 20};
+  const ClippingHighlightGeometry::WordRect ellipsis{13, 140, 200, 10, 20};
+  ClippingHighlightGeometry::GapRect gap;
+
+  ASSERT_TRUE(ClippingHighlightGeometry::gapBetweenAdjacentWords(wordBeforeEllipsis, ellipsis, gap));
+  EXPECT_EQ(gap.x, 132);
+  EXPECT_EQ(gap.y, 200);
+  EXPECT_EQ(gap.width, 8);
+  EXPECT_EQ(gap.height, 20);
+}
+
+TEST(ClippingHighlightGeometry, DoesNotBridgeDifferentLinesOrUnselectedWords) {
+  const ClippingHighlightGeometry::WordRect first{12, 100, 200, 32, 20};
+  ClippingHighlightGeometry::GapRect gap;
+
+  EXPECT_FALSE(ClippingHighlightGeometry::gapBetweenAdjacentWords(first, {13, 140, 220, 10, 20}, gap));
+  EXPECT_FALSE(ClippingHighlightGeometry::gapBetweenAdjacentWords(first, {14, 140, 200, 10, 20}, gap));
 }
 
 TEST(ClippingTextMatcher, RejectsAuthoredHyphensAndMismatchedInsertedSuffixes) {

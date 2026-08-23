@@ -54,6 +54,7 @@
 #include "activities/home/RecentBookProgress.h"
 #include "activities/util/ConfirmationActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
+#include "clippings/ClippingHighlightGeometry.h"
 #include "clippings/ClippingTextMatcher.h"
 #include "clippings/ClippingsManager.h"
 #include "components/UITheme.h"
@@ -6660,9 +6661,13 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
     return false;
   };
 
+  ClippingHighlightGeometry::WordRect previousHighlight;
+  const TextBlock* previousHighlightBlock = nullptr;
+  bool hasPreviousHighlight = false;
   forEachVisiblePageWord(page, [&](const uint16_t pageWordIndex, const PageLine& line, const TextBlock& block,
                                    const size_t i) {
     if (!isHighlightedWord(pageWordIndex)) {
+      hasPreviousHighlight = false;
       return true;
     }
 
@@ -6695,11 +6700,25 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
       }
     }
     if (wordW > 0) {
+      const ClippingHighlightGeometry::WordRect currentHighlight{pageWordIndex, wordX, wordY, wordW, wordH};
+      ClippingHighlightGeometry::GapRect gap;
+      // No-break spaces are stored as hidden layout words. Bridge to the next
+      // visible word in the same line even when that hidden token interrupted
+      // the immediate-word lookahead above.
+      if (hasPreviousHighlight && previousHighlightBlock == &block &&
+          ClippingHighlightGeometry::gapBetweenAdjacentWords(previousHighlight, currentHighlight, gap)) {
+        renderer.fillRectDither(gap.x, gap.y, gap.width, gap.height, Color::LightGray);
+      }
       renderer.fillRectDither(wordX, wordY, wordW, wordH, Color::LightGray);
       // A saved clipping always uses black text on its light-gray marker.
       // The ordinary reader foreground is white in dark mode, which makes the
       // text fade into this marker.
       renderer.drawText(fontId, wordX, wordY, visibleText, true, textStyle);
+      previousHighlight = currentHighlight;
+      previousHighlightBlock = &block;
+      hasPreviousHighlight = true;
+    } else {
+      hasPreviousHighlight = false;
     }
     return true;
   });
