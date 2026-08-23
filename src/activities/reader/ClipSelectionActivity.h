@@ -69,6 +69,7 @@ class ClipSelectionActivity final : public Activity {
   ButtonNavigator buttonNavigator;
 
   void buildReadingOrder();
+  void positionCursorAtInitialPageCenter();
   void resetSavedBufferChunks();
   void allocateSavedBuffer();
   void storeCurrentBuffer();

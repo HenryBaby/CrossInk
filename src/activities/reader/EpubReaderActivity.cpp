@@ -3958,7 +3958,6 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
     }
     const int lineHeight = renderer.getLineHeight(readerFontId);
     const int pagesToLoad = std::min(3, section->pageCount - startPage);
-    std::array<uint16_t, 3> pageWordCounts{};
     static constexpr size_t MAX_CLIP_SELECTION_WORDS = 240;
     static constexpr uint32_t CLIP_SELECTION_WORD_RESERVE_HEADROOM = 16U * 1024U;
     static constexpr size_t CLIP_SELECTION_INITIAL_TEXT_RESERVE = 4U * 1024U;
@@ -4026,17 +4025,43 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
 
       // The pool keeps each word NUL-terminated, so estimate the page once
       // and grow once before collecting it instead of reallocating per word.
+      // If the current page alone exceeds the selection cap, retain a bounded
+      // window around its middle instead of the leading words. That keeps the
+      // initial cursor aligned with button-driven dictionary selection.
       size_t pageTextBytes = 0;
       const size_t remainingWords = maxSelectableWords - wordStore.words.size();
-      size_t estimatedWords = 0;
+      size_t pageSelectableWords = 0;
       for (const auto& element : page->elements) {
-        if (estimatedWords >= remainingWords || element->getTag() != TAG_PageLine) continue;
+        if (element->getTag() != TAG_PageLine) continue;
         const auto& line = static_cast<const PageLine&>(*element);
         if (!line.getBlock()) continue;
         const auto& block = *line.getBlock();
-        for (uint16_t i = 0; i < block.wordCount() && estimatedWords < remainingWords; ++i) {
+        for (uint16_t i = 0; i < block.wordCount(); ++i) {
           const char* wordText = block.wordText(i);
           if (!hasVisibleWordText(wordText)) continue;
+          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
+          if (renderer.getTextAdvanceX(readerFontId, wordText, textStyle) > 0) ++pageSelectableWords;
+        }
+      }
+      const size_t firstWordToKeep =
+          dictionaryRequest == nullptr && pageIdx == 0 && pageSelectableWords > remainingWords
+              ? (pageSelectableWords - remainingWords) / 2
+              : 0;
+      const size_t wordsToKeep = std::min(remainingWords, pageSelectableWords - firstWordToKeep);
+      size_t selectableWordIndex = 0;
+      size_t estimatedWords = 0;
+      for (const auto& element : page->elements) {
+        if (estimatedWords >= wordsToKeep || element->getTag() != TAG_PageLine) continue;
+        const auto& line = static_cast<const PageLine&>(*element);
+        if (!line.getBlock()) continue;
+        const auto& block = *line.getBlock();
+        for (uint16_t i = 0; i < block.wordCount() && estimatedWords < wordsToKeep; ++i) {
+          const char* wordText = block.wordText(i);
+          if (!hasVisibleWordText(wordText)) continue;
+          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
+          if (renderer.getTextAdvanceX(readerFontId, wordText, textStyle) <= 0) continue;
+          if (selectableWordIndex++ < firstWordToKeep) continue;
+
           const size_t wordBytes = strlen(wordText) + 1;
           if (wordBytes > ClipWordStore::MAX_TEXT_POOL_BYTES - pageTextBytes) {
             pageTextBytes = ClipWordStore::MAX_TEXT_POOL_BYTES;
@@ -4049,6 +4074,7 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
       const size_t remainingTextBytes = ClipWordStore::MAX_TEXT_POOL_BYTES - wordStore.textPool.size();
       wordStore.textPool.reserve(wordStore.textPool.size() + std::min(pageTextBytes, remainingTextBytes));
 
+      size_t pageWordIndex = 0;
       for (const auto& element : page->elements) {
         if (textPoolFull) break;
         if (element->getTag() != TAG_PageLine) continue;
@@ -4060,7 +4086,13 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
         for (uint16_t i = 0; i < count; ++i) {
           const char* wordText = block.wordText(i);
           if (!hasVisibleWordText(wordText)) continue;
-          if (wordStore.words.size() >= maxSelectableWords) {
+
+          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
+          int wordWidth = renderer.getTextAdvanceX(readerFontId, wordText, textStyle);
+          if (wordWidth <= 0) continue;
+          const size_t wordIndexOnPage = pageWordIndex++;
+          if (wordIndexOnPage < firstWordToKeep) continue;
+          if (wordIndexOnPage >= firstWordToKeep + wordsToKeep || wordStore.words.size() >= maxSelectableWords) {
             if (!wordLimitLogged) {
               LOG_ERR("CLIP", "Selectable word cap hit (%u words); clipping range truncated",
                       static_cast<unsigned>(maxSelectableWords));
@@ -4068,10 +4100,6 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
             }
             break;
           }
-
-          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-          int wordWidth = renderer.getTextAdvanceX(readerFontId, wordText, textStyle);
-          if (wordWidth <= 0) continue;
 
           WordRef word;
           word.x = layout.marginLeft + line.xPos + block.wordXpos(i);
@@ -4082,7 +4110,7 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           word.w = wordWidth;
           word.h = lineHeight;
           word.pageIdx = pageIdx;
-          word.pageWordIndex = pageWordCounts[pageIdx]++;
+          word.pageWordIndex = static_cast<uint16_t>(wordIndexOnPage);
           if (!wordStore.appendText(word, wordText)) {
             if (!textPoolLimitLogged) {
               LOG_ERR("CLIP", "Selectable text pool reached its 64 KB limit; clipping range truncated");

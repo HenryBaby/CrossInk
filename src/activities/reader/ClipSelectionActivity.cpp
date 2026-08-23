@@ -61,7 +61,7 @@ void ClipSelectionActivity::onEnter() {
     finish();
     return;
   }
-  cursorIdx = 0;
+  positionCursorAtInitialPageCenter();
   savedSectionPage = section.currentPage;
 
   if (hasDictionaryRequest) {
@@ -198,6 +198,39 @@ void ClipSelectionActivity::buildReadingOrder() {
       }
     }
     lineStart = lineEnd;
+  }
+}
+
+void ClipSelectionActivity::positionCursorAtInitialPageCenter() {
+  // Match button-driven dictionary lookup: begin on the middle text row and
+  // middle word of the reader's current page, not at the opening word.
+  size_t pageEnd = 0;
+  while (pageEnd < readingOrderSize && wordStore.words[readingOrder[pageEnd]].pageIdx == 0) {
+    ++pageEnd;
+  }
+  if (pageEnd == 0) return;
+
+  size_t rowCount = 0;
+  for (size_t rowStart = 0; rowStart < pageEnd;) {
+    const int y = wordStore.words[readingOrder[rowStart]].y;
+    size_t rowEnd = rowStart + 1;
+    while (rowEnd < pageEnd && wordStore.words[readingOrder[rowEnd]].y == y) ++rowEnd;
+    ++rowCount;
+    rowStart = rowEnd;
+  }
+
+  const size_t targetRow = rowCount / 2;
+  size_t rowIndex = 0;
+  for (size_t rowStart = 0; rowStart < pageEnd;) {
+    const int y = wordStore.words[readingOrder[rowStart]].y;
+    size_t rowEnd = rowStart + 1;
+    while (rowEnd < pageEnd && wordStore.words[readingOrder[rowEnd]].y == y) ++rowEnd;
+    if (rowIndex == targetRow) {
+      cursorIdx = static_cast<int>(rowStart + (rowEnd - rowStart) / 2);
+      return;
+    }
+    ++rowIndex;
+    rowStart = rowEnd;
   }
 }
 
