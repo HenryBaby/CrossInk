@@ -1,11 +1,11 @@
 #include "UsbDriveActivity.h"
 
 #include <Arduino.h>
-#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
 
 #include "MappedInputManager.h"
+#include "SilentRestart.h"
 #include "components/CompactHeader.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
@@ -17,6 +17,7 @@ void UsbDriveActivity::onEnter() {
   state = State::Unsupported;
   preparing = true;
   restartRequested = false;
+  hostWaitStartedAt = 0;
 
   // Paint the instruction screen before detaching the filesystem and exposing
   // its block device to the host. The two operations must never overlap.
@@ -31,6 +32,7 @@ void UsbDriveActivity::onEnter() {
 #endif
   preparing = false;
   state = State::WaitingForHost;
+  hostWaitStartedAt = millis();
   requestUpdate();
 }
 
@@ -46,10 +48,17 @@ void UsbDriveActivity::loop() {
   const auto storageState = Storage.usbDriveState();
   const State nextState = static_cast<State>(storageState);
   if (nextState != state) {
+    const bool messageChanged = state != State::Connected || nextState != State::Accessed;
     state = nextState;
-    requestUpdate();
+    if (messageChanged) requestUpdate();
   }
 #endif
+
+  if (state == State::WaitingForHost && millis() - hostWaitStartedAt >= HOST_WAIT_TIMEOUT_MS) {
+    LOG_INF("USB", "USB Drive host wait timed out");
+    restartToHome();
+    return;
+  }
 
   const bool canExitWithInput = state == State::WaitingForHost || state == State::IoError;
   if (canExitWithInput) {
@@ -61,15 +70,6 @@ void UsbDriveActivity::loop() {
     }
     if (state == State::WaitingForHost) return;
   }
-
-#ifndef SIMULATOR
-  // An MSC I/O error is sticky until the host disconnects. Poll the native USB
-  // bus state directly so the reader honors the error screen's disconnect hint.
-  if (state == State::IoError && !gpio.isUsbConnected()) {
-    restartToHome();
-    return;
-  }
-#endif
 
   if (state == State::Ejected || state == State::Disconnected || state == State::Unsupported) {
     restartToHome();
@@ -137,6 +137,6 @@ void UsbDriveActivity::restartToHome() {
 #else
   delay(20);
   handoffUsbOtgToSerialJtag();
-  ESP.restart();
+  restartToHomeAfterStorageHandoff();
 #endif
 }

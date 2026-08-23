@@ -6,7 +6,9 @@
 #include <HalClock.h>
 #include <Logging.h>
 #include <SDCardManager.h>
+#if FREEINK_CAP_USB_MSC
 #include <UsbMassStorage.h>
+#endif
 
 #include <cassert>
 #include <cstdlib>
@@ -18,10 +20,12 @@
 
 HalStorage HalStorage::instance;
 
+#if FREEINK_CAP_USB_MSC
 class HalStorage::UsbDriveContext {
  public:
   freeink::UsbMassStorage massStorage;
 };
+#endif
 
 namespace {
 constexpr uint16_t kFallbackYear = 2024;
@@ -113,7 +117,11 @@ void storageDateTimeCallback(uint16_t* date, uint16_t* time) {
 }
 }  // namespace
 
-HalStorage::HalStorage() : usbDriveContext(new (std::nothrow) UsbDriveContext()) {
+HalStorage::HalStorage()
+#if FREEINK_CAP_USB_MSC
+    : usbDriveContext(new (std::nothrow) UsbDriveContext())
+#endif
+{
   storageMutex = xSemaphoreCreateMutex();
   assert(storageMutex != nullptr);
 }
@@ -159,8 +167,8 @@ void HalStorage::endUsbDrive() {
 }
 
 UsbDriveState HalStorage::usbDriveState() const {
+#if FREEINK_CAP_USB_MSC
   if (!usbDriveContext) return UsbDriveState::Unsupported;
-#if FREEINK_CAP_USB_MSC || (defined(SIMULATOR) && CROSSINK_APP_CAP_USB_DRIVE)
   switch (usbDriveContext->massStorage.state()) {
     case freeink::UsbMassStorageState::WaitingForHost:
       return UsbDriveState::WaitingForHost;

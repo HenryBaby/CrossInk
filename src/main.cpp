@@ -362,6 +362,12 @@ void silentRestart() {
   restartWithSilentToken();
 }
 
+void restartToHomeAfterStorageHandoff() {
+  // Keep this distinct from other callers: USB Drive has released raw SD
+  // storage and must reboot into Home before any normal filesystem work runs.
+  silentRestart();
+}
+
 void armSilentRestartReaderPageBuild(const std::string& bookPath, const uint16_t spineIndex, const uint16_t targetPage,
                                      const bool autoPageTurnActive) {
   silentReaderPageBuildBookHash = silentRestartBookHash(bookPath);
@@ -1461,7 +1467,15 @@ void loop() {
     // while every filesystem/UI/global path remains suspended by the activity.
     (void)UsbSerialFileTransfer::process(false);
     activityManager.loop();
-    delay(10);
+    if (activityManager.preventAutoSleep()) {
+      powerManager.setPowerSaving(false);
+      delay(10);
+    } else {
+      // No host is active, so a slower loop is safe. The activity itself times
+      // out the raw-storage handoff rather than entering deep sleep detached.
+      powerManager.setPowerSaving(true);
+      delay(50);
+    }
     return;
   }
 
