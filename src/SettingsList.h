@@ -1269,11 +1269,13 @@ inline std::vector<SettingInfo> buildControlsFrontButtonSettingsList(const std::
 
 inline std::vector<SettingInfo> buildControlsSideButtonSettingsList(const std::vector<SettingInfo>& allSettings) {
   std::vector<SettingInfo> settings;
-  settings.reserve(4);
+  settings.reserve(3 + (gpio.hasTouch() ? 1u : 0u));
   addSettingByName(settings, allSettings, StrId::STR_SIDE_BTN_LAYOUT);
   addSettingByKey(settings, allSettings, "sideButtonOrientationAware");
   addSettingByKey(settings, allSettings, "sideButtonLongPress");
-  addSettingByName(settings, allSettings, StrId::STR_SIDE_BUTTON_CHORD);
+  if (gpio.hasTouch()) {
+    addSettingByName(settings, allSettings, StrId::STR_SIDE_BUTTON_CHORD);
+  }
   return settings;
 }
 

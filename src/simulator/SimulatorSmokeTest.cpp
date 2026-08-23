@@ -13,9 +13,11 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "SettingsList.h"
 #include "activities/ActivityManager.h"
 #include "activities/reader/EpubReaderMenuActivity.h"
 #include "activities/reader/ReaderOptionsActivity.h"
+#include "activities/settings/QuickActionsActivity.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
@@ -112,6 +114,21 @@ class SimulatorSmokeTest {
     LOG_INF("SMOKE", "Using theme index %d", theme);
   }
 
+  static void verifyUpDownShortcutAvailability() {
+    const auto allSettings = getSettingsList();
+    const auto sideButtonSettings = buildControlsSideButtonSettingsList(allSettings);
+    const bool hasSideButtonChord =
+        std::any_of(sideButtonSettings.begin(), sideButtonSettings.end(),
+                    [](const SettingInfo& setting) { return setting.nameId == StrId::STR_SIDE_BUTTON_CHORD; });
+    if (hasSideButtonChord != gpio.hasTouch()) {
+      fail("Side-button chord availability does not match touch capability");
+    }
+
+    if (QuickActionsActivityTest::isTriggerAvailable(QuickActions::Trigger::UpDown) != gpio.hasTouch()) {
+      fail("Quick Actions Up + Down availability does not match touch capability");
+    }
+  }
+
   [[noreturn]] static void fail(const char* message) {
     LOG_ERR("SMOKE", "%s", message);
     std::_Exit(2);
@@ -161,6 +178,7 @@ class SimulatorSmokeTest {
         if (!SimulatorHomeKeyInput::verifyTimingContract()) {
           fail("Simulator Home key timing contract failed");
         }
+        verifyUpDownShortcutAvailability();
         applyRequestedTheme();
         activityManager.goHome();
         queueStep("Home", SmokeStep::Home);
