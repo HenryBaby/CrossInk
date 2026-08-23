@@ -28,6 +28,7 @@
 ### Removed
 
 - The undocumented X4 Pro power-button double-click frontlight toggle.
+- Built-in reader-font emoticons and hand gestures; SD-card fonts still include emoji fallback support.
 
 ### Fixed
 
