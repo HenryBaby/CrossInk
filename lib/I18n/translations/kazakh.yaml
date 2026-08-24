@@ -53,7 +53,7 @@ STR_USB_DRIVE_WAITING: "Бұл оқырманды компьютерге қос�
 STR_USB_DRIVE_CONNECTED: "USB дискісі қосылды"
 STR_USB_DRIVE_EJECT_HINT: "Басты бетке оралу үшін компьютердегі дискіні шығарыңыз немесе кабельді ажыратыңыз."
 STR_USB_DRIVE_ERROR: "USB дискісінің қатесі. Басты бетке оралу үшін кабельді ажыратыңыз."
-STR_USB_DRIVE_RETURNING: "Басты бетке оралу..."
+STR_USB_DRIVE_START_ERROR: "USB дискісін іске қосу мүмкін емес. Басты бетке оралу үшін Артқа басыңыз."
 STR_NEARBY_DEVICE: "Жақын құрылғы"
 STR_NEARBY_STATS_SYNC: "Статистиканы синхрондау"
 STR_RECEIVE_NEARBY_BOOK: "Файлды қабылдау"

@@ -150,6 +150,9 @@ bool HalStorage::beginUsbDrive() {
   }
   if (!usbDriveContext->massStorage.begin(blockDevice)) {
     LOG_ERR("USB", "USB Drive MSC initialization failed");
+    if (!SDCard.begin()) {
+      LOG_ERR("USB", "Unable to remount SD card after USB Drive startup failure");
+    }
     return false;
   }
   return true;

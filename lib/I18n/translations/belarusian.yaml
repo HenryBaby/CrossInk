@@ -54,7 +54,7 @@ STR_USB_DRIVE_WAITING: "Падключыце гэты рыдэр да камп'�
 STR_USB_DRIVE_CONNECTED: "USB-назапашвальнік падключаны"
 STR_USB_DRIVE_EJECT_HINT: "Выміце назапашвальнік на камп'ютары або адключыце кабель, каб вярнуцца на галоўны экран."
 STR_USB_DRIVE_ERROR: "Памылка USB-назапашвальніка. Адключыце кабель, каб вярнуцца на галоўны экран."
-STR_USB_DRIVE_RETURNING: "Вяртанне на галоўны экран..."
+STR_USB_DRIVE_START_ERROR: "Не ўдалося запусціць USB-назапашвальнік. Націсніце Назад, каб вярнуцца дадому."
 STR_NEARBY_DEVICE: "Прылада побач"
 STR_NEARBY_STATS_SYNC: "Сінхранізаваць статыстыку"
 STR_RECEIVE_NEARBY_BOOK: "Атрымаць файл"

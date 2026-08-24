@@ -54,7 +54,7 @@ STR_USB_DRIVE_WAITING: "Kết nối máy đọc này với máy tính của bạ
 STR_USB_DRIVE_CONNECTED: "Đã kết nối ổ USB"
 STR_USB_DRIVE_EJECT_HINT: "Hãy tháo ổ đĩa trên máy tính hoặc ngắt cáp để trở về trang chủ."
 STR_USB_DRIVE_ERROR: "Lỗi ổ USB. Hãy ngắt cáp để trở về trang chủ."
-STR_USB_DRIVE_RETURNING: "Đang trở về trang chủ..."
+STR_USB_DRIVE_START_ERROR: "Không thể khởi động ổ USB. Nhấn Quay lại để về Trang chủ."
 STR_NEARBY_DEVICE: "Thiết bị ở gần"
 STR_NEARBY_STATS_SYNC: "Đồng bộ thống kê"
 STR_RECEIVE_NEARBY_BOOK: "Nhận tệp"

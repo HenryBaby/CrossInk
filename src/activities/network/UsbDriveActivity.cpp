@@ -16,8 +16,10 @@ void UsbDriveActivity::onEnter() {
   Activity::onEnter();
   state = State::Unsupported;
   preparing = true;
+  startFailed = false;
   restartRequested = false;
   hostWaitStartedAt = 0;
+  startFailureStartedAt = 0;
 
   // Paint the instruction screen before detaching the filesystem and exposing
   // its block device to the host. The two operations must never overlap.
@@ -25,7 +27,11 @@ void UsbDriveActivity::onEnter() {
 #ifndef SIMULATOR
   if (!Storage.beginUsbDrive()) {
     LOG_ERR("USB", "Unable to start USB Drive");
-    restartToHome();
+    preparing = false;
+    startFailed = true;
+    state = State::IoError;
+    startFailureStartedAt = millis();
+    requestUpdate();
     return;
   }
 
@@ -45,17 +51,25 @@ void UsbDriveActivity::onExit() {
 
 void UsbDriveActivity::loop() {
 #ifndef SIMULATOR
-  const auto storageState = Storage.usbDriveState();
-  const State nextState = static_cast<State>(storageState);
-  if (nextState != state) {
-    const bool messageChanged = state != State::Connected || nextState != State::Accessed;
-    state = nextState;
-    if (messageChanged) requestUpdate();
+  if (!startFailed) {
+    const auto storageState = Storage.usbDriveState();
+    const State nextState = static_cast<State>(storageState);
+    if (nextState != state) {
+      const bool messageChanged = state != State::Connected || nextState != State::Accessed;
+      state = nextState;
+      if (messageChanged) requestUpdate();
+    }
   }
 #endif
 
   if (state == State::WaitingForHost && millis() - hostWaitStartedAt >= HOST_WAIT_TIMEOUT_MS) {
     LOG_INF("USB", "USB Drive host wait timed out");
+    restartToHome();
+    return;
+  }
+
+  if (startFailed && millis() - startFailureStartedAt >= START_FAILURE_TIMEOUT_MS) {
+    LOG_INF("USB", "USB Drive startup failure timed out");
     restartToHome();
     return;
   }
@@ -98,16 +112,15 @@ void UsbDriveActivity::render(RenderLock&&) {
         renderMessage(tr(STR_USB_DRIVE_CONNECTED), tr(STR_USB_DRIVE_EJECT_HINT));
         break;
       case State::IoError:
-        renderMessage(tr(STR_USB_DRIVE_ERROR));
+        renderMessage(startFailed ? tr(STR_USB_DRIVE_START_ERROR) : tr(STR_USB_DRIVE_ERROR));
         break;
       case State::Ejected:
       case State::Disconnected:
       case State::Unsupported:
-        renderMessage(tr(STR_USB_DRIVE_RETURNING));
         break;
     }
 
-  if (state == State::WaitingForHost) {
+  if (state == State::WaitingForHost || state == State::IoError) {
     const auto labels = mappedInput.mapLabels(mappedInput.withBackArrow(tr(STR_BACK)), "", "", "");
     GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
   }

@@ -54,7 +54,7 @@ STR_USB_DRIVE_WAITING: "Подключите эту читалку к компь
 STR_USB_DRIVE_CONNECTED: "USB-накопитель подключён"
 STR_USB_DRIVE_EJECT_HINT: "Извлеките накопитель на компьютере или отключите кабель, чтобы вернуться на главный экран."
 STR_USB_DRIVE_ERROR: "Ошибка USB-накопителя. Отключите кабель, чтобы вернуться на главный экран."
-STR_USB_DRIVE_RETURNING: "Возврат на главный экран..."
+STR_USB_DRIVE_START_ERROR: "Не удалось запустить USB-накопитель. Нажмите Назад для возврата домой."
 STR_NEARBY_DEVICE: "Устройство поблизости"
 STR_NEARBY_STATS_SYNC: "Синхронизировать статистику"
 STR_RECEIVE_NEARBY_BOOK: "Получить файл"
