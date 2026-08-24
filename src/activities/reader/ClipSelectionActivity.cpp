@@ -1,5 +1,6 @@
 #include "ClipSelectionActivity.h"
 
+#include <Arduino.h>
 #include <FontCacheManager.h>
 #include <GfxRenderer.h>
 #include <I18n.h>
@@ -8,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "ClipSelectionPaging.h"
 #include "MappedInputManager.h"
 #include "ReaderUtils.h"
 #include "activities/ActivityResult.h"
@@ -252,11 +254,33 @@ void ClipSelectionActivity::loop() {
   int touchY = 0;
   if (touchDragSelecting) {
     if (mappedInput.isScreenTouchHeld(touchX, touchY)) {
-      if (selectWordAtPoint(touchX, touchY)) requestUpdate();
+      touchDragHasMoved =
+          touchDragHasMoved || ClipSelectionPaging::hasDraggedFrom(touchDragStartX, touchDragStartY, touchX, touchY);
+      // Keep timing through a small capacitive-touch jitter margin around the
+      // selected final word, but reset when the finger genuinely drags away.
+      const bool touchedWord = selectWordAtPoint(touchX, touchY);
+      // Releasing on the final word finishes there. Holding it for a moment
+      // is the explicit intent to continue the clipping onto the next page.
+      const int nextPageStart = ClipSelectionPaging::nextPageStartIndexForTouchDrag(
+          touchDragHasMoved, startMarkIdx, wordStore.words, readingOrder.data(), readingOrderSize, cursorIdx);
+      if (nextPageStart >= 0 && (touchedWord || isWithinCurrentPageEndDwellSlop(touchX, touchY))) {
+        const uint32_t now = static_cast<uint32_t>(millis());
+        if (touchDragPageEndIdx != cursorIdx) {
+          touchDragPageEndIdx = cursorIdx;
+          touchDragPageEndHeldSince = now;
+        } else if (ClipSelectionPaging::hasHeldPageEndLongEnough(now, touchDragPageEndHeldSince)) {
+          touchDragPageEndIdx = -1;
+          moveCursor(nextPageStart);
+        }
+      } else {
+        touchDragPageEndIdx = -1;
+      }
       return;
     }
     if (mappedInput.wasScreenTouchReleased()) {
       touchDragSelecting = false;
+      touchDragHasMoved = false;
+      touchDragPageEndIdx = -1;
       confirmSelection();
       return;
     }
@@ -264,6 +288,10 @@ void ClipSelectionActivity::loop() {
              selectWordAtPoint(touchX, touchY)) {
     if (startMarkIdx == -1) startMarkIdx = cursorIdx;
     touchDragSelecting = true;
+    touchDragHasMoved = false;
+    touchDragStartX = touchX;
+    touchDragStartY = touchY;
+    touchDragPageEndIdx = -1;
     requestUpdate();
     return;
   }
@@ -325,6 +353,14 @@ bool ClipSelectionActivity::selectWordAtPoint(const int x, const int y) {
   return false;
 }
 
+bool ClipSelectionActivity::isWithinCurrentPageEndDwellSlop(const int x, const int y) const {
+  if (cursorIdx < 0 || cursorIdx >= static_cast<int>(readingOrderSize)) return false;
+  const uint16_t wordIdx = readingOrder[cursorIdx];
+  if (wordIdx >= wordStore.words.size()) return false;
+  const WordRef& word = wordStore.words[wordIdx];
+  return word.pageIdx == currentDisplayPage && ClipSelectionPaging::isWithinPageEndDwellSlop(word, x, y);
+}
+
 void ClipSelectionActivity::confirmSelection() {
   if (startMarkIdx == -1) {
     startMarkIdx = cursorIdx;
@@ -345,9 +381,14 @@ void ClipSelectionActivity::confirmSelection() {
 }
 
 bool ClipSelectionActivity::finishDictionarySelection() {
-  if (dictionaryRequest.firstPageWordOrdinal > dictionaryRequest.lastPageWordOrdinal) {
-    LOG_ERR("CLIP", "Dictionary clipping range is reversed (%u > %u)",
+  const bool rangeIsReversed = dictionaryRequest.firstPageOffset > dictionaryRequest.lastPageOffset ||
+                               (dictionaryRequest.firstPageOffset == dictionaryRequest.lastPageOffset &&
+                                dictionaryRequest.firstPageWordOrdinal > dictionaryRequest.lastPageWordOrdinal);
+  if (rangeIsReversed) {
+    LOG_ERR("CLIP", "Dictionary clipping range is reversed (%u:%u > %u:%u)",
+            static_cast<unsigned>(dictionaryRequest.firstPageOffset),
             static_cast<unsigned>(dictionaryRequest.firstPageWordOrdinal),
+            static_cast<unsigned>(dictionaryRequest.lastPageOffset),
             static_cast<unsigned>(dictionaryRequest.lastPageWordOrdinal));
     return false;
   }
@@ -358,19 +399,22 @@ bool ClipSelectionActivity::finishDictionarySelection() {
   const WordRef* lastRequestedWord = nullptr;
   for (size_t orderIdx = 0; orderIdx < readingOrderSize; ++orderIdx) {
     const WordRef& word = wordStore.words[readingOrder[orderIdx]];
-    if (word.pageIdx != 0) continue;
-    if (word.pageWordIndex == dictionaryRequest.firstPageWordOrdinal) {
+    if (word.pageIdx == dictionaryRequest.firstPageOffset &&
+        word.pageWordIndex == dictionaryRequest.firstPageWordOrdinal) {
       firstOrder = static_cast<int>(orderIdx);
       firstRequestedWord = &word;
     }
-    if (word.pageWordIndex == dictionaryRequest.lastPageWordOrdinal) {
+    if (word.pageIdx == dictionaryRequest.lastPageOffset &&
+        word.pageWordIndex == dictionaryRequest.lastPageWordOrdinal) {
       lastOrder = static_cast<int>(orderIdx);
       lastRequestedWord = &word;
     }
   }
   if (firstOrder < 0 || lastOrder < 0) {
-    LOG_ERR("CLIP", "Dictionary clipping range is missing (%u..%u)",
+    LOG_ERR("CLIP", "Dictionary clipping range is missing (%u:%u..%u:%u)",
+            static_cast<unsigned>(dictionaryRequest.firstPageOffset),
             static_cast<unsigned>(dictionaryRequest.firstPageWordOrdinal),
+            static_cast<unsigned>(dictionaryRequest.lastPageOffset),
             static_cast<unsigned>(dictionaryRequest.lastPageWordOrdinal));
     return false;
   }
@@ -380,13 +424,15 @@ bool ClipSelectionActivity::finishDictionarySelection() {
   if (!firstRequestedWord || !lastRequestedWord ||
       dictionaryRequest.firstWordByteOffset > firstRequestedWord->textLength ||
       dictionaryRequest.lastWordByteEndOffset > lastRequestedWord->textLength ||
-      (dictionaryRequest.firstPageWordOrdinal == dictionaryRequest.lastPageWordOrdinal &&
+      (dictionaryRequest.firstPageOffset == dictionaryRequest.lastPageOffset &&
+       dictionaryRequest.firstPageWordOrdinal == dictionaryRequest.lastPageWordOrdinal &&
        dictionaryRequest.firstWordByteOffset > dictionaryRequest.lastWordByteEndOffset)) {
     LOG_ERR("CLIP", "Dictionary clipping fragment range is invalid");
     return false;
   }
   const ClipTextBuilder::SelectionBounds selectionBounds{
-      dictionaryRequest.firstPageWordOrdinal, dictionaryRequest.firstWordByteOffset,
+      dictionaryRequest.firstPageOffset,     dictionaryRequest.firstPageWordOrdinal,
+      dictionaryRequest.firstWordByteOffset, dictionaryRequest.lastPageOffset,
       dictionaryRequest.lastPageWordOrdinal, dictionaryRequest.lastWordByteEndOffset};
   auto result = ClipTextBuilder::build(wordStore, readingOrder.data(), from, to, static_cast<int>(readingOrderSize),
                                        startPageInSection, section.pageCount, &selectionBounds);

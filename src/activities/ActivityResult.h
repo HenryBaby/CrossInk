@@ -113,7 +113,11 @@ struct ClippingResult {
 // boundaries within its outer words. The reader resolves it through its
 // canonical ClipWordStore before creating a clipping.
 struct DictionaryClippingRequest {
+  // Page offsets are relative to the reader page that opened dictionary lookup.
+  // A touch drag may continue from that page onto the next one.
+  uint8_t firstPageOffset = 0;
   uint16_t firstPageWordOrdinal = 0;
+  uint8_t lastPageOffset = 0;
   uint16_t lastPageWordOrdinal = 0;
   uint16_t firstWordByteOffset = 0;
   uint16_t lastWordByteEndOffset = 0;

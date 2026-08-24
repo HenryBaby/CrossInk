@@ -3265,16 +3265,20 @@ bool EpubReaderActivity::handleTouchDictionaryLookup() {
   return true;
 }
 
-std::unique_ptr<Page> EpubReaderActivity::reloadDictionaryLookupPage() {
-  if (!section) return nullptr;
+std::unique_ptr<Page> EpubReaderActivity::reloadDictionaryLookupPage(const int pageOffset) {
+  if (!section || pageOffset < 0 || section->currentPage + pageOffset >= section->pageCount) return nullptr;
   // A Page is variable-sized and can reach tens of KB, so it must remain a
   // fallible heap object. It exists only while rebuilding the parent selection
   // or a rare full-screen modal background, then is released immediately.
-  return section->loadPageFromSectionFile();
+  const int savedPage = section->currentPage;
+  section->currentPage = savedPage + pageOffset;
+  auto page = section->loadPageFromSectionFile();
+  section->currentPage = savedPage;
+  return page;
 }
 
-std::unique_ptr<Page> EpubReaderActivity::reloadDictionaryLookupPageCallback(void* context) {
-  return static_cast<EpubReaderActivity*>(context)->reloadDictionaryLookupPage();
+std::unique_ptr<Page> EpubReaderActivity::reloadDictionaryLookupPageCallback(void* context, const int pageOffset) {
+  return static_cast<EpubReaderActivity*>(context)->reloadDictionaryLookupPage(pageOffset);
 }
 
 void EpubReaderActivity::renderDictionaryLookupBackground() {
@@ -3299,16 +3303,13 @@ void EpubReaderActivity::renderDictionaryLookupBackground() {
   backgroundPage->render(renderer, SETTINGS.getReaderFontId(), layout.marginLeft, layout.marginTop, foregroundBlack);
 }
 
-void EpubReaderActivity::renderDictionaryLookupBackgroundCallback(void* context) {
-  static_cast<EpubReaderActivity*>(context)->renderDictionaryLookupBackground();
-}
-
 void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initialTouchX, int initialTouchY,
                                         bool autoLookupInitialWord) {
   std::unique_ptr<Page> pageForLookup;
   ReaderViewportLayout layout{};
   std::string bookCachePath;
   std::string nextPageFirstWord;
+  bool hasNextPageForLookup = false;
 
   {
     RenderLock lock(*this);
@@ -3332,6 +3333,7 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
       auto nextPage = section->loadPageFromSectionFile();
       section->currentPage = savedPage;
       if (nextPage) {
+        hasNextPageForLookup = true;
         const auto it = std::find_if(nextPage->elements.begin(), nextPage->elements.end(),
                                      [](const auto& element) { return element->getTag() == TAG_PageLine; });
         if (it != nextPage->elements.end()) {
@@ -3350,10 +3352,9 @@ void EpubReaderActivity::openWordSelect(bool framebufferContainsPage, int initia
   // object allocation fallible instead of aborting the firmware when memory is tight.
   auto wordSelect = makeUniqueNoThrow<DictionaryWordSelectActivity>(
       renderer, mappedInput, std::move(pageForLookup), layout.marginLeft, layout.marginTop, std::move(bookCachePath),
-      std::move(nextPageFirstWord), framebufferContainsPage, layout.marginBottom, initialTouchX, initialTouchY,
-      autoLookupInitialWord, bookSettings.dictionarySdFontFamilyName, bookSettings.dictionaryFontPointSize, this,
-      &EpubReaderActivity::renderDictionaryLookupBackgroundCallback,
-      &EpubReaderActivity::reloadDictionaryLookupPageCallback);
+      std::move(nextPageFirstWord), hasNextPageForLookup, framebufferContainsPage, layout.marginBottom, initialTouchX,
+      initialTouchY, autoLookupInitialWord, bookSettings.dictionarySdFontFamilyName,
+      bookSettings.dictionaryFontPointSize, this, &EpubReaderActivity::reloadDictionaryLookupPageCallback);
   if (!wordSelect) {
     LOG_ERR("DICT", "OOM allocating DictionaryWordSelectActivity (%u bytes)",
             static_cast<unsigned>(sizeof(DictionaryWordSelectActivity)));
@@ -4044,11 +4045,29 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           if (renderer.getTextAdvanceX(readerFontId, wordText, textStyle) > 0) ++pageSelectableWords;
         }
       }
-      const size_t firstWordToKeep =
-          dictionaryRequest == nullptr && pageIdx == 0 && pageSelectableWords > remainingWords
-              ? (pageSelectableWords - remainingWords) / 2
-              : 0;
-      const size_t wordsToKeep = std::min(remainingWords, pageSelectableWords - firstWordToKeep);
+      size_t firstWordToKeep = 0;
+      size_t wordsToKeep = 0;
+      if (dictionaryRequest) {
+        // Dictionary requests name stable page-local word ordinals. Retain the
+        // requested interval instead of the leading page words, so a dense
+        // first page cannot evict a valid endpoint on the following page.
+        const bool pageIsInRequestedRange =
+            pageIdx >= dictionaryRequest->firstPageOffset && pageIdx <= dictionaryRequest->lastPageOffset;
+        if (pageIsInRequestedRange) {
+          firstWordToKeep = pageIdx == dictionaryRequest->firstPageOffset ? dictionaryRequest->firstPageWordOrdinal : 0;
+          const size_t endWordExclusive = pageIdx == dictionaryRequest->lastPageOffset
+                                              ? static_cast<size_t>(dictionaryRequest->lastPageWordOrdinal) + 1U
+                                              : pageSelectableWords;
+          if (firstWordToKeep < pageSelectableWords && firstWordToKeep < endWordExclusive) {
+            const size_t requestedWords = std::min(endWordExclusive, pageSelectableWords) - firstWordToKeep;
+            wordsToKeep = std::min(remainingWords, requestedWords);
+          }
+        }
+      } else {
+        firstWordToKeep =
+            pageIdx == 0 && pageSelectableWords > remainingWords ? (pageSelectableWords - remainingWords) / 2 : 0;
+        wordsToKeep = std::min(remainingWords, pageSelectableWords - firstWordToKeep);
+      }
       size_t selectableWordIndex = 0;
       size_t estimatedWords = 0;
       for (const auto& element : page->elements) {
@@ -4093,7 +4112,8 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           if (wordWidth <= 0) continue;
           const size_t wordIndexOnPage = pageWordIndex++;
           if (wordIndexOnPage < firstWordToKeep) continue;
-          if (wordIndexOnPage >= firstWordToKeep + wordsToKeep || wordStore.words.size() >= maxSelectableWords) {
+          if (wordIndexOnPage >= firstWordToKeep + wordsToKeep) break;
+          if (wordStore.words.size() >= maxSelectableWords) {
             if (!wordLimitLogged) {
               LOG_ERR("CLIP", "Selectable word cap hit (%u words); clipping range truncated",
                       static_cast<unsigned>(maxSelectableWords));
@@ -4164,6 +4184,25 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
     LOG_ERR("CLIP", "No selectable words on current EPUB page");
     requestUpdate();
     return;
+  }
+  if (dictionaryRequest) {
+    const auto hasRequestedWord = [&wordStore](const uint8_t pageOffset, const uint16_t wordOrdinal) {
+      return std::any_of(wordStore.words.begin(), wordStore.words.end(),
+                         [pageOffset, wordOrdinal](const WordRef& word) {
+                           return word.pageIdx == pageOffset && word.pageWordIndex == wordOrdinal;
+                         });
+    };
+    if (!hasRequestedWord(dictionaryRequest->firstPageOffset, dictionaryRequest->firstPageWordOrdinal) ||
+        !hasRequestedWord(dictionaryRequest->lastPageOffset, dictionaryRequest->lastPageWordOrdinal)) {
+      LOG_ERR("CLIP", "Dictionary clipping range exceeded selection storage (%u:%u..%u:%u)",
+              static_cast<unsigned>(dictionaryRequest->firstPageOffset),
+              static_cast<unsigned>(dictionaryRequest->firstPageWordOrdinal),
+              static_cast<unsigned>(dictionaryRequest->lastPageOffset),
+              static_cast<unsigned>(dictionaryRequest->lastPageWordOrdinal));
+      drawToast(renderer, tr(STR_CLIPPING_FAILED));
+      requestUpdate();
+      return;
+    }
   }
 
   advanceCollector.reset();

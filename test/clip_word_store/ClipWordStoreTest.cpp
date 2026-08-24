@@ -5,6 +5,7 @@
 
 #include "ClippingStore.h"
 #include "Epub/Epub/ReaderRenderSpec.h"
+#include "activities/reader/ClipSelectionPaging.h"
 #include "activities/reader/WordRef.h"
 #include "clippings/ClipTextBuilder.h"
 #include "clippings/ClippingHighlightGeometry.h"
@@ -37,6 +38,55 @@ TEST(ClipWordStore, RejectsTextPastTheUint16PoolBoundary) {
   EXPECT_FALSE(store.appendText(overflow, "x"));
 }
 
+TEST(ClipSelectionPaging, AdvancesOnlyAfterTheFinalWordOfTheCurrentPage) {
+  std::vector<WordRef> words(5);
+  words[0].pageIdx = 0;
+  words[1].pageIdx = 0;
+  words[2].pageIdx = 1;
+  words[3].pageIdx = 1;
+  words[4].pageIdx = 2;
+  const uint16_t order[] = {0, 1, 2, 3, 4};
+
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndex(words, order, std::size(order), 0), -1);
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndex(words, order, std::size(order), 1), 2);
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndex(words, order, std::size(order), 3), 4);
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndex(words, order, std::size(order), 4), -1);
+}
+
+TEST(ClipSelectionPaging, RequiresARealDragBeforePaging) {
+  EXPECT_FALSE(ClipSelectionPaging::hasDraggedFrom(10, 20, 10, 20));
+  EXPECT_FALSE(ClipSelectionPaging::hasDraggedFrom(10, 20, 13, 17));
+  EXPECT_TRUE(ClipSelectionPaging::hasDraggedFrom(10, 20, 14, 20));
+  EXPECT_TRUE(ClipSelectionPaging::hasDraggedFrom(10, 20, 10, 16));
+}
+
+TEST(ClipSelectionPaging, RequiresAHoldAtTheFinalDraggedWordBeforePaging) {
+  std::vector<WordRef> words(3);
+  words[0].pageIdx = 0;
+  words[1].pageIdx = 0;
+  words[2].pageIdx = 1;
+  const uint16_t order[] = {0, 1, 2};
+
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndexForTouchDrag(false, 0, words, order, std::size(order), 1), -1);
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndexForTouchDrag(true, 2, words, order, std::size(order), 1), -1);
+  EXPECT_EQ(ClipSelectionPaging::nextPageStartIndexForTouchDrag(true, 0, words, order, std::size(order), 1), 2);
+  EXPECT_FALSE(ClipSelectionPaging::hasHeldPageEndLongEnough(999, 0));
+  EXPECT_TRUE(ClipSelectionPaging::hasHeldPageEndLongEnough(1000, 0));
+}
+
+TEST(ClipSelectionPaging, AllowsOnlySmallPageEndDwellTouchJitter) {
+  WordRef word;
+  word.x = 100;
+  word.y = 200;
+  word.w = 20;
+  word.h = 10;
+
+  EXPECT_TRUE(ClipSelectionPaging::isWithinPageEndDwellSlop(word, 95, 195));
+  EXPECT_TRUE(ClipSelectionPaging::isWithinPageEndDwellSlop(word, 127, 217));
+  EXPECT_FALSE(ClipSelectionPaging::isWithinPageEndDwellSlop(word, 91, 200));
+  EXPECT_FALSE(ClipSelectionPaging::isWithinPageEndDwellSlop(word, 120, 218));
+}
+
 TEST(ClipTextBuilder, JoinsInsertedHyphenAcrossParagraphBoundary) {
   ClipWordStore store;
   WordRef prefix;
@@ -57,6 +107,37 @@ TEST(ClipTextBuilder, JoinsInsertedHyphenAcrossParagraphBoundary) {
   const ClippingResult result = ClipTextBuilder::build(store, order, 0, 1, 2, 0, 2);
 
   EXPECT_EQ(result.text, "hyphenated");
+}
+
+TEST(ClipTextBuilder, AppliesDictionaryFragmentBoundsToTheirOwnPages) {
+  ClipWordStore store;
+  WordRef first;
+  first.pageIdx = 0;
+  first.pageWordIndex = 0;
+  first.x = 0;
+  first.w = 5;
+  ASSERT_TRUE(store.appendText(first, "start"));
+  store.words.push_back(first);
+
+  WordRef middle;
+  middle.pageIdx = 0;
+  middle.pageWordIndex = 1;
+  middle.x = 10;
+  middle.w = 6;
+  ASSERT_TRUE(store.appendText(middle, "middle"));
+  store.words.push_back(middle);
+
+  WordRef last;
+  last.pageIdx = 1;
+  last.pageWordIndex = 0;
+  ASSERT_TRUE(store.appendText(last, "finish"));
+  store.words.push_back(last);
+
+  const uint16_t order[] = {0, 1, 2};
+  const ClipTextBuilder::SelectionBounds bounds{0, 0, 4, 1, 0, 1};
+  const ClippingResult result = ClipTextBuilder::build(store, order, 0, 2, 3, 0, 2, &bounds);
+
+  EXPECT_EQ(result.text, "t middle f");
 }
 
 TEST(ClippingTextMatcher, MatchesLayoutInsertedHyphenFragmentsAsOneToken) {
