@@ -1563,16 +1563,22 @@ void HomeActivity::loop() {
       minimalHomeNavIndex = homeNavCount - 1;
     }
 
-    if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
-      minimalHomeNavIndex = minimalHomeNavIndex < 0 ? homeNavCount - 1
-                                                    : ButtonNavigator::previousIndex(minimalHomeNavIndex, homeNavCount);
-      requestUpdate();
-      return;
-    }
-    if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
-      minimalHomeNavIndex = minimalHomeNavIndex < 0 ? 0 : ButtonNavigator::nextIndex(minimalHomeNavIndex, homeNavCount);
-      requestUpdate();
-      return;
+    // Touch readers do not show the front-button hints, so retain their
+    // existing side-button handling without moving the non-touch hint focus.
+    if (mappedInput.hasTouch()) {
+      if (mappedInput.wasPressed(MappedInputManager::Button::Up)) {
+        minimalHomeNavIndex = minimalHomeNavIndex < 0
+                                  ? homeNavCount - 1
+                                  : ButtonNavigator::previousIndex(minimalHomeNavIndex, homeNavCount);
+        requestUpdate();
+        return;
+      }
+      if (mappedInput.wasPressed(MappedInputManager::Button::Down)) {
+        minimalHomeNavIndex =
+            minimalHomeNavIndex < 0 ? 0 : ButtonNavigator::nextIndex(minimalHomeNavIndex, homeNavCount);
+        requestUpdate();
+        return;
+      }
     }
 
     auto activateMinimalHomeNav = [this](int index) {

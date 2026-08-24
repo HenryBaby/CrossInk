@@ -32,6 +32,7 @@
 
 ### Fixed
 
+- Minimal and Dashboard Home screens no longer highlight front-button hints when pressing the side Up or Down buttons.
 - Declining an alternate dictionary-form lookup now returns to the reader instead of leaving the selected word active.
 - Starting a clipping with buttons now highlights a word near the middle of the current page instead of the first word.
 - Quick Actions now consumes its own taps and button releases without blocking unrelated Power shortcuts in reader menus.
