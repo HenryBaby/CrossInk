@@ -159,6 +159,27 @@ uint16_t HalPowerManager::getBatteryPercentage() const {
   return _batteryCachedPercent / 10;
 }
 
+#if CROSSINK_BATTERY_DIAG_LOG
+bool HalPowerManager::getBatteryDiagnostics(BatteryDiagnostics& out) const {
+  // Function-local like getBatteryPercentage()'s: BoardConfig::ACTIVE is only
+  // resolved once HalGPIO::begin() has run the X3/X4 probe, so a file-scope
+  // instance could be constructed against an unresolved profile.
+  static const BatteryMonitor battery;
+  const BatteryMonitor::Status status = battery.readStatus();
+  if (!status.supported) {
+    LOG_ERR("PWR", "Battery diagnostics unsupported on this board");
+    return false;
+  }
+  out.soc = status.percentage;
+  out.millivolts = status.millivolts;
+  out.charging = status.charging;
+  out.socKnown = status.percentageKnown;
+  out.millivoltsKnown = status.millivoltsKnown;
+  out.chargingKnown = status.chargingKnown;
+  return true;
+}
+#endif
+
 HalPowerManager::Lock::Lock() {
   xSemaphoreTake(powerManager.modeMutex, portMAX_DELAY);
   // Current limitation: only one lock at a time

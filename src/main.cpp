@@ -107,6 +107,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #include "simulator/SimulatorSmokeTest.h"
 #endif
 #include "images/LoadingIcon.h"
+#include "util/BatteryDiagnosticLog.h"
 #include "util/ButtonNavigator.h"
 #include "util/ButtonShortcutController.h"
 #include "util/Dictionary.h"
@@ -926,6 +927,10 @@ void enterDeepSleep(bool fromTimeout) {
     }
   }
 
+  // Last chance to sample: startDeepSleep() cuts the SD rail on X3, so nothing
+  // can be written again until the next wake.
+  BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Sleep);
+
   putTiltSensorToSleepForDeepSleep();
   display.deepSleep();
   LOG_DBG("MAIN", "Entering deep sleep");
@@ -1131,6 +1136,8 @@ void setup() {
   SETTINGS.loadFromFile();
   Storage.installDateTimeCallback(&SETTINGS.clockUtcOffsetQ);
   APP_STATE.loadFromFile();
+  // Needs SETTINGS for the clock's UTC offset, so it cannot run any earlier.
+  BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Wake);
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
   I18N.setLanguage(static_cast<Language>(SETTINGS.language));
   if (!isNetworkResume) {
