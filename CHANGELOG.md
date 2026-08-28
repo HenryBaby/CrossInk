@@ -33,6 +33,7 @@
 
 ### Fixed
 
+- Sticky and X4 Pro readers now reject firmware files built for the other device before SD-card or over-the-air updates write the OTA partition.
 - USB Drive startup failures now restore SD-card access and return Home automatically after showing an error.
 - Minimal and Dashboard Home screens no longer highlight front-button hints when pressing the side Up or Down buttons.
 - Declining an alternate dictionary-form lookup now returns to the reader instead of leaving the selected word active.
