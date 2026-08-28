@@ -35,6 +35,7 @@
 
 ### Fixed
 
+- KOReader authentication and progress sync now keep Wi-Fi awake during their short network requests, avoiding modem-sleep timeouts.
 - S3 devices without a USB-detect pin can now recognize power-only chargers through battery charging state.
 - Power-latch pins now stay asserted during deep sleep on S3 devices, preventing battery-only wakes from becoming slow cold boots.
 - Sticky and X4 Pro readers now reject firmware files built for the other device before SD-card or over-the-air updates write the OTA partition.
