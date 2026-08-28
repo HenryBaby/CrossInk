@@ -163,6 +163,14 @@ bool HalStorage::beginUsbDrive() {
 #endif
 }
 
+bool HalStorage::disconnectUsbDriveHost() {
+#if FREEINK_CAP_USB_MSC
+  return usbDriveContext && usbDriveContext->massStorage.disconnectHost();
+#else
+  return false;
+#endif
+}
+
 void HalStorage::endUsbDrive() {
 #if FREEINK_CAP_USB_MSC
   if (usbDriveContext) usbDriveContext->massStorage.end();

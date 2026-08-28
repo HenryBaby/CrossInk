@@ -46,6 +46,7 @@ class HalStorage {
   void installDateTimeCallback(const uint8_t* utcOffsetQuarterHoursBiased);
 
   bool beginUsbDrive();
+  bool disconnectUsbDriveHost();
   void endUsbDrive();
   UsbDriveState usbDriveState() const;
 

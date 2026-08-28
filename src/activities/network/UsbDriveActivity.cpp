@@ -18,8 +18,10 @@ void UsbDriveActivity::onEnter() {
   preparing = true;
   startFailed = false;
   restartRequested = false;
+  forcedDisconnectRequested = false;
   hostWaitStartedAt = 0;
   startFailureStartedAt = 0;
+  forcedDisconnectRequestedAt = 0;
 
   // Paint the instruction screen before detaching the filesystem and exposing
   // its block device to the host. The two operations must never overlap.
@@ -74,6 +76,26 @@ void UsbDriveActivity::loop() {
     return;
   }
 
+  if (forcedDisconnectRequested) {
+    if (millis() - forcedDisconnectRequestedAt >= FORCED_DISCONNECT_TIMEOUT_MS) {
+      LOG_ERR("USB", "USB Drive host disconnect grace period ended; forcing restart");
+      restartToHome();
+    }
+    return;
+  }
+
+  if (!startFailed && state == State::IoError) {
+    forcedDisconnectRequested = true;
+    forcedDisconnectRequestedAt = millis();
+    LOG_ERR("USB", "USB Drive I/O error; disconnecting host");
+#ifndef SIMULATOR
+    if (!Storage.disconnectUsbDriveHost()) {
+      LOG_ERR("USB", "Unable to request USB Drive host disconnect");
+    }
+#endif
+    return;
+  }
+
   const bool canExitWithInput = state == State::WaitingForHost || state == State::IoError;
   if (canExitWithInput) {
     if (TouchHeaderBackButton::wasTapped(mappedInput, renderer) ||
@@ -102,6 +124,8 @@ void UsbDriveActivity::render(RenderLock&&) {
 
   if (preparing) {
     renderMessage(tr(STR_USB_DRIVE_PREPARING), tr(STR_USB_DRIVE_EJECT_HINT));
+  } else if (forcedDisconnectRequested) {
+    renderMessage(tr(STR_USB_DRIVE_ERROR));
   } else
     switch (state) {
       case State::WaitingForHost:
