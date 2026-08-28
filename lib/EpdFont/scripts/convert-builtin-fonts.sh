@@ -113,7 +113,7 @@ PHM_FALLBACK_RANGES=(
 
 READING_FONT_SIZES=(8 9 10 12 14 16 18 20)
 READING_FONT_STYLES=("Regular" "Bold" "Italic" "BoldItalic")
-READING_FONT_RENDER_ARGS=(--2bit --compress --pnum --darken-aa)
+READING_FONT_RENDER_ARGS=(--2bit --compress --pnum --darken-aa --zopfli)
 
 font_include_args() {
   local face_index="$1"
