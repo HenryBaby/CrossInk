@@ -111,6 +111,19 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
     gpio_set_level(latch, 0);
     gpio_hold_en(latch);
   }
+#else
+  // Keep configured power latches asserted through deep sleep. The SDK isolates
+  // GPIO pads before sleeping, so an unheld latch can float LOW once external
+  // power is removed and turn a fast wake into a cold boot. This is deliberately
+  // complementary to the C3 path above, where the battery latch must go LOW.
+  for (const int8_t pin : {BoardConfig::ACTIVE.power.latch0, BoardConfig::ACTIVE.power.latch1}) {
+    if (pin < 0 || BoardConfig::latchConflictsWithBus(pin)) continue;
+    const auto latch = static_cast<gpio_num_t>(pin);
+    gpio_hold_dis(latch);
+    gpio_set_direction(latch, GPIO_MODE_OUTPUT);
+    gpio_set_level(latch, 1);
+    gpio_hold_en(latch);
+  }
 #endif
 
   // Cut the gated peripheral rails (touch/SD/EPD on boards like the Sticky) and
