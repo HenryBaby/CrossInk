@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- X4 Pro now confirms when its Home button is enabled or disabled while reading.
 - ZIP and EPUB reads now stop safely on SD-card read errors instead of turning a negative result into an out-of-bounds buffer size.
 - Boards with unverified power-button wiring no longer treat every battery cold boot as a held power-button wake, preventing immediate re-sleep after flashing or USB detection gaps.
 - USB Drive now disconnects the host and restarts safely after an SD-card I/O error instead of remaining in a broken raw-storage session.

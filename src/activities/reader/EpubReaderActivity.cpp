@@ -4941,6 +4941,7 @@ void EpubReaderActivity::toggleHomeButtonInReader() {
   homeButtonInReaderFeedback = true;
   pendingTiltPageTurnFeedback = true;
   tiltPageTurnFeedbackShowTime = millis();
+  requestUpdate();
 }
 
 void EpubReaderActivity::showRenderModeToast(const uint8_t renderMode) {
