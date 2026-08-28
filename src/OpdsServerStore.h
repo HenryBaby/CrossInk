@@ -32,7 +32,6 @@ struct OpdsServer {
   std::string downloadFolder = "/";
   OpdsFolderOrganization folderOrganization = OpdsFolderOrganization::FLAT;
   OpdsFilenameFormat filenameFormat = OpdsFilenameFormat::AUTHOR_TITLE;
-  bool verifyTls = true;
 };
 
 /**

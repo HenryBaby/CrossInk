@@ -547,8 +547,7 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   {
     OpdsParserStream stream{parser};
     HttpDownloader::DownloadOptions downloadOptions;
-    downloadOptions.transport =
-        server.verifyTls ? HttpDownloader::Transport::ESP_HTTP : HttpDownloader::Transport::WOLFSSL;
+    downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
     const auto result = HttpDownloader::streamUrl(
         url, [&stream](const uint8_t* data, const size_t len) { return stream.write(data, len) == len; }, nullptr,
         server.username, server.password, std::move(downloadOptions));
@@ -705,8 +704,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
   downloadOptions.bufferSize = OPDS_DOWNLOAD_BUFFER_SIZE;
-  downloadOptions.transport =
-      server.verifyTls ? HttpDownloader::Transport::ESP_HTTP : HttpDownloader::Transport::WOLFSSL;
+  downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
   std::string responseFilename;
   if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME)
     downloadOptions.responseFilename = &responseFilename;

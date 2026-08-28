@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Restored OPDS connections to wolfSSL and removed the obsolete TLS verification toggle.
+
 ## [v1.5.6] - 2026-08-28
 
 ### Fixed
