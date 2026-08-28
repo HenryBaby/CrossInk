@@ -285,7 +285,9 @@ bool HalGPIO::hasEdgeSideButtons() const {
 }
 
 bool HalGPIO::verifyPowerButtonWakeup() {
-  if (BoardConfig::isPaperMono() || BoardConfig::ACTIVE.input.power < 0) {
+  // M5Paper v1.1 reaches setup after a normal wheel click has already been
+  // released. Its hardware pull-ups make this ghost-wake debounce unnecessary.
+  if (BoardConfig::isPaperMono() || BoardConfig::isM5PaperV11() || BoardConfig::ACTIVE.input.power < 0) {
     return true;
   }
 
@@ -370,6 +372,14 @@ bool HalGPIO::isUsbConnected() const {
 #endif
 }
 
+bool HalGPIO::coldBootImpliesPowerButton() const {
+  // These boards use a button-energized or otherwise known latch topology, so
+  // a no-USB POWERON can be trusted as a power-button boot. Unknown/future
+  // topologies must continue booting instead of risking an immediate sleep
+  // after flashing or when charge detection is unavailable.
+  return isXteinkDevice() || BoardConfig::isPaperMono() || BoardConfig::isSticky();
+}
+
 HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
@@ -380,7 +390,8 @@ HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
       (wakeupCause == ESP_SLEEP_WAKEUP_GPIO || wakeupCause == ESP_SLEEP_WAKEUP_EXT1)) {
     return WakeupReason::PowerButton;
   }
-  if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && !usbConnected) {
+  if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && !usbConnected &&
+      coldBootImpliesPowerButton()) {
     return WakeupReason::PowerButton;
   }
   if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_UNKNOWN && usbConnected) {

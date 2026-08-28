@@ -1074,6 +1074,7 @@ void setup() {
   const auto wakeupReason = gpio.getWakeupReason();
 #ifndef SIMULATOR
   if (wakeupReason == HalGPIO::WakeupReason::PowerButton && !gpio.verifyPowerButtonWakeup()) {
+    LOG_DBG("MAIN", "Power-button wake not held through verification, sleeping");
     powerManager.startDeepSleep(gpio);
   }
 #endif
