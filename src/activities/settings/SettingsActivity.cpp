@@ -74,8 +74,6 @@ void formatFrontlightScheduleTime(const uint16_t timeOfDay, char* const buf, con
            I18N.get(time.isPm ? StrId::STR_PM : StrId::STR_AM));
 }
 
-int settingsTabBarTop(const ThemeMetrics& metrics) { return CompactHeader::headerBottomY(metrics); }
-
 Rect settingsHeaderRect(const ThemeMetrics& metrics, const int pageWidth) {
   return Rect{0, metrics.topPadding, pageWidth, CompactHeader::headerBottomY(metrics) - metrics.topPadding};
 }
@@ -1224,9 +1222,13 @@ void SettingsActivity::buildSettingsScreen(UiApp::ScreenType& screen) {
 #if CROSSINK_APP_CAP_TOUCH
   const bool landscapeTouch = useLandscapeTouchLayout(renderer);
 #endif
-  // Content starts directly below the compact header divider.
-  screen.setContentMargin(fui::Insets{static_cast<int16_t>(settingsTabBarTop(metrics)), 0,
-                                      static_cast<int16_t>(metrics.buttonHintsHeight), 0});
+  const fui::Rect safe = screen.frame().safeRect();
+  // setContentMargin() is relative to the bezel-safe rectangle, while the
+  // compact header geometry is in absolute screen coordinates. Overlap the
+  // tab's top rule with the header's final underline pixel.
+  const int tabTop = std::max<int>(safe.y, CompactHeader::headerBottomY(metrics) - 1);
+  screen.setContentMargin(
+      fui::Insets{static_cast<int16_t>(tabTop - safe.y), 0, static_cast<int16_t>(metrics.buttonHintsHeight), 0});
 
   // Category tabs. The selected pill dims to a dither when the selection is
   // down in the list (the legacy focused/unfocused tab distinction).
