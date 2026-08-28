@@ -4,6 +4,7 @@
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalClock.h>
+#include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -488,6 +489,9 @@ bool selectRandomSleepImage(SleepImageMode mode, SleepImageSelection& selection,
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
+  // Sleep screens draw directly, outside ActivityManager's normal render path.
+  // Keep them at normal polarity when Night Mode remains enabled globally.
+  display.setInverted(false);
 
   const bool renderQuickResume =
       SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
