@@ -166,7 +166,7 @@ class Epub {
   int getTocItemsCount() const;
   int getSpineIndexForTocIndex(int tocIndex) const;
   int getTocIndexForSpineIndex(int spineIndex) const;
-  bool isNavigationDocumentSpine(int spineIndex) const;
+  bool isNavigationDocumentSpine(int spineIndex, bool* scanSucceeded = nullptr) const;
   size_t getCumulativeSpineItemSize(int spineIndex) const;
   int getSpineIndexForTextReference() const;
 

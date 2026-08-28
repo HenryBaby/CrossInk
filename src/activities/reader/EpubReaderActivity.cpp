@@ -7107,10 +7107,22 @@ void EpubReaderActivity::navigateToHref(const std::string& hrefStr, const bool s
   // be tapped. A destination declared in the book TOC is a chapter jump,
   // though: it must replace the current chapter instead of opening a preview.
   const bool chapterDestination = isTocChapterDestination(targetSpineIndex, anchor);
-  // A link clicked in the EPUB navigation document is a chapter jump, not a
-  // footnote. Keep the return stack for endnotes elsewhere in the book, even
-  // when their target also appears in the TOC.
-  const bool saveReturnPosition = savePosition && !epub->isNavigationDocumentSpine(currentSpineIndex);
+  // A link clicked in a contents document is a chapter jump, not a footnote.
+  // Serialize its source scan with rendering: real SD cards allow only one
+  // reader, and ZIP inflation borrows the framebuffer's storage.
+  bool sourceScanSucceeded = true;
+  bool contentsNavigation = false;
+  if (chapterDestination) {
+    RenderLock lock(*this);
+    GfxRenderer::FrameBufferLoan loan(renderer);
+    contentsNavigation = epub->isNavigationDocumentSpine(currentSpineIndex, &sourceScanSucceeded);
+  }
+  if (!sourceScanSucceeded) {
+    LOG_ERR("ERS", "Could not inspect contents source for link: %s", hrefStr.c_str());
+  }
+  // Keep the return stack for an endnote that happens to point at a TOC
+  // chapter.
+  const bool saveReturnPosition = savePosition && !contentsNavigation;
   if (saveReturnPosition && section && footnoteDepth < MAX_FOOTNOTE_DEPTH) {
     savedPositions[footnoteDepth] = {currentSpineIndex, section->currentPage};
     footnoteDepth++;
