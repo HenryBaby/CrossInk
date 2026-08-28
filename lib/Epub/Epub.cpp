@@ -378,6 +378,10 @@ bool Epub::parseContentOpf(BookMetadataCache::BookMetadata& bookMetadata, const 
     tocNavItem = opfParser.tocNavPath;
   }
 
+  if (!opfParser.guideTocPageHref.empty()) {
+    tocGuideItem = opfParser.guideTocPageHref;
+  }
+
   if (collectCssFiles && !opfParser.cssFiles.empty()) {
     cssFiles = std::move(opfParser.cssFiles);
   }
@@ -1578,6 +1582,14 @@ int Epub::getTocItemsCount() const {
   }
 
   return bookMetadataCache->getTocCount();
+}
+
+bool Epub::isNavigationDocumentSpine(const int spineIndex) const {
+  if ((tocNavItem.empty() && tocGuideItem.empty()) || spineIndex < 0 || spineIndex >= getSpineItemsCount()) {
+    return false;
+  }
+  const std::string& href = getSpineItem(spineIndex).href;
+  return href == tocNavItem || href == tocGuideItem;
 }
 
 // work out the section index for a toc index
