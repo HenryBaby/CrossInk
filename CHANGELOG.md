@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.5.7] - 2026-08-28
+
 ### Fixed
 
-- Restored OPDS connections to wolfSSL and removed the obsolete TLS verification toggle.
+- [`1c41a318`](https://github.com/HenryBaby/CrossInk/commit/1c41a318) — Restored OPDS connections to wolfSSL and removed the obsolete TLS verification toggle.
 
 ## [v1.5.6] - 2026-08-28
 
