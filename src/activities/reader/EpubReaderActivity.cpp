@@ -3104,7 +3104,16 @@ bool EpubReaderActivity::handleTwoFingerSwipeAction(const CrossPointSettings::TW
     case CrossPointSettings::TWO_FINGER_SWIPE_NEXT_CHAPTER:
     case CrossPointSettings::TWO_FINGER_SWIPE_PREVIOUS_CHAPTER: {
       const int direction = action == CrossPointSettings::TWO_FINGER_SWIPE_NEXT_CHAPTER ? 1 : -1;
-      const int targetSpine = currentSpineIndex + direction;
+      int firstSpineIndex = currentSpineIndex;
+      int lastSpineIndex = currentSpineIndex;
+      epub->resolveChapterGroupRange(currentSpineIndex, firstSpineIndex, lastSpineIndex);
+      int targetSpine = direction > 0 ? lastSpineIndex + 1 : firstSpineIndex - 1;
+      if (direction < 0 && targetSpine >= 0) {
+        int previousChapterFirstSpineIndex = targetSpine;
+        int previousChapterLastSpineIndex = targetSpine;
+        epub->resolveChapterGroupRange(targetSpine, previousChapterFirstSpineIndex, previousChapterLastSpineIndex);
+        targetSpine = previousChapterFirstSpineIndex;
+      }
       if (activeFootnotePreview || targetSpine < 0 || targetSpine >= epub->getSpineItemsCount()) return true;
       {
         RenderLock lock(*this);
