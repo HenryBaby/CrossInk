@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.5.6] - 2026-08-28
+
 ### Fixed
 
-- Prevented blind-like ghosting on X3 when waking from an ordinary sleep screen without a saved Quick Resume frame.
+- [`807dbb51`](https://github.com/HenryBaby/CrossInk/commit/807dbb51) — Prevented blind-like ghosting on X3 when waking from an ordinary sleep screen without a saved Quick Resume frame.
 
 ## [v1.5.5] - 2026-08-22
 
