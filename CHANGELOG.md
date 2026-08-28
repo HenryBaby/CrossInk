@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Prevented blind-like ghosting on X3 when waking from an ordinary sleep screen without a saved Quick Resume frame.
+
 ## [v1.5.5] - 2026-08-22
 
 ### Upstream CrossInk v1.5.1-rc-4

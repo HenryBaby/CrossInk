@@ -76,6 +76,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #endif
 
 #include "AppVersion.h"
+#include "BootDisplayPolicy.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "GlobalActions.h"
@@ -317,16 +318,6 @@ constexpr uint32_t SILENT_READER_PAGE_BUILD_MAGIC = 0xC1EAB017;
 constexpr uint32_t SILENT_READER_PAGE_BUILD_AUTO_TURN = 1U << 0;
 constexpr uint32_t NETWORK_RENDER_TASK_STACK_BYTES = 8192;
 constexpr uint32_t READER_RENDER_TASK_STACK_BYTES = 16384;
-
-// How the device is coming back to life, resolved once at boot. Both resume
-// flows suppress the splash and leave the panel holding its pre-boot frame; a
-// plain boot shows the splash. See setup() for the resolution.
-enum class BootResume : uint8_t {
-  Splash,          // cold boot, flash, panic, or plain reboot
-  Silent,          // heap-defrag ESP.restart() (RTC flag; lost on power loss)
-  Network,         // minimal boot directly into a memory-intensive network activity
-  SplashlessWake,  // wake from deep sleep with the splash suppressed by the SD flag
-};
 
 // Latched true once enterDeepSleep() commits to sleeping, before it tears down
 // the current activity. WiFi activities call silentRestart() in onExit() to
@@ -1238,9 +1229,11 @@ void setup() {
                             : isSilentReboot                           ? BootResume::Silent
                             : isSleepWake && !APP_STATE.showBootScreen ? BootResume::SplashlessWake
                                                                        : BootResume::Splash;
+  const bool hasSavedSleepFrame = resume == BootResume::SplashlessWake && Storage.exists(SLEEP_FRAME_FILE);
   bool allowFastInitialReaderRefresh = false;
 
-  setupDisplayAndFonts(resume != BootResume::Splash, resume != BootResume::Network, useReaderRenderStack);
+  setupDisplayAndFonts(useSeamlessDisplayInit(resume, gpio.deviceIsX3(), hasSavedSleepFrame),
+                       resume != BootResume::Network, useReaderRenderStack);
   logBootHeap("display and selected fonts ready");
 
   switch (resume) {
@@ -1258,7 +1251,7 @@ void setup() {
       // us in a splashless-with-no-frame loop on the next boot.
       APP_STATE.showBootScreen = true;
       APP_STATE.saveToFile();
-      if (Storage.exists(SLEEP_FRAME_FILE) && loadSleepFrameBuffer()) {
+      if (hasSavedSleepFrame && loadSleepFrameBuffer()) {
         const bool useDifferentialRefresh = gpio.deviceIsX3();
         if (useDifferentialRefresh) {
           // begin() clears the X3 controller RAM, so restore the saved frame as
