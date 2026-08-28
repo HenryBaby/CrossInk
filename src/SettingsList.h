@@ -374,6 +374,8 @@ inline uint8_t shortcutRawValue(const ShortcutOptionCatalog catalog, const Cross
           return Chord::CHORD_SLEEP;
         case Action::PAGE_TURN:
           return Chord::CHORD_PAGE_TURN;
+        case Action::PREVIOUS_PAGE:
+          return Chord::CHORD_PREVIOUS_PAGE;
         case Action::TOGGLE_BOOKMARK:
           return Chord::CHORD_TOGGLE_BOOKMARK;
         case Action::READING_STATS:
@@ -392,6 +394,8 @@ inline uint8_t shortcutRawValue(const ShortcutOptionCatalog catalog, const Cross
           return Chord::CHORD_CYCLE_PAGE_TURN;
         case Action::SYNC_PROGRESS:
           return Chord::CHORD_SYNC_PROGRESS;
+        case Action::NEARBY_POSITION_SYNC:
+          return Chord::CHORD_NEARBY_POSITION_SYNC;
         case Action::FILE_TRANSFER:
           return Chord::CHORD_FILE_TRANSFER;
         case Action::CALIBRE_WIRELESS:
@@ -479,6 +483,8 @@ inline uint8_t shortcutRawValue(const ShortcutOptionCatalog catalog, const Cross
         case Action::QUICK_LOCK:
           return LongPress::LONG_MENU_QUICK_LOCK;
         case Action::PAGE_TURN:
+        case Action::PREVIOUS_PAGE:
+        case Action::NEARBY_POSITION_SYNC:
         case Action::TOGGLE_HOME_BUTTON_IN_READER:
         case Action::TOGGLE_FRONTLIGHT:
         case Action::TOGGLE_TOUCHSCREEN:

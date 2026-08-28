@@ -254,6 +254,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     // Appended after the X4 Pro and Quick Actions values so existing settings
     // files continue to mean exactly the same thing.
     QUICK_LOCK = 30,
+    // Shortcut values are persisted. Append new actions; never reuse removed
+    // raw values or they can silently change an existing binding's behavior.
+    PREVIOUS_PAGE = 31,
+    NEARBY_POSITION_SYNC = 32,
     SHORT_PWRBTN_COUNT
   };
 
@@ -290,6 +294,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     CHORD_QUICK_ACTIONS = 26,
     CHORD_TOGGLE_FRONTLIGHT = 27,
     CHORD_TOGGLE_TOUCHSCREEN = 28,
+    CHORD_PREVIOUS_PAGE = 29,
+    CHORD_NEARBY_POSITION_SYNC = 30,
     POWER_CHORD_ACTION_COUNT
   };
 

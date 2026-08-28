@@ -9,6 +9,7 @@
 - Two-finger pinch gestures now adjust EPUB font size, and two-finger rotation turns supported reader layouts in the same direction.
 - Quick Actions provides a menu of favorite reader commands, assignable to Power + Up and, on X4 Pro, Home-button gestures.
 - A new Quick Lock shortcut locks the device without putting it to sleep; it uses the regular sleep timeout and can be assigned to Power + Up, long-press Back, or long-press Menu.
+- Shortcuts can now go to the previous page or start Nearby Position Sync from an EPUB reader.
 - Dictionary lookups can now save the selected word or phrase directly as a clipping.
 - Readers can configure an Up + Down side-button shortcut; on touchscreen devices, while the reader touchscreen is disabled, the same chord always opens Settings so it can be restored.
 - Power-button shortcuts and Quick Actions can now toggle the frontlight or reader touchscreen when supported.

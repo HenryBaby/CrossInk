@@ -2956,9 +2956,14 @@ void EpubReaderActivity::loop() {
   const bool powerReleased = mappedInput.wasReleased(MappedInputManager::Button::Power);
   const bool shortPowerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && powerReleased &&
                               mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
+  const bool shortPowerPrevious = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE &&
+                                  powerReleased && mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
   const bool releasedLongPowerTurn = SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
                                      powerReleased &&
                                      mappedInput.getHeldTime() >= SETTINGS.getPowerButtonLongPressDuration();
+  const bool releasedLongPowerPrevious = SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE &&
+                                         powerReleased &&
+                                         mappedInput.getHeldTime() >= SETTINGS.getPowerButtonLongPressDuration();
   bool heldLongPowerTurn = false;
   if (SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && consumeLongPowerButtonHold()) {
     nextTriggered = true;
@@ -2966,6 +2971,13 @@ void EpubReaderActivity::loop() {
     fromTilt = false;
     heldLongPowerTurn = true;
   }
+  if (SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE && consumeLongPowerButtonHold()) {
+    prevTriggered = true;
+    fromSideBtn = false;
+    fromTilt = false;
+    heldLongPowerTurn = true;
+  }
+  prevTriggered = prevTriggered || shortPowerPrevious || releasedLongPowerPrevious;
   if (!prevTriggered && !nextTriggered) {
     idlePrewarmNextPage();
     return;
@@ -3052,7 +3064,7 @@ void EpubReaderActivity::loop() {
   }
 
   const char* pageTurnSource = fromTouch ? "touch" : (fromTilt ? "tilt" : (fromSideBtn ? "side" : "front"));
-  if (shortPowerTurn || releasedLongPowerTurn || heldLongPowerTurn) {
+  if (shortPowerTurn || shortPowerPrevious || releasedLongPowerTurn || releasedLongPowerPrevious || heldLongPowerTurn) {
     pageTurnSource = "power";
   }
   // Drop the manual turn if a render is still in flight, OR within a short window of the
@@ -4424,6 +4436,12 @@ bool EpubReaderActivity::handleShortcutAction(const uint8_t rawAction) {
     case CrossPointSettings::SHORT_PWRBTN::PAGE_TURN:
       pageTurn(true, "home_button");
       return true;
+    case CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE:
+      pageTurn(false, "home_button");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::NEARBY_POSITION_SYNC:
+      onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::NEARBY_POSITION_SYNC);
+      return true;
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
       executeReaderQuickAction(CrossPointSettings::LONG_MENU_CHANGE_FONT);
       return true;
@@ -4503,6 +4521,12 @@ bool EpubReaderActivity::handleShortcutAction(const CrossPointSettings::SHORT_PW
   switch (action) {
     case CrossPointSettings::SHORT_PWRBTN::PAGE_TURN:
       pageTurn(true, "shortcut");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE:
+      pageTurn(false, "shortcut");
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::NEARBY_POSITION_SYNC:
+      onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::NEARBY_POSITION_SYNC);
       return true;
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
       executeReaderQuickAction(CrossPointSettings::LONG_MENU_CHANGE_FONT);
@@ -4664,6 +4688,9 @@ bool EpubReaderActivity::executeShortPowerButtonAction() {
   }
 
   switch (SETTINGS.shortPwrBtn) {
+    case CrossPointSettings::SHORT_PWRBTN::NEARBY_POSITION_SYNC:
+      onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::NEARBY_POSITION_SYNC);
+      return true;
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
       executeReaderQuickAction(CrossPointSettings::LONG_MENU_CHANGE_FONT);
       return true;
@@ -4762,7 +4789,9 @@ bool EpubReaderActivity::consumeLongPowerButtonHold() {
 }
 
 bool EpubReaderActivity::executeLongPowerButtonAction() {
-  if (SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN || !consumeLongPowerButtonHold()) {
+  if ((SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN ||
+       SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE) ||
+      !consumeLongPowerButtonHold()) {
     return false;
   }
 
@@ -4782,6 +4811,10 @@ bool EpubReaderActivity::executeLongPowerButtonAction() {
     case CrossPointSettings::SHORT_PWRBTN::SYNC_PROGRESS:
       mappedInput.suppressNextPowerConfirmRelease();
       executeReaderQuickAction(CrossPointSettings::LONG_MENU_SYNC_PROGRESS);
+      return true;
+    case CrossPointSettings::SHORT_PWRBTN::NEARBY_POSITION_SYNC:
+      mappedInput.suppressNextPowerConfirmRelease();
+      onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::NEARBY_POSITION_SYNC);
       return true;
     case CrossPointSettings::SHORT_PWRBTN::MARK_FINISHED:
       executeReaderQuickAction(CrossPointSettings::LONG_MENU_MARK_FINISHED);

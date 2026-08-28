@@ -635,6 +635,8 @@ CrossPointSettings::SHORT_PWRBTN chordPowerAction(const ButtonShortcutController
       return Power::SLEEP;
     case Chord::PageTurn:
       return Power::PAGE_TURN;
+    case Chord::PreviousPage:
+      return Power::PREVIOUS_PAGE;
     case Chord::ToggleBookmark:
       return Power::TOGGLE_BOOKMARK;
     case Chord::ReadingStats:
@@ -653,6 +655,8 @@ CrossPointSettings::SHORT_PWRBTN chordPowerAction(const ButtonShortcutController
       return Power::CYCLE_PAGE_TURN;
     case Chord::SyncProgress:
       return Power::SYNC_PROGRESS;
+    case Chord::NearbyPositionSync:
+      return Power::NEARBY_POSITION_SYNC;
     case Chord::FileTransfer:
       return Power::FILE_TRANSFER;
     case Chord::CalibreWireless:

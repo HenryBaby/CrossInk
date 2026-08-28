@@ -230,7 +230,8 @@ bool isSleepScreenSetting(const SettingInfo& info) { return info.key && strcmp(i
 bool isValidQuickActionSlot(const uint8_t action) {
   return action < CrossPointSettings::QUICK_ACTION_SLOT_ACTION_COUNT ||
          action == CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER ||
-         action == CrossPointSettings::TOGGLE_FRONTLIGHT || action == CrossPointSettings::TOGGLE_TOUCHSCREEN;
+         action == CrossPointSettings::TOGGLE_FRONTLIGHT || action == CrossPointSettings::TOGGLE_TOUCHSCREEN ||
+         action == CrossPointSettings::PREVIOUS_PAGE || action == CrossPointSettings::NEARBY_POSITION_SYNC;
 }
 
 uint8_t migrateTiltDirectionValue(const uint8_t direction) {
