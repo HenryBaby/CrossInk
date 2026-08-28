@@ -344,14 +344,27 @@ bool HalGPIO::isUsbConnected() const {
 #if FREEINK_DEVICE_X4PRO && !ARDUINO_USB_MODE
   // X4 Pro uses native TinyUSB for its composite CDC+MSC device. The mounted
   // state is the reliable bus-presence signal for this OTG configuration.
-  return tud_mounted();
+  if (tud_mounted()) return true;
 #endif
   if (BoardConfig::ACTIVE.usbDetect >= 0) {
     return digitalRead(BoardConfig::ACTIVE.usbDetect) == HIGH;
   }
 #if FREEINK_MCU_S3
-  // No VBUS line on this board (X4 Pro): fall back to native-USB host detection.
-  return usbHostSofActive();
+  // Without a VBUS pin, prefer native-USB host traffic, then use charging as a
+  // fallback for power-only adapters that do not emit USB frames. Charge
+  // termination at 100% can still report disconnected.
+  if (usbHostSofActive()) return true;
+  static const BatteryMonitor battery;
+  static bool sampled = false;
+  static bool charging = false;
+  static unsigned long lastSampleMs = 0;
+  const unsigned long now = millis();
+  if (!sampled || now - lastSampleMs >= 500) {
+    charging = battery.isCharging();
+    lastSampleMs = now;
+    sampled = true;
+  }
+  return charging;
 #else
   return false;
 #endif
