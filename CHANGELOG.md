@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Font-size changes from reader button long presses now stop at the minimum and maximum sizes.
+
 ## [v1.5.7] - 2026-08-28
 
 ### Fixed

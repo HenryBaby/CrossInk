@@ -2859,7 +2859,7 @@ void EpubReaderActivity::loop() {
         topLongPressed) {
       sideButtonLongPressHandled = !topReleased;
       if (sideLongPressChangesFont) {
-        if (sdFontSystem.changeReaderFontSize(/*larger=*/true)) {
+        if (sdFontSystem.changeReaderFontSize(/*larger=*/true, FontSizeStepMode::Clamp)) {
           reindexCurrentSection();
         }
       } else {
@@ -2872,7 +2872,7 @@ void EpubReaderActivity::loop() {
         bottomLongPressed) {
       sideButtonLongPressHandled = !bottomReleased;
       if (sideLongPressChangesFont) {
-        if (sdFontSystem.changeReaderFontSize(/*larger=*/false)) {
+        if (sdFontSystem.changeReaderFontSize(/*larger=*/false, FontSizeStepMode::Clamp)) {
           reindexCurrentSection();
         }
       } else {
@@ -2934,7 +2934,7 @@ void EpubReaderActivity::loop() {
       }
 
       if (frontLongPressChangesFont) {
-        if (sdFontSystem.changeReaderFontSize(/*larger=*/nextLongPressed)) {
+        if (sdFontSystem.changeReaderFontSize(/*larger=*/nextLongPressed, FontSizeStepMode::Clamp)) {
           reindexCurrentSection();
         }
         return;

@@ -269,7 +269,7 @@ void TxtReaderActivity::loop() {
     if (!sideButtonLongPressHandled && (topLongPressed || bottomLongPressed)) {
       sideButtonLongPressHandled = !(topReleased || bottomReleased);
       if (sideLongPressChangesFont) {
-        changeReaderFontSize(/*larger=*/topLongPressed);
+        changeReaderFontSize(/*larger=*/topLongPressed, FontSizeStepMode::Clamp);
         return;
       }
       SETTINGS.orientation = ReaderUtils::rotatedOrientation(SETTINGS.orientation, /*clockwise=*/bottomLongPressed);
@@ -301,7 +301,7 @@ void TxtReaderActivity::loop() {
     if (!frontButtonLongPressHandled && (prevLongPressed || nextLongPressed)) {
       frontButtonLongPressHandled = true;
       if (frontLongPressChangesFont) {
-        changeReaderFontSize(/*larger=*/nextLongPressed);
+        changeReaderFontSize(/*larger=*/nextLongPressed, FontSizeStepMode::Clamp);
         return;
       }
 
