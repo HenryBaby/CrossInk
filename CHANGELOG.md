@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.5.8] - 2026-08-30
+
 ### Fixed
 
-- Font-size changes from reader button long presses now stop at the minimum and maximum sizes.
+- [`3c1cae00`](https://github.com/HenryBaby/CrossInk/commit/3c1cae00) — Font-size changes from reader button long presses now stop at the minimum and maximum sizes.
 
 ## [v1.5.7] - 2026-08-28
 
