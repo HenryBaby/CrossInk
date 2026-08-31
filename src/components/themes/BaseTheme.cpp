@@ -88,7 +88,9 @@ void BaseTheme::drawBatteryLeft(const GfxRenderer& renderer, Rect rect, const bo
                                 const bool foregroundBlack) const {
   // Left aligned: icon on left, percentage on right (reader mode)
   const uint16_t percentage = powerManager.getBatteryPercentage();
-  const int y = rect.y + 6;
+  // The icon's nub makes its visual center sit slightly below its bounding
+  // box. Lift it one pixel to center it with the percentage text.
+  const int y = rect.y + 5;
 
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
@@ -106,7 +108,7 @@ void BaseTheme::drawBatteryRight(const GfxRenderer& renderer, Rect rect, const b
   // Right aligned: percentage on left, icon on right (UI headers)
   // rect.x is already positioned for the icon (drawHeader calculated it)
   const uint16_t percentage = powerManager.getBatteryPercentage();
-  const int y = rect.y + 6;
+  const int y = rect.y + 5;
 
   if (showPercentage) {
     const auto percentageText = std::to_string(percentage) + "%";
@@ -1035,8 +1037,10 @@ void BaseTheme::drawStatusBar(GfxRenderer& renderer, const float bookProgress, c
 }
 
 void BaseTheme::drawTopStatusBarClock(const GfxRenderer& renderer, int topY, const char* previewTime,
-                                      const bool readerContext, const int textYOffset, const bool darkMode) const {
-  if (!(readerContext ? SETTINGS.shouldShowClockInReader() : SETTINGS.shouldShowClockOutsideReader())) {
+                                      const bool readerContext, const int textYOffset, const bool darkMode,
+                                      const bool forceVisible) const {
+  if (!forceVisible &&
+      !(readerContext ? SETTINGS.shouldShowClockInReader() : SETTINGS.shouldShowClockOutsideReader())) {
     return;
   }
 

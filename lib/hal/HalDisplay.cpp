@@ -37,11 +37,6 @@ void HalDisplay::begin(bool seamless) {
   }
 }
 
-void HalDisplay::setInverted(bool inverted) {
-  HalSpiBus::Lock spiLock;
-  einkDisplay.setInverted(inverted);
-}
-
 void HalDisplay::clearScreen(uint8_t color) const { einkDisplay.clearScreen(color); }
 
 void HalDisplay::drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
@@ -104,6 +99,8 @@ void HalDisplay::refreshDisplay(HalDisplay::RefreshMode mode, bool turnOffScreen
 
   einkDisplay.refreshDisplay(convertRefreshMode(mode), turnOffScreen);
 }
+
+bool HalDisplay::isInverted() const { return einkDisplay.isInverted(); }
 
 void HalDisplay::deepSleep() {
   HalSpiBus::Lock spiLock;

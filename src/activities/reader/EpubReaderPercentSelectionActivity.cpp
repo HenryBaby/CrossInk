@@ -9,6 +9,7 @@
 
 #include "DeviceCapabilities.h"
 #include "MappedInputManager.h"
+#include "components/SliderValue.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
@@ -72,7 +73,8 @@ void EpubReaderPercentSelectionActivity::setPercent(const int value) {
 void EpubReaderPercentSelectionActivity::onSliderEvent(const fui::ActionEvent& event, void* user) {
   auto* self = static_cast<EpubReaderPercentSelectionActivity*>(user);
   if (event.dragPermille < 0) return;
-  self->setPercent((static_cast<int>(event.dragPermille) * 100 + 500) / 1000);
+  const int value = (static_cast<int>(event.dragPermille) * 100 + 500) / 1000;
+  self->setPercent(self->sliderTapPending ? snapSliderTapValue(value, 0, 100, 5) : value);
 }
 
 void EpubReaderPercentSelectionActivity::onStepEvent(const fui::ActionEvent& event, void* user) {
@@ -113,7 +115,9 @@ void EpubReaderPercentSelectionActivity::loop() {
   if (uiReady) {
     snap = touchSnapshotFrom(mappedInput);
     if (snap.touchPressed || snap.touchHeld || snap.touchReleased) {
+      sliderTapPending = snap.touchReleased && snap.touchX >= 0;
       const auto event = app.route(snap);
+      sliderTapPending = false;
       if (app.invalidated()) requestUpdate();
       if (event) {
         if (event.dragPermille >= 0) draggingSlider = true;

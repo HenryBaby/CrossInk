@@ -74,7 +74,6 @@ struct ReaderLayoutSettingsSnapshot {
   uint8_t embeddedStyle;
   uint8_t hyphenationEnabled;
   uint8_t textAntiAliasing;
-  uint8_t readerDarkMode;
   uint8_t imageRendering;
   uint8_t extraParagraphSpacing;
   uint8_t forceParagraphIndents;
@@ -92,8 +91,8 @@ struct ReaderLayoutSettingsSnapshot {
            screenMarginHorizontal == other.screenMarginHorizontal &&
            publisherPageNumbers == other.publisherPageNumbers && paragraphAlignment == other.paragraphAlignment &&
            embeddedStyle == other.embeddedStyle && hyphenationEnabled == other.hyphenationEnabled &&
-           textAntiAliasing == other.textAntiAliasing && readerDarkMode == other.readerDarkMode &&
-           imageRendering == other.imageRendering && extraParagraphSpacing == other.extraParagraphSpacing &&
+           textAntiAliasing == other.textAntiAliasing && imageRendering == other.imageRendering &&
+           extraParagraphSpacing == other.extraParagraphSpacing &&
            forceParagraphIndents == other.forceParagraphIndents && bionicReadingEnabled == other.bionicReadingEnabled &&
            guideReadingEnabled == other.guideReadingEnabled && epubRenderMode == other.epubRenderMode &&
            std::strncmp(sdFontFamilyName, other.sdFontFamilyName, sizeof(sdFontFamilyName)) == 0;
@@ -115,7 +114,6 @@ ReaderLayoutSettingsSnapshot captureReaderLayoutSettings() {
       SETTINGS.embeddedStyle,
       SETTINGS.hyphenationEnabled,
       SETTINGS.textAntiAliasing,
-      SETTINGS.readerDarkMode,
       SETTINGS.imageRendering,
       SETTINGS.extraParagraphSpacing,
       SETTINGS.forceParagraphIndents,

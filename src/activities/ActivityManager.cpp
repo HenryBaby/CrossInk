@@ -1,7 +1,9 @@
 #include "ActivityManager.h"
 
 #include <CrossInkHalFrontlight.h>
+#include <Epub.h>
 #include <FontCacheManager.h>
+#include <FsHelpers.h>
 #include <HalPowerManager.h>
 #include <HalStorage.h>
 #include <Logging.h>
@@ -12,6 +14,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "OpdsServerStore.h"
+#include "RecentBooksStore.h"
 #include "SilentRestart.h"
 #include "boot_sleep/BootActivity.h"
 #include "boot_sleep/SleepActivity.h"
@@ -21,12 +24,16 @@
 #include "home/CrashActivity.h"
 #include "home/FileBrowserActivity.h"
 #include "home/HomeActivity.h"
+#include "home/RecentBookProgress.h"
 #include "home/RecentBooksActivity.h"
 #include "home/RecentBooksGridActivity.h"
 #include "network/CrossPointWebServerActivity.h"
 #include "network/NearbyBookTransferActivity.h"
 #include "network/NearbyStatsSyncActivity.h"
 #include "network/UsbDriveActivity.h"
+#include "reader/BookReadingStats.h"
+#include "reader/BookStatsActivity.h"
+#include "reader/GlobalReadingStats.h"
 #include "reader/ReaderActivity.h"
 #include "settings/OpdsServerListActivity.h"
 #include "settings/SettingsActivity.h"
@@ -38,12 +45,89 @@ namespace {
 constexpr uint32_t FILE_TRANSFER_MODE_MASK = 0xFF;
 constexpr uint32_t FILE_TRANSFER_RETURN_TO_READER = 1U << 8;
 
+constexpr bool hasStickyReaderDetailsPanel() {
+#if defined(FREEINK_DEVICE_STICKY) && FREEINK_DEVICE_STICKY
+  return true;
+#else
+  return false;
+#endif
+}
+
 uint32_t fileTransferBootPayload(const NetworkMode mode, const bool returnToReader) {
   return static_cast<uint32_t>(mode) | (returnToReader ? FILE_TRANSFER_RETURN_TO_READER : 0);
 }
 
 void restartToFileTransfer(const NetworkMode mode, const std::string& returnBookPath) {
   silentRestartToNetwork(NetworkBootTarget::FILE_TRANSFER, fileTransferBootPayload(mode, !returnBookPath.empty()));
+}
+
+std::string fileNameFromPath(const std::string& path) {
+  const size_t slash = path.find_last_of('/');
+  return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+FrontlightPanelContext buildFrontlightPanelContext(Activity& activity, GfxRenderer& renderer,
+                                                   MappedInputManager& mappedInput) {
+  FrontlightPanelContext context;
+  context.sourceActivity = &activity;
+  const std::string currentPath = activity.getCurrentBookPath();
+  const bool currentValid = FsHelpers::hasEpubExtension(currentPath) && Storage.exists(currentPath.c_str());
+  const bool lastValid = !APP_STATE.openEpubPath.empty() && FsHelpers::hasEpubExtension(APP_STATE.openEpubPath) &&
+                         Storage.exists(APP_STATE.openEpubPath.c_str());
+  const FrontlightBookSource source =
+      chooseFrontlightBookSource(activity.isEpubReaderActivity(), currentValid, lastValid);
+  context.activeEpub = source == FrontlightBookSource::CurrentBook;
+  if (context.activeEpub) {
+    context.bookTitle = activity.getCurrentBookTitle();
+    context.bookPath = currentPath;
+    context.showReaderDetails = hasStickyReaderDetailsPanel() && !Frontlight.present();
+    if (context.showReaderDetails && activity.getFrontlightPanelBookDetails(context.bookDetails)) {
+      context.bookTitle = context.bookDetails.title;
+    }
+    context.readingStatsActivity = activity.createFrontlightReadingStatsActivity();
+    return context;
+  }
+
+  const GlobalReadingStats global = GlobalReadingStats::load();
+  std::string cachePath;
+  BookReadingStats bookStats;
+  float progress = -1.0f;
+  if (source == FrontlightBookSource::LastBook) {
+    context.bookPath = APP_STATE.openEpubPath;
+    context.bookTitle = fileNameFromPath(context.bookPath);
+    cachePath = Epub::cachePathForFilePath(context.bookPath, "/.crosspoint");
+    bookStats = BookReadingStats::load(cachePath);
+    const RecentBook book{context.bookPath, context.bookTitle, {}, {}};
+    progress = RecentBookProgress::loadCachedEpubPercent(book);
+  } else {
+    context.bookTitle = tr(STR_READING_STATS);
+  }
+  if (GlobalReadingStats::hasSyncedStats()) {
+    context.readingStatsActivity =
+        makeUniqueNoThrow<BookStatsActivity>(renderer, mappedInput, context.bookTitle, cachePath, bookStats, progress,
+                                             false, 0, global, GlobalReadingStats::loadAggregated(global));
+  } else {
+    context.readingStatsActivity = makeUniqueNoThrow<BookStatsActivity>(
+        renderer, mappedInput, context.bookTitle, cachePath, bookStats, progress, false, 0, global);
+  }
+  return context;
+}
+
+bool openFrontlightPanel(Activity& activity, GfxRenderer& renderer, MappedInputManager& mappedInput,
+                         const FrontlightDrawerState* restoredState = nullptr) {
+  FrontlightPanelContext context = buildFrontlightPanelContext(activity, renderer, mappedInput);
+  if (restoredState) context.drawerState = *restoredState;
+  auto panel = makeUniqueNoThrow<FrontlightPanelActivity>(renderer, mappedInput, std::move(context));
+  if (!panel) {
+    LOG_ERR("ACT", "OOM opening frontlight panel");
+    return false;
+  }
+  activity.onFrontlightPanelOpened();
+  activity.startActivityForResult(std::move(panel), [&activity](const ActivityResult& result) {
+    const auto* panelResult = std::get_if<FrontlightPanelResult>(&result.data);
+    if (panelResult) activity.handleFrontlightPanelResult(*panelResult);
+  });
+  return true;
 }
 
 bool applyTwoFingerSwipeAction(Activity& activity, MappedInputManager& mappedInput, GfxRenderer& renderer) {
@@ -158,6 +242,7 @@ void ActivityManager::renderTaskLoop() {
       // explicitly clears inversion for its normal sleep screen.
       display.setInverted(SETTINGS.screenInverted != 0);
       currentActivity->render(std::move(lock));
+      restoredActivityNeedsRender = false;
     }
     TouchRegistry::getInstance().publish();
     // Notify any task blocked in requestUpdateAndWait() that the render is done.
@@ -210,9 +295,11 @@ void ActivityManager::loop() {
       const bool lightPanelGesture = currentActivity->usesFullScreenReaderVerticalSwipes()
                                          ? mappedInput.wasReaderLightPanelGesture()
                                          : mappedInput.wasLightPanelGesture();
-      if (Frontlight.present() && currentActivity->name != "FrontlightPanel" &&
-          currentActivity->allowFrontlightPanelGesture() && lightPanelGesture) {
-        pushActivity(std::make_unique<FrontlightPanelActivity>(renderer, mappedInput));
+      if (supportsFrontlightDrawer(mappedInput.hasTouchHardware(), Frontlight.present(),
+                                   hasStickyReaderDetailsPanel()) &&
+          currentActivity->name != "FrontlightPanel" && currentActivity->allowFrontlightPanelGesture() &&
+          lightPanelGesture) {
+        openFrontlightPanel(*currentActivity, renderer, mappedInput);
         return;
       }
       // Note: do not hold a lock here, the loop() method must be responsible for acquire one if needed
@@ -235,6 +322,7 @@ void ActivityManager::loop() {
         continue;
       }
 
+      const bool closedFrontlightPanel = currentActivity->name == "FrontlightPanel";
       ActivityResult pendingResult = std::move(currentActivity->result);
 
       // Destroy the current activity
@@ -249,6 +337,9 @@ void ActivityManager::loop() {
       } else {
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
+        restoredActivityNeedsRender = true;
+
+        if (closedFrontlightPanel) currentActivity->onFrontlightPanelClosed();
 
         if (openReaderMenuAfterPop) {
           openReaderMenuAfterPop = false;
@@ -272,12 +363,12 @@ void ActivityManager::loop() {
           handler(pendingResult);
         }
 
-        // Queue an update to ensure the popped activity gets re-rendered.
-        // Do not block here: result handlers may transiently take RenderLock while
-        // reconciling state, and a synchronous wait at this point can trip the
-        // deadlock guard even though the queued repaint is sufficient.
+        // Queue an update to ensure the popped activity gets re-rendered. A
+        // partial-screen overlay first restores the full-screen activity below
+        // it now that the result handler has finished reconciling settings.
         if (pendingAction == PendingAction::None) {
           lock.unlock();
+          if (currentActivity->requiresFreshBackdrop()) restoreBackdropBehindCurrentOverlay();
           requestUpdate();
         }
 
@@ -286,6 +377,18 @@ void ActivityManager::loop() {
       }
 
     } else if (pendingActivity) {
+      if (pendingAction == PendingAction::Push && pendingActivity->requiresFreshBackdrop()) {
+        if (restoredActivityNeedsRender.load()) {
+          const RequestUpdateResult redraw = requestUpdateAndWait();
+          if (redraw != RequestUpdateResult::Rendered) {
+            LOG_ERR("ACT", "Could not restore source backdrop before opening %s", pendingActivity->name.c_str());
+          }
+        }
+        // A queued render may already have refreshed the source and cleared
+        // restoredActivityNeedsRender. Preserve the overlay's paused timing
+        // state either way before it becomes current.
+        if (currentActivity) currentActivity->onBackdropRenderedForOverlay();
+      }
       // Current activity has requested a new activity to be launched
       RenderLock lock;
 
@@ -307,6 +410,44 @@ void ActivityManager::loop() {
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
 
+      if (pendingAction == PendingAction::None && pendingReaderMenuAction >= 0 &&
+          currentActivity->isEpubReaderActivity()) {
+        const uint8_t action = static_cast<uint8_t>(pendingReaderMenuAction);
+        pendingReaderMenuAction = -1;
+        currentActivity->handleExternalReaderMenuAction(action);
+      }
+
+      if (pendingAction == PendingAction::None && APP_STATE.pendingOverlayResume.valid()) {
+        const PendingOverlayResume resume = APP_STATE.pendingOverlayResume;
+        if (resume.returnHomeAfterReaderFlow && currentActivity->isEpubReaderActivity() &&
+            (resume.bookPath.empty() || resume.bookPath == currentActivity->getCurrentBookPath())) {
+          PendingOverlayResume homeResume = resume;
+          homeResume.returnHomeAfterReaderFlow = false;
+          APP_STATE.setPendingOverlayResume(std::move(homeResume));
+          goHome();
+          continue;
+        }
+        const bool readerReady = resume.origin == PendingOverlayOrigin::Reader &&
+                                 currentActivity->isEpubReaderActivity() &&
+                                 (resume.bookPath.empty() || resume.bookPath == currentActivity->getCurrentBookPath());
+        const bool homeReady = resume.origin == PendingOverlayOrigin::Home && currentActivity->isHomeActivity();
+        if (readerReady || homeReady) {
+          if (resume.overlay == PendingOverlayType::ReaderDrawer && currentActivity->restorePendingOverlay(resume)) {
+            PendingOverlayResume consumed;
+            APP_STATE.consumePendingOverlayResume(consumed);
+          } else if (resume.overlay == PendingOverlayType::FrontlightDrawer &&
+                     supportsFrontlightDrawer(mappedInput.hasTouchHardware(), Frontlight.present(),
+                                              hasStickyReaderDetailsPanel())) {
+            FrontlightDrawerState restoredState;
+            restoredState.selectedAction = static_cast<int8_t>(resume.selectedIndex);
+            if (openFrontlightPanel(*currentActivity, renderer, mappedInput, &restoredState)) {
+              PendingOverlayResume consumed;
+              APP_STATE.consumePendingOverlayResume(consumed);
+            }
+          }
+        }
+      }
+
       // onEnter may request another pending action, we will handle it in the next loop iteration
       continue;
     }
@@ -324,6 +465,32 @@ void ActivityManager::loop() {
       xTaskNotify(renderTaskHandle, 1, eIncrement);
     }
   }
+}
+
+bool ActivityManager::restoreBackdropBehindCurrentOverlay() {
+  if (!currentActivity || !currentActivity->requiresFreshBackdrop() || stackActivities.empty()) return false;
+
+  std::unique_ptr<Activity> overlay;
+  {
+    RenderLock lock;
+    overlay = std::move(currentActivity);
+    currentActivity = std::move(stackActivities.back());
+    stackActivities.pop_back();
+  }
+
+  const RequestUpdateResult redraw = requestUpdateAndWait();
+  if (redraw == RequestUpdateResult::Rendered && currentActivity) {
+    currentActivity->onBackdropRenderedForOverlay();
+  } else {
+    LOG_ERR("ACT", "Could not restore backdrop behind %s", overlay->name.c_str());
+  }
+
+  {
+    RenderLock lock;
+    stackActivities.push_back(std::move(currentActivity));
+    currentActivity = std::move(overlay);
+  }
+  return redraw == RequestUpdateResult::Rendered;
 }
 
 bool ActivityManager::handleGlobalHomeGesture() {
@@ -415,14 +582,15 @@ void ActivityManager::goToFileTransfer(std::string returnBookPath) {
   replaceActivity(std::make_unique<CrossPointWebServerActivity>(renderer, mappedInput, std::move(returnBookPath)));
 }
 
-void ActivityManager::goToNearbyBookSend(std::string path, const bool returnToReader) {
+bool ActivityManager::goToNearbyBookSend(std::string path, const bool returnToReader) {
   auto activity = makeUniqueNoThrow<NearbyBookTransferActivity>(
       renderer, mappedInput, NearbyBookTransferActivity::Mode::Send, std::move(path), returnToReader);
   if (!activity) {
     LOG_ERR("ACT", "OOM: nearby file sender");
-    return;
+    return false;
   }
   replaceActivity(std::move(activity));
+  return true;
 }
 
 void ActivityManager::goToNearbyBookReceive() {
@@ -566,6 +734,11 @@ void ActivityManager::goToReader(std::string path, const bool suppressBackReleas
   OPDS_STORE.release();
   replaceActivity(std::make_unique<ReaderActivity>(renderer, mappedInput, std::move(path), suppressBackRelease,
                                                    allowFastInitialRefresh, cleanImageBaseOnEntry));
+}
+
+void ActivityManager::goToReaderAndRunMenuAction(std::string path, const uint8_t action) {
+  pendingReaderMenuAction = action;
+  goToReader(std::move(path));
 }
 
 void ActivityManager::goToSleep(bool fromTimeout) {

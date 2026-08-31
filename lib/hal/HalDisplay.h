@@ -32,7 +32,6 @@ class HalDisplay {
   static constexpr uint32_t BUFFER_SIZE = DISPLAY_WIDTH_BYTES * DISPLAY_HEIGHT;
 
   // Frame buffer operations
-  void setInverted(bool inverted);
   void clearScreen(uint8_t color = 0xFF) const;
   void drawImage(const uint8_t* imageData, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
                  bool fromProgmem = false) const;
@@ -58,6 +57,7 @@ class HalDisplay {
   // base pass. X3 has a dedicated grayscale waveform and must stay blocking.
   bool supportsAsyncGrayscaleBase() const;
   void refreshDisplay(RefreshMode mode = RefreshMode::FAST_REFRESH, bool turnOffScreen = false);
+  bool isInverted() const;
 
   // Power management
   void deepSleep();

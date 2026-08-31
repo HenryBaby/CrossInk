@@ -7,6 +7,9 @@
 #include <utility>
 #include <variant>
 
+#include "reader/EpubReaderMenuModel.h"
+#include "util/FrontlightPanelModel.h"
+
 struct WifiResult {
   bool connected = false;
   std::string ssid;
@@ -22,11 +25,18 @@ struct MenuResult {
   uint8_t orientation = 0;
   bool settingsChanged = false;
   uint8_t pageTurnOption = 0;
+  ReaderDrawerState drawerState{};
+  ReaderSettingsChangeMask changeMask = ReaderSettingsChangeMask::None;
+  bool reopenDrawer = false;
+  int16_t drawerValue = -1;
 };
 
 struct ChapterResult {
   int spineIndex = 0;
   std::string anchor;
+  uint8_t orientation = 0;
+  bool settingsChanged = false;
+  ReaderDrawerState drawerState{};
 };
 
 struct PercentResult {
@@ -137,7 +147,7 @@ using ResultVariant =
     std::variant<std::monostate, WifiResult, KeyboardResult, MenuResult, ChapterResult, PercentResult, IntervalResult,
                  OptionSelectionResult, PageResult, ProgressChangeResult, SyncResult, NetworkModeResult, FootnoteResult,
                  BookmarkResult, FileBrowserActionResult, FilePathResult, WordResult, ReadingStatsResult,
-                 ClippingResult, DictionaryClippingRequest, ClippingJumpResult>;
+                 ClippingResult, DictionaryClippingRequest, ClippingJumpResult, FrontlightPanelResult>;
 
 struct ActivityResult {
   bool isCancelled = false;

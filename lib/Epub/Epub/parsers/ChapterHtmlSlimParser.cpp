@@ -1610,9 +1610,9 @@ bool ChapterHtmlSlimParser::appendMalformedMarkupWarningPage() {
     xPos.push_back(0);
     styles.push_back(style);
 
-    auto block =
-        std::make_shared<TextBlock>(std::move(words), std::move(xPos), std::move(styles), std::vector<uint8_t>{},
-                                    std::vector<uint16_t>{}, std::vector<uint16_t>{}, std::vector<uint8_t>{});
+    auto block = std::make_shared<TextBlock>(std::move(words), std::move(xPos), std::move(styles),
+                                             std::vector<uint8_t>{}, std::vector<uint16_t>{}, std::vector<uint16_t>{},
+                                             std::vector<uint8_t>{}, std::vector<bool>{false});
     auto pageLine = makeUniqueNoThrow<PageLine>(
         std::move(block),
         static_cast<int16_t>(

@@ -2,23 +2,22 @@
 
 ### Added
 
-- Frontlit readers can choose Never for periodic full-screen refreshes, and Night Mode now applies across the interface.
 - Full Xteink X4 Pro support, including USB Drive access to its SD card and direct USB file transfers.
+- Frontlit readers can choose Never for periodic full-screen refreshes, and Night Mode now applies system-wide for ESP32-S3 devices.
 - Tapping the reader status bar on touch devices now toggles it for the current reading session without changing the page layout.
-- Touchscreen readers can choose tap, swipe, inverted tap, or disabled page-turn gestures, and assign two-finger swipes to frontlight, chapter, or font-size actions.
-- Two-finger pinch gestures now adjust EPUB font size, and two-finger rotation turns supported reader layouts in the same direction.
 - Quick Actions provides a menu of favorite reader commands, assignable to Power + Up and, on X4 Pro, Home-button gestures.
 - A new Quick Lock shortcut locks the device without putting it to sleep; it uses the regular sleep timeout and can be assigned to Power + Up, long-press Back, or long-press Menu.
 - Shortcuts can now go to the previous page or start Nearby Position Sync from an EPUB reader.
-- Dictionary lookups can now save the selected word or phrase directly as a clipping.
-- Readers can configure an Up + Down side-button shortcut; on touchscreen devices, while the reader touchscreen is disabled, the same chord always opens Settings so it can be restored.
-- Power-button shortcuts and Quick Actions can now toggle the frontlight or reader touchscreen when supported.
-- On one-cover Lyra, Dashboard, and Minimal Home screens, swipe left to switch between the two most recent books.
+- Dictionary lookups can now save the selected word or phrase directly as a clipping on touch devices.
+- Up + Down side-button shortcut added for touchscreen devices, while the reader touchscreen is disabled, the same chord always opens the reader menu so it can be restored.
+- Touchscreen File Browsers now expose their display and visibility settings from a header shortcut.
 
 ### Changed
 
 - Font prewarming now uses a bounded fixed buffer instead of growing temporary strings, reducing heap churn while rendering mixed-style pages.
 - Built-in fonts now use smaller sparse kerning data and stronger offline compression, leaving more firmware flash available without changing text layout.
+- EPUB readers on touch devices now use a half-height, five-tab reader menu, including a More tab for navigation and auto-page-turn actions; the X4 Pro frontlight panel includes reading stats, sync, display inversion, Settings, and touchscreen shortcuts.
+- Sticky reader menus now open from the bottom with a swipe up; swiping down opens book details and the same five quick actions available on X4 Pro.
 - Screen Margin now has separate Top/Bottom and Left/Right controls, each adjustable in 5- and 10-pixel steps up to 200 pixels.
 - Shortcut action pickers now use a consistent option order while hiding actions unsupported by the selected trigger or device.
 - Wi-Fi passwords are now shown while entering them, making corrections easier on-device.
@@ -36,7 +35,7 @@
 
 ### Fixed
 
-- X4 Pro now confirms when its Home button is enabled or disabled while reading.
+- The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
 - EPUB table-of-contents links now resume at their destination chapters instead of being saved as footnotes.
 - EPUB chapter-skip gestures now move past all split sections in the current chapter.
 - ZIP and EPUB reads now stop safely on SD-card read errors instead of turning a negative result into an out-of-bounds buffer size.
@@ -46,6 +45,7 @@
 - S3 devices without a USB-detect pin can now recognize power-only chargers through battery charging state.
 - Power-latch pins now stay asserted during deep sleep on S3 devices, preventing battery-only wakes from becoming slow cold boots.
 - Sticky and X4 Pro readers now reject firmware files built for the other device before SD-card or over-the-air updates write the OTA partition.
+
 - USB Drive startup failures now restore SD-card access and return Home automatically after showing an error.
 - Minimal and Dashboard Home screens no longer highlight front-button hints when pressing the side Up or Down buttons.
 - Declining an alternate dictionary-form lookup now returns to the reader instead of leaving the selected word active.

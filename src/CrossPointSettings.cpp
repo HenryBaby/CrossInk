@@ -476,6 +476,7 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   doc["language"] = (language < getLanguageCount()) ? LANGUAGE_CODES[language] : "EN";
   doc["tiltPageTurnDirectionSchema"] = TILT_DIRECTION_SCHEMA_CURRENT;
   doc["clockDateHasBeenSynced"] = clockDateHasBeenSynced;
+  doc["screenInverted"] = screenInverted;
 }
 
 bool CrossPointSettings::fromJson(JsonVariantConst doc) {
@@ -490,6 +491,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
       !doc["tiltPageTurnDirection"].isNull() &&
       ((doc["tiltPageTurnDirectionSchema"] | static_cast<uint8_t>(1)) < TILT_DIRECTION_SCHEMA_CURRENT);
   if (doc["statusBarChapterPageCount"].isNull()) applyLegacyStatusBarSettings(*this);
+  screenInverted = clamp(doc["screenInverted"] | screenInverted, 2, screenInverted);
 
   for (const auto& info : getBaseSettingsList()) {
     if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) continue;
@@ -582,8 +584,8 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
     this->*(info.valuePtr) = value;
   }
 
-  // Night Mode used to be persisted per book as readerDarkMode. Preserve a
-  // user's existing preference when moving it to the global display setting.
+  // Older global settings files named the display preference readerDarkMode.
+  // Preserve it when moving to the global screenInverted setting.
   if (doc["screenInverted"].isNull() && !doc["readerDarkMode"].isNull()) {
     screenInverted = clamp(doc["readerDarkMode"] | static_cast<uint8_t>(0), 2, 0);
     needsResave = true;

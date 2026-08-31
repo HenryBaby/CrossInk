@@ -135,4 +135,8 @@ class HomeActivity final : public Activity {
   bool blocksGlobalInput() const override { return quickActionsPopup.isActive(); }
   bool handleShortcutAction(CrossPointSettings::SHORT_PWRBTN action) override;
   std::string getCurrentBookPath() const override;
+  std::string getCurrentBookTitle() const override;
+  std::unique_ptr<Activity> createFrontlightReadingStatsActivity() override;
+  void onFrontlightPanelClosed() override;
+  bool handleFrontlightPanelResult(const FrontlightPanelResult& result) override;
 };

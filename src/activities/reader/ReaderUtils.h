@@ -80,6 +80,18 @@ inline int getTopClockStatusBarReservedHeight(const GfxRenderer& renderer) {
   return UITheme::getInstance().getMetrics().topPadding + UITheme::getTopStatusBarInset(renderer) + statusBarHeight;
 }
 
+inline int getReaderFooterReservedHeight(const bool automaticPageTurnActive) {
+  const uint8_t statusBarHeight = UITheme::getInstance().getStatusBarHeight();
+  if (automaticPageTurnActive &&
+      (statusBarHeight == 0 || statusBarHeight == UITheme::getInstance().getProgressBarHeight())) {
+    return std::max(static_cast<int>(SETTINGS.screenMarginVertical),
+                    static_cast<int>(statusBarHeight + UITheme::getInstance().getMetrics().statusBarVerticalMargin +
+                                     STATUS_BAR_TEXT_PADDING));
+  }
+  return std::max(static_cast<int>(SETTINGS.screenMarginVertical),
+                  static_cast<int>(statusBarHeight + STATUS_BAR_TEXT_PADDING));
+}
+
 inline uint8_t rotatedOrientation(const uint8_t orientation, const bool clockwise) {
   return clockwise ? (orientation + 1) % CrossPointSettings::ORIENTATION_COUNT
                    : (orientation + CrossPointSettings::ORIENTATION_COUNT - 1) % CrossPointSettings::ORIENTATION_COUNT;
