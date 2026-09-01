@@ -47,6 +47,7 @@ enum class SettingAction {
   CheckForUpdates,
   SdFirmwareUpdate,
   Language,
+  KeyboardLayouts,
   DownloadFonts,
   ClockSync,
 };
