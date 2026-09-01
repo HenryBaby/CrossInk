@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- Arabic and Persian text no longer lets font ligatures reprocess letters that were already shaped for display.
 - Closing a dictionary definition now releases its temporary SD font caches, including when it shares the reader font.
 - XTCH covers now retain all four grayscale levels instead of being flattened to black and white.
 - Calibre Wireless now shows the full IP address on its own line without shortening the connected network name.
