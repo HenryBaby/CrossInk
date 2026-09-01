@@ -284,7 +284,7 @@ bool HalGPIO::hasEdgeSideButtons() const {
          BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro;
 }
 
-bool HalGPIO::verifyPowerButtonWakeup() {
+bool HalGPIO::verifyPowerButtonWakeup(const bool shortPressWakes) {
   // M5Paper v1.1 reaches setup after a normal wheel click has already been
   // released. Its hardware pull-ups make this ghost-wake debounce unnecessary.
   if (BoardConfig::isPaperMono() || BoardConfig::isM5PaperV11() || BoardConfig::ACTIVE.input.power < 0) {
@@ -299,7 +299,7 @@ bool HalGPIO::verifyPowerButtonWakeup() {
     delay(1);
     inputMgr.update();
   }
-  return heldAtFirstSample && inputMgr.isPowerButtonPhysicallyPressed();
+  return shortPressWakes || (heldAtFirstSample && inputMgr.isPowerButtonPhysicallyPressed());
 }
 
 #if FREEINK_MCU_S3

@@ -911,6 +911,42 @@ bool shouldClearX4WakeGhosting() {
 #endif
 }
 
+// Wake validation runs before the SD card and its settings file are available.
+// Mirror the one setting that changes its behavior while entering sleep, so a
+// deliberate short sleep press can wake the device even after the button has
+// been released during boot. The write is skipped when the value is unchanged.
+constexpr char WAKE_NVS_NAMESPACE[] = "crosspoint";
+constexpr char WAKE_SHORT_PRESS_KEY[] = "wakeShortPr";
+
+bool readWakeShortPressFromNvs() {
+#ifdef SIMULATOR
+  return false;
+#else
+  nvs_handle_t handle;
+  if (nvs_open(WAKE_NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return false;
+  uint8_t value = 0;
+  const esp_err_t result = nvs_get_u8(handle, WAKE_SHORT_PRESS_KEY, &value);
+  nvs_close(handle);
+  return result == ESP_OK && value != 0;
+#endif
+}
+
+void mirrorWakeShortPressToNvs() {
+#ifndef SIMULATOR
+  const uint8_t expected =
+      (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP || APP_STATE.quickLockResumePending) ? 1 : 0;
+  nvs_handle_t handle;
+  if (nvs_open(WAKE_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return;
+  uint8_t current = 0;
+  const bool hasCurrent = nvs_get_u8(handle, WAKE_SHORT_PRESS_KEY, &current) == ESP_OK;
+  if (!hasCurrent || current != expected) {
+    nvs_set_u8(handle, WAKE_SHORT_PRESS_KEY, expected);
+    nvs_commit(handle);
+  }
+  nvs_close(handle);
+#endif
+}
+
 // Enter deep sleep mode
 void enterDeepSleep(bool fromTimeout) {
   HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
@@ -954,6 +990,7 @@ void enterDeepSleep(bool fromTimeout) {
 
   putTiltSensorToSleepForDeepSleep();
   display.deepSleep();
+  mirrorWakeShortPressToNvs();
   LOG_DBG("MAIN", "Entering deep sleep");
 
   powerManager.startDeepSleep(gpio);
@@ -1095,7 +1132,8 @@ void setup() {
 
   const auto wakeupReason = gpio.getWakeupReason();
 #ifndef SIMULATOR
-  if (wakeupReason == HalGPIO::WakeupReason::PowerButton && !gpio.verifyPowerButtonWakeup()) {
+  const bool shortPressWakes = readWakeShortPressFromNvs();
+  if (wakeupReason == HalGPIO::WakeupReason::PowerButton && !gpio.verifyPowerButtonWakeup(shortPressWakes)) {
     LOG_DBG("MAIN", "Power-button wake not held through verification, sleeping");
     powerManager.startDeepSleep(gpio);
   }
@@ -1161,6 +1199,7 @@ void setup() {
   SETTINGS.loadFromFile();
   Storage.installDateTimeCallback(&SETTINGS.clockUtcOffsetQ);
   APP_STATE.loadFromFile();
+  mirrorWakeShortPressToNvs();
   // Needs SETTINGS for the clock's UTC offset, so it cannot run any earlier.
   BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Wake);
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
@@ -1225,6 +1264,7 @@ void setup() {
     APP_STATE.quickLockResumePending = false;
     APP_STATE.quickLockResumeTrigger = static_cast<uint8_t>(QuickLockTrigger::None);
     APP_STATE.saveToFile();
+    mirrorWakeShortPressToNvs();
   }
   const BootResume resume = isNetworkResume                            ? BootResume::Network
                             : isSilentReboot                           ? BootResume::Silent
