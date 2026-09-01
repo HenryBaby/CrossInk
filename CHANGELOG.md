@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- Mixed-direction EPUB paragraphs now retain their block reading direction when inline spans change direction.
 - End-of-book suggestions now receive input before reader shortcuts and automatic page turns.
 - Arabic and Persian text no longer lets font ligatures reprocess letters that were already shaped for display.
 - Closing a dictionary definition now releases its temporary SD font caches, including when it shares the reader font.
