@@ -2,7 +2,6 @@
 
 #include <CrossInkHalFrontlight.h>
 #include <GfxRenderer.h>
-#include <HalDisplay.h>
 #include <I18n.h>
 #include <Memory.h>
 
@@ -192,7 +191,6 @@ void FrontlightPanelActivity::toggleReaderTouchscreen() {
     RenderLock lock;
     BookActions::drawToast(renderer,
                            pendingTouchscreenDisabled ? tr(STR_TOUCHSCREEN_DISABLED) : tr(STR_TOUCHSCREEN_ENABLED));
-    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   }
   delay(1000);
   requestUpdate();
