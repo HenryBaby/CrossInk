@@ -13,6 +13,10 @@ inline constexpr size_t CLIPPING_TEXT_MAX = 4U * 1024U;
 inline constexpr uint16_t CLIPPING_MAX_PER_BOOK = 256;
 inline constexpr uint16_t CLIPPING_MAX_PAGE_MATCHES = 16;
 inline constexpr uint32_t CLIPPING_WORD_LAYOUT_VERSION = 2;
+inline constexpr uint8_t CLIPPING_LAYOUT_START_RESOLVED = 1U << 0;
+inline constexpr uint8_t CLIPPING_LAYOUT_END_RESOLVED = 1U << 1;
+inline constexpr uint8_t CLIPPING_LAYOUT_BOUNDARIES_RESOLVED =
+    CLIPPING_LAYOUT_START_RESOLVED | CLIPPING_LAYOUT_END_RESOLVED;
 
 inline uint32_t clippingWordLayoutSignature(const uint32_t readerLayoutSignature) {
   if (readerLayoutSignature == 0) return 0;
@@ -35,6 +39,9 @@ struct Clipping {
   uint32_t layoutSignature = 0;
   uint32_t textOffset = 0;
   uint16_t textLength = 0;
+  // Session-only migration state. This occupies existing alignment padding and
+  // is intentionally omitted from the on-disk record.
+  uint8_t resolvedLayoutBoundaries = 0;
   char chapterTitle[CLIPPING_CHAPTER_TITLE_MAX] = {};
 };
 
@@ -72,6 +79,8 @@ class ClippingStore {
   size_t clippingCount() const { return clippings.size(); }
   const Clipping* clippingAt(size_t index) const;
   const std::vector<Clipping>& getClippings() const { return clippings; }
+  bool cacheResolvedLayoutRange(size_t index, uint16_t page, uint16_t startWord, uint16_t endWord,
+                                uint32_t layoutSignature);
   bool readClippingText(size_t index, std::string& out) const;
   bool readClippingText(const Clipping& clipping, std::string& out) const;
 
@@ -104,6 +113,57 @@ inline bool clippingStoredRangeMatchesLayout(const Clipping& clipping, const uin
   // is used to find the highlight instead.
   return clipping.layoutSignature != 0 && currentLayoutSignature != 0 &&
          clipping.layoutSignature == currentLayoutSignature;
+}
+
+inline bool clippingUsesLegacyWordLayout(const Clipping& clipping, const uint16_t currentPageCount,
+                                         const uint32_t readerLayoutSignature) {
+  if (clipping.pageCount != currentPageCount || clipping.layoutSignature == 0 || readerLayoutSignature == 0) {
+    return false;
+  }
+  return clipping.layoutSignature == readerLayoutSignature &&
+         clipping.layoutSignature != clippingWordLayoutSignature(readerLayoutSignature);
+}
+
+inline bool clippingCachedRangeReadyOnPage(const Clipping& clipping, const uint16_t page) {
+  if (clipping.startPage > clipping.endPage || page < clipping.startPage || page > clipping.endPage) {
+    return false;
+  }
+  if (page == clipping.startPage && (clipping.resolvedLayoutBoundaries & CLIPPING_LAYOUT_START_RESOLVED) == 0) {
+    return false;
+  }
+  if (page == clipping.endPage && (clipping.resolvedLayoutBoundaries & CLIPPING_LAYOUT_END_RESOLVED) == 0) {
+    return false;
+  }
+  return true;
+}
+
+inline bool cacheClippingResolvedLayoutRange(Clipping& clipping, const uint16_t page, const uint16_t startWord,
+                                             const uint16_t endWord, const uint32_t layoutSignature) {
+  if (layoutSignature == 0 || clipping.startPage > clipping.endPage || page < clipping.startPage ||
+      page > clipping.endPage || startWord > endWord) {
+    return false;
+  }
+
+  bool changed = false;
+  if (page == clipping.startPage) {
+    changed = clipping.startWordIndex != startWord ||
+              (clipping.resolvedLayoutBoundaries & CLIPPING_LAYOUT_START_RESOLVED) == 0;
+    clipping.startWordIndex = startWord;
+    clipping.resolvedLayoutBoundaries |= CLIPPING_LAYOUT_START_RESOLVED;
+  }
+  if (page == clipping.endPage) {
+    changed = changed || clipping.endWordIndex != endWord ||
+              (clipping.resolvedLayoutBoundaries & CLIPPING_LAYOUT_END_RESOLVED) == 0;
+    clipping.endWordIndex = endWord;
+    clipping.resolvedLayoutBoundaries |= CLIPPING_LAYOUT_END_RESOLVED;
+  }
+  if ((clipping.resolvedLayoutBoundaries & CLIPPING_LAYOUT_BOUNDARIES_RESOLVED) ==
+          CLIPPING_LAYOUT_BOUNDARIES_RESOLVED &&
+      clipping.layoutSignature != layoutSignature) {
+    clipping.layoutSignature = layoutSignature;
+    changed = true;
+  }
+  return changed;
 }
 
 #define CLIPPINGS ClippingStore::getInstance()

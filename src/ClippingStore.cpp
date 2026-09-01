@@ -180,6 +180,16 @@ const Clipping* ClippingStore::clippingAt(const size_t index) const {
   return &clippings[index];
 }
 
+bool ClippingStore::cacheResolvedLayoutRange(const size_t index, const uint16_t page, const uint16_t startWord,
+                                             const uint16_t endWord, const uint32_t layoutSignature) {
+  if (index >= clippings.size()) return false;
+  if (!cacheClippingResolvedLayoutRange(clippings[index], page, startWord, endWord, layoutSignature)) {
+    return false;
+  }
+  dirty = true;
+  return true;
+}
+
 bool ClippingStore::readClippingText(const size_t index, std::string& out) const {
   const Clipping* clipping = clippingAt(index);
   if (!clipping) return false;
