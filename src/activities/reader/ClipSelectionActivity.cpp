@@ -376,6 +376,10 @@ void ClipSelectionActivity::confirmSelection() {
   if (const auto paragraphIndex = section.getParagraphIndexForPage(result.sectionPage)) {
     result.paragraphIndex = *paragraphIndex;
   }
+  // onExit() restores savedSectionPage so cancelling a clipping does not move
+  // the reader. A confirmed selection instead resumes at the final cursor,
+  // including when that cursor advanced onto the next page.
+  savedSectionPage = startPageInSection + wordStore.words[readingOrder[cursorIdx]].pageIdx;
   setResult(std::move(result));
   finish();
 }
