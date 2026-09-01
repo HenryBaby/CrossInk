@@ -644,7 +644,7 @@ void KOReaderSyncActivity::onExit() {
 
   if (wifiActivated) {
     wifiOff();
-    silentRestartToReader(true);
+    silentRestartToReaderAfterNetwork(true);
   }
 }
 

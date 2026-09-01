@@ -61,9 +61,9 @@ void CalibreConnectActivity::onExit() {
     WiFi.disconnect(false);
     delay(30);
     if (returnToReader) {
-      silentRestartToReader();
+      silentRestartToReaderAfterNetwork();
     } else {
-      silentRestart();
+      silentRestartAfterNetwork();
     }
   }
 }
