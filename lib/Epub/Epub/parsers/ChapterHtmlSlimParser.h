@@ -131,6 +131,7 @@ class ChapterHtmlSlimParser {
     bool hasBackgroundBlack = false, backgroundBlack = false;
     bool hasDirection = false;
     CssTextDirection direction = CssTextDirection::Ltr;
+    bool setsParagraphDirection = false;
     bool hasSup = false, sup = false;
     bool hasSub = false, sub = false;
     bool hasSmallCaps = false, smallCaps = false;

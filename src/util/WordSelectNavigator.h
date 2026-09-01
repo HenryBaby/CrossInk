@@ -312,6 +312,8 @@ class WordSelectNavigator {
   int completedSelectionStart = -1;
   int completedSelectionEnd = -1;
   bool touchDragCursorVisible = false;
+  unsigned long lastWordRepeatTime = 0;
+  bool wordRepeatActive = false;
 
   int findClosestWord(int targetRow) const;
   int findClosestWordFromX(int targetRow, int refCenterX) const;

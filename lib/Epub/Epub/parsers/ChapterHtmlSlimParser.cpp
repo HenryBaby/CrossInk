@@ -296,8 +296,15 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
                            (currentCssStyle.textDecoration & CssTextDecoration::LineThrough) != CssTextDecoration::None;
   effectiveBackgroundBlack =
       honorsPublisherDecorations() && currentCssStyle.hasBackgroundBlack() && currentCssStyle.backgroundBlack;
-  effectiveDirectionDefined = currentCssStyle.hasDirection();
-  effectiveDirection = currentCssStyle.direction;
+  bool paragraphDirectionDefined = false;
+  bool paragraphIsRtl = false;
+  if (blockStyleCount_ > 0) {
+    const auto& blockStyle = blockStyleBuf_[blockStyleCount_ - 1];
+    paragraphDirectionDefined = blockStyle.directionDefined;
+    paragraphIsRtl = blockStyle.isRtl;
+  }
+  effectiveDirectionDefined = paragraphDirectionDefined;
+  effectiveDirection = paragraphIsRtl ? CssTextDirection::Rtl : CssTextDirection::Ltr;
   effectiveSup = currentCssStyle.hasVerticalAlign() && currentCssStyle.verticalAlign == CssVerticalAlign::Super;
   effectiveSub = currentCssStyle.hasVerticalAlign() && currentCssStyle.verticalAlign == CssVerticalAlign::Sub;
   effectiveSmallCaps =
@@ -324,6 +331,10 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
     if (entry.hasDirection) {
       effectiveDirectionDefined = true;
       effectiveDirection = entry.direction;
+      if (entry.setsParagraphDirection) {
+        paragraphDirectionDefined = true;
+        paragraphIsRtl = entry.direction == CssTextDirection::Rtl;
+      }
     }
     if (entry.hasSup) {
       effectiveSup = entry.sup;
@@ -340,13 +351,8 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
 
   if (currentTextBlock && currentTextBlock->isEmpty()) {
     auto& style = currentTextBlock->getBlockStyle();
-    if (effectiveDirectionDefined) {
-      style.directionDefined = true;
-      style.isRtl = effectiveDirection == CssTextDirection::Rtl;
-    } else {
-      style.directionDefined = false;
-      style.isRtl = false;
-    }
+    style.directionDefined = paragraphDirectionDefined;
+    style.isRtl = paragraphIsRtl;
   }
 }
 
@@ -2025,6 +2031,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         cellStyle.backgroundBlack = cssStyle.backgroundBlack;
       }
       ChapterHtmlSlimParser::applyDirectionToEntry(cellStyle, cssStyle);
+      cellStyle.setsParagraphDirection = true;
       ChapterHtmlSlimParser::applySmallCapsToEntry(cellStyle, cssStyle);
       if (self->inlineStyleCount_ < MAX_INLINE_STYLE_DEPTH) {
         self->inlineStyleBuf_[self->inlineStyleCount_++] = cellStyle;
@@ -2857,6 +2864,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         entry.backgroundBlack = cssStyle.backgroundBlack;
       }
       applyDirectionToEntry(entry, cssStyle);
+      entry.setsParagraphDirection = strcmp(name, "html") == 0 || strcmp(name, "body") == 0;
       applySmallCapsToEntry(entry, cssStyle);
       if (cssStyle.hasVerticalAlign()) {
         if (cssStyle.verticalAlign == CssVerticalAlign::Super) {
@@ -2867,7 +2875,6 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
           entry.sub = true;
         }
       }
-      ChapterHtmlSlimParser::applyDirectionToEntry(entry, cssStyle);
       if (self->inlineStyleCount_ < MAX_INLINE_STYLE_DEPTH) {
         self->inlineStyleBuf_[self->inlineStyleCount_++] = entry;
       } else {
@@ -3362,6 +3369,7 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
         self->currentTextBlock->setBlockStyle(style.addBottom(self->blockStyleBuf_[self->blockStyleCount_ - 1]));
       }
       self->blockStyleCount_--;
+      self->updateEffectiveInlineStyle();
     }
   }
   if (self->tableDepth == 1 && strcmp(name, "caption") == 0 && self->currentCompactTable && self->currentTextBlock) {

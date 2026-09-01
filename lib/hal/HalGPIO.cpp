@@ -276,12 +276,14 @@ void HalGPIO::setSharedConfirmPowerShortPressEmitsPower(const bool enabled) {
 bool HalGPIO::isXteinkDevice() const {
   return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
          BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3Uc8279 ||
-         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4;
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4 ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Classic;
 }
 
 bool HalGPIO::hasEdgeSideButtons() const {
   return BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX3 ||
-         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro;
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Pro ||
+         BoardConfig::ACTIVE.board == BoardConfig::Board::XteinkX4Classic;
 }
 
 bool HalGPIO::verifyPowerButtonWakeup(const bool shortPressWakes) {

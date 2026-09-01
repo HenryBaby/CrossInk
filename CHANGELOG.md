@@ -2,6 +2,8 @@
 
 ### Added
 
+- Keyboard layouts can now be enabled in Settings and switched from the keyboard's language key.
+- Xteink X4 Classic support, including its six buttons, SD card, USB Drive, display profile, and board-specific firmware builds.
 - Full Xteink X4 Pro support, including USB Drive access to its SD card and direct USB file transfers.
 - Frontlit readers can choose Never for periodic full-screen refreshes, and Night Mode now applies system-wide for ESP32-S3 devices.
 - Tapping the reader status bar on touch devices now toggles it for the current reading session without changing the page layout.
@@ -14,6 +16,7 @@
 
 ### Changed
 
+- Holding a word-selection direction now repeats, touch Settings tabs have a larger target, and OPDS pickers can add a server in place.
 - Font prewarming now uses a bounded fixed buffer instead of growing temporary strings, reducing heap churn while rendering mixed-style pages.
 - Built-in fonts now use smaller sparse kerning data and stronger offline compression, leaving more firmware flash available without changing text layout.
 - EPUB readers on touch devices now use a half-height, five-tab reader menu, including a More tab for navigation and auto-page-turn actions; the X4 Pro frontlight panel includes reading stats, sync, display inversion, Settings, and touchscreen shortcuts.
@@ -35,6 +38,12 @@
 
 ### Fixed
 
+- Mixed-direction EPUB paragraphs now retain their block reading direction when inline spans change direction.
+- End-of-book suggestions now receive input before reader shortcuts and automatic page turns.
+- Arabic and Persian text no longer lets font ligatures reprocess letters that were already shaped for display.
+- Closing a dictionary definition now releases its temporary SD font caches, including when it shares the reader font.
+- XTCH covers now retain all four grayscale levels instead of being flattened to black and white.
+- Calibre Wireless now shows the full IP address on its own line without shortening the connected network name.
 - Clipping now supports text inside EPUB tables.
 - The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
 - EPUB table-of-contents links now resume at their destination chapters instead of being saved as footnotes.

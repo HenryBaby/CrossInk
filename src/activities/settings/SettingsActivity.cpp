@@ -23,6 +23,7 @@
 #include "FontSelectionActivity.h"
 #include "FrontlightTimePickerActivity.h"
 #include "KOReaderSettingsActivity.h"
+#include "KeyboardLayoutsActivity.h"
 #include "MappedInputManager.h"
 #include "OpdsServerListActivity.h"
 #include "QuickActions.h"
@@ -53,6 +54,7 @@ namespace fui = freeink::ui;
 namespace {
 constexpr fui::ActionId ACTION_ROW = 1;
 constexpr fui::ActionId ACTION_TAB = 2;
+constexpr int16_t TOUCH_TAB_BAR_HEIGHT = 50;
 }  // namespace
 
 const StrId SettingsActivity::categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
@@ -300,7 +302,7 @@ void SettingsActivity::rebuildSettingsLists() {
   const auto allSettings = getSettingsList(&sdFontSystem.registry(), &dictionaryRegistry);
   displaySettings = buildGroupedDisplaySettingsList(allSettings);
 #ifndef SIMULATOR
-  if (BoardConfig::isX4Pro()) {
+  if (BoardConfig::isX4Pro() || CROSSINK_APP_DEVICE_X4CLASSIC) {
     displaySettings.erase(
         std::remove_if(displaySettings.begin(), displaySettings.end(),
                        [](const SettingInfo& setting) { return setting.valuePtr == &CrossPointSettings::fadingFix; }),
@@ -1117,6 +1119,9 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::Language:
         openLanguagePicker();
         break;
+      case SettingAction::KeyboardLayouts:
+        startActivityForResult(std::make_unique<KeyboardLayoutsActivity>(renderer, mappedInput), resultHandler);
+        break;
       case SettingAction::ClockSync:
         startActivityForResult(std::make_unique<ClockSyncActivity>(renderer, mappedInput), resultHandler);
         break;
@@ -1350,8 +1355,9 @@ void SettingsActivity::buildSettingsScreen(UiApp::ScreenType& screen) {
   tabProps.tabInset = fui::Insets{2, 2, 4, 2};
   tabProps.contentInset = fui::Insets{2, 4, 2, 4};
   const int16_t tabLineHeight = screen.target().lineHeight(screen.theme().smallText.font);
-  const int16_t tabBand =
-      static_cast<int16_t>(metrics.tabBarHeight > tabLineHeight + 10 ? metrics.tabBarHeight : tabLineHeight + 10);
+  const int16_t preferredTabHeight =
+      mappedInput.hasTouch() ? TOUCH_TAB_BAR_HEIGHT : static_cast<int16_t>(metrics.tabBarHeight);
+  const int16_t tabBand = preferredTabHeight > tabLineHeight + 10 ? preferredTabHeight : tabLineHeight + 10;
   // Legacy Lyra two-state treatment: with the selection on the tab band, the
   // band fills gray and the active tab is a solid pill; with the selection
   // down in the list, the band is plain and the active tab keeps a gray box

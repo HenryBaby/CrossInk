@@ -19,7 +19,8 @@ constexpr uint32_t SECTION_CACHE_MAGIC = 0x535843FF;  // bytes: 0xFF, "CXS"
 // v62: Text blocks persist source whitespace semantics for font-preview reflow.
 // This changes their serialized payload, so full and suspended section caches
 // must rebuild together.
-constexpr uint8_t SECTION_FILE_VERSION = 62;
+// v63: Paragraph base direction excludes direction changes from inline elements.
+constexpr uint8_t SECTION_FILE_VERSION = 63;
 // Suspended incremental build: valid pages plus LUTs and a parse-watermark trailer.
 // Change this with layout or payload changes so stale partial pages cannot resume
 // under a different layout contract.
