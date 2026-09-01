@@ -2782,7 +2782,36 @@ void EpubReaderActivity::loop() {
     pendingReadFolderMove = false;
   }
 
-  if (automaticPageTurnActive) {
+  // The suggestion menu owns Confirm/Back/navigation before automatic page
+  // turning and reader shortcuts. This keeps a hold from placing a bookmark
+  // or opening dictionary selection behind the menu.
+  const bool endOfBookMenuOpen = atEndOfBook && endOfBookOptions && endOfBookOptions->menuActive();
+  if (endOfBookMenuOpen) {
+    longPressMenuHandled = false;
+    lastPageTurnTime = millis();
+    std::string openPath;
+    switch (endOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
+      case EndOfBookOptions::Action::OpenBook:
+        activityManager.goToReader(openPath);
+        return;
+      case EndOfBookOptions::Action::GoHome:
+        onGoHome();
+        return;
+      case EndOfBookOptions::Action::LastPage:
+        currentSpineIndex = std::max(epub->getSpineItemsCount() - 1, 0);
+        nextPageNumber = 0;
+        pendingPageJump = std::numeric_limits<uint16_t>::max();
+        requestUpdate();
+        return;
+      case EndOfBookOptions::Action::Redraw:
+        requestUpdate();
+        return;
+      case EndOfBookOptions::Action::None:
+        break;
+    }
+  }
+
+  if (automaticPageTurnActive && !endOfBookMenuOpen) {
     if (confirmReleased || (!touch.prev && !touch.next && mappedInput.wasReleased(MappedInputManager::Button::Back)) ||
         ReaderUtils::isTouchMenuGesture(mappedInput)) {
       automaticPageTurnActive = false;
@@ -2814,15 +2843,16 @@ void EpubReaderActivity::loop() {
   }
 #endif
 
-  // Long-press Confirm: execute the configured reader action without opening the menu
-  if (longPressMenuHandled) {
+  // Long-press Confirm: execute the configured reader action without opening the menu.
+  // The end-of-book menu receives the same input first and keeps this shortcut inert.
+  if (!endOfBookMenuOpen && longPressMenuHandled) {
     if (confirmReleased || !mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
       longPressMenuHandled = false;
     }
     return;
   }
 
-  if (confirmReleased) {
+  if (!endOfBookMenuOpen && confirmReleased) {
     if (SETTINGS.longPressMenuAction != CrossPointSettings::LONG_MENU_OFF &&
         mappedInput.getHeldTime() >= longPressMenuMs) {
       const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
@@ -2832,32 +2862,7 @@ void EpubReaderActivity::loop() {
     }
   }
 
-  // While the end screen suggestion menu is showing it owns Confirm/Back/navigation
-  // input. Anything it doesn't handle (e.g. long-press Back) falls through to the
-  // regular handlers below; page turns are absorbed by the end-of-book block.
-  if (atEndOfBook && endOfBookOptions && endOfBookOptions->menuActive()) {
-    std::string openPath;
-    switch (endOfBookOptions->handleMenuInput(mappedInput, &openPath)) {
-      case EndOfBookOptions::Action::OpenBook:
-        activityManager.goToReader(openPath);
-        return;
-      case EndOfBookOptions::Action::GoHome:
-        onGoHome();
-        return;
-      case EndOfBookOptions::Action::LastPage:
-        currentSpineIndex = std::max(epub->getSpineItemsCount() - 1, 0);
-        nextPageNumber = 0;
-        pendingPageJump = std::numeric_limits<uint16_t>::max();
-        requestUpdate();
-        return;
-      case EndOfBookOptions::Action::Redraw:
-        requestUpdate();
-        return;
-      case EndOfBookOptions::Action::None:
-        break;
-    }
-  }
-  if (SETTINGS.longPressMenuAction != CrossPointSettings::LONG_MENU_OFF &&
+  if (!endOfBookMenuOpen && SETTINGS.longPressMenuAction != CrossPointSettings::LONG_MENU_OFF &&
       mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= longPressMenuMs) {
     longPressMenuHandled = true;
     const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
@@ -2867,11 +2872,11 @@ void EpubReaderActivity::loop() {
   }
 
   // Enter reader menu activity.
-  if (confirmReleased || ReaderUtils::isTouchMenuGesture(mappedInput)) {
+  if (!endOfBookMenuOpen && (confirmReleased || ReaderUtils::isTouchMenuGesture(mappedInput))) {
     openReaderMenu();
   }
 
-  if (handleTouchDictionaryLookup()) {
+  if (!endOfBookMenuOpen && handleTouchDictionaryLookup()) {
     return;
   }
 
@@ -3045,7 +3050,8 @@ void EpubReaderActivity::loop() {
   const bool shortPowerTurn = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN && powerReleased &&
                               mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
   const bool shortPowerPrevious = SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE &&
-                                  powerReleased && mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
+                                  powerReleased &&
+                                  mappedInput.getHeldTime() < SETTINGS.getPowerButtonLongPressDuration();
   const bool releasedLongPowerTurn = SETTINGS.longPwrBtn == CrossPointSettings::SHORT_PWRBTN::PAGE_TURN &&
                                      powerReleased &&
                                      mappedInput.getHeldTime() >= SETTINGS.getPowerButtonLongPressDuration();
