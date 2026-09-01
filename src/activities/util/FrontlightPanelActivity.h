@@ -69,6 +69,7 @@ class FrontlightPanelActivity final : public Activity {
   void adjustBrightness(int delta);
   void adjustWarmth(int delta);
   void toggleLight();
+  void toggleReaderTouchscreen();
   void close();
   void activateQuickAction(int index);
   void openSyncDialog();

@@ -63,6 +63,8 @@ class SimulatorSmokeTest {
     Release,
     HomeTap,
     HomeLongPress,
+    AssertTouchscreenDisabled,
+    AssertTouchscreenEnabled,
     OpenSmokeBook,
     DisableReaderTouch,
     EnableReaderTouch,
@@ -286,6 +288,14 @@ class SimulatorSmokeTest {
 
   static ScriptAction homeLongPress() {
     return {ScriptActionType::HomeLongPress, MappedInputManager::Button::Back, nullptr, 0, 0, 0};
+  }
+
+  static ScriptAction assertTouchscreenDisabled() {
+    return {ScriptActionType::AssertTouchscreenDisabled, MappedInputManager::Button::Back, nullptr, 0, 0, 0};
+  }
+
+  static ScriptAction assertTouchscreenEnabled() {
+    return {ScriptActionType::AssertTouchscreenEnabled, MappedInputManager::Button::Back, nullptr, 0, 0, 0};
   }
 
   static ScriptAction openSmokeBook() {
@@ -544,6 +554,39 @@ class SimulatorSmokeTest {
     scriptIndex = 0;
     inputCompletionStep = SmokeStep::FileBrowserSettings;
 
+    if (mappedInputManager.hasHomeKey()) {
+      const int width = renderer.getScreenWidth();
+      const int height = renderer.getScreenHeight();
+      inputScript.push_back(touchDown(width / 2, 8));
+      inputScript.push_back(touchMove(width / 2, height / 4));
+      inputScript.push_back(touchRelease(width / 2, height / 4));
+      inputScript.push_back(render("Frontlight Panel opened outside Reader", 4));
+      inputScript.push_back(assertActivity("FrontlightPanel"));
+      inputScript.push_back(touchDown(width * 9 / 10, height / 2));
+      inputScript.push_back(touchRelease(width * 9 / 10, height / 2));
+      inputScript.push_back(render("Reader touchscreen disabled from Frontlight Panel outside Reader", 4));
+      inputScript.push_back(assertActivity("FrontlightPanel"));
+      inputScript.push_back(touchDown(width / 2, height - 60));
+      inputScript.push_back(touchRelease(width / 2, height - 60));
+      inputScript.push_back(render("File Browser restored after disabling reader touchscreen", 4));
+      inputScript.push_back(assertActivity("FileBrowser"));
+      inputScript.push_back(assertTouchscreenDisabled());
+      inputScript.push_back(touchDown(width / 2, 8));
+      inputScript.push_back(touchMove(width / 2, height / 4));
+      inputScript.push_back(touchRelease(width / 2, height / 4));
+      inputScript.push_back(render("Frontlight Panel reopened outside Reader", 4));
+      inputScript.push_back(assertActivity("FrontlightPanel"));
+      inputScript.push_back(touchDown(width * 9 / 10, height / 2));
+      inputScript.push_back(touchRelease(width * 9 / 10, height / 2));
+      inputScript.push_back(render("Reader touchscreen enabled from Frontlight Panel outside Reader", 4));
+      inputScript.push_back(assertActivity("FrontlightPanel"));
+      inputScript.push_back(touchDown(width / 2, height - 60));
+      inputScript.push_back(touchRelease(width / 2, height - 60));
+      inputScript.push_back(render("File Browser restored after enabling reader touchscreen", 4));
+      inputScript.push_back(assertActivity("FileBrowser"));
+      inputScript.push_back(assertTouchscreenEnabled());
+    }
+
     const Rect header = TouchHeaderBackButton::headerRect(renderer, mappedInputManager);
     const auto backLayout = TouchHeaderBackButton::layout(header);
     const int x = header.x + header.width - backLayout.iconRect.width / 2;
@@ -579,6 +622,12 @@ class SimulatorSmokeTest {
         break;
       case ScriptActionType::HomeLongPress:
         simulatorHomeKeyInput.injectLongPress();
+        break;
+      case ScriptActionType::AssertTouchscreenDisabled:
+        if (!SETTINGS.disableReaderTouchscreen) fail("Expected reader touchscreen to be disabled");
+        break;
+      case ScriptActionType::AssertTouchscreenEnabled:
+        if (SETTINGS.disableReaderTouchscreen) fail("Expected reader touchscreen to be enabled");
         break;
       case ScriptActionType::OpenSmokeBook: {
         const char* bookPath = std::getenv("CROSSINK_SIMULATOR_SMOKE_BOOK");

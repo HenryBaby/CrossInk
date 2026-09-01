@@ -11,6 +11,8 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "activities/RenderLock.h"
+#include "activities/home/BookActions.h"
 #include "activities/settings/SettingsActivity.h"
 #include "components/DrawerHandle.h"
 #include "components/HeaderDate.h"
@@ -95,8 +97,8 @@ void FrontlightPanelActivity::onEnter() {
 void FrontlightPanelActivity::onExit() {
   // Debounced persistence: one SPIFFS write on close, never per slider tick.
   const bool inversionChanged = initialInversion != static_cast<bool>(SETTINGS.screenInverted);
-  const bool touchscreenChanged = context.activeEpub && initialTouchscreenDisabled != pendingTouchscreenDisabled;
-  if (context.activeEpub) SETTINGS.disableReaderTouchscreen = pendingTouchscreenDisabled ? 1 : 0;
+  const bool touchscreenChanged = initialTouchscreenDisabled != pendingTouchscreenDisabled;
+  SETTINGS.disableReaderTouchscreen = pendingTouchscreenDisabled ? 1 : 0;
   const bool frontlightChanged =
       !context.showReaderDetails && (SETTINGS.frontlightBrightness != brightness ||
                                      SETTINGS.frontlightWarmth != warmth || SETTINGS.frontlightOn != (lightOn ? 1 : 0));
@@ -184,6 +186,18 @@ void FrontlightPanelActivity::toggleLight() {
   requestUpdate();
 }
 
+void FrontlightPanelActivity::toggleReaderTouchscreen() {
+  pendingTouchscreenDisabled = !pendingTouchscreenDisabled;
+  {
+    RenderLock lock;
+    BookActions::drawToast(renderer,
+                           pendingTouchscreenDisabled ? tr(STR_TOUCHSCREEN_DISABLED) : tr(STR_TOUCHSCREEN_ENABLED));
+    renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+  }
+  delay(1000);
+  requestUpdate();
+}
+
 void FrontlightPanelActivity::close() { finish(); }
 
 void FrontlightPanelActivity::openReadingStats() {
@@ -263,10 +277,7 @@ void FrontlightPanelActivity::activateQuickAction(const int index) {
       openGlobalSettings();
       return;
     case 4:
-      if (context.activeEpub) {
-        pendingTouchscreenDisabled = !pendingTouchscreenDisabled;
-        requestUpdate();
-      }
+      toggleReaderTouchscreen();
       return;
   }
 }
