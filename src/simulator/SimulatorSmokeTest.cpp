@@ -349,6 +349,14 @@ class SimulatorSmokeTest {
         inputScript.push_back(touchRelease(width / 2, height / 4));
         inputScript.push_back(render("Frontlight Panel opened from touch gesture", 4));
         inputScript.push_back(assertActivity("FrontlightPanel"));
+        inputScript.push_back(homeTap());
+        inputScript.push_back(render("Reader restored by simulated Home key tap in Frontlight Panel", 4));
+        inputScript.push_back(assertActivity("EpubReader"));
+        inputScript.push_back(touchDown(width / 2, 8));
+        inputScript.push_back(touchMove(width / 2, height / 4));
+        inputScript.push_back(touchRelease(width / 2, height / 4));
+        inputScript.push_back(render("Frontlight Panel reopened after simulated Home key tap", 4));
+        inputScript.push_back(assertActivity("FrontlightPanel"));
         inputScript.push_back(touchDown(20, height / 3));
         inputScript.push_back(touchMove(20, 8));
         inputScript.push_back(touchRelease(20, 8));

@@ -22,6 +22,7 @@
 #include "components/icons/frontlightHeaderIcons.h"
 #include "components/icons/listIcons.h"
 #include "components/icons/tablerIcons.h"
+#include "components/icons/touchHeaderIcons.h"
 #include "components/icons/touchscreenStateIcons.h"
 
 namespace fui = freeink::ui;
@@ -36,7 +37,7 @@ constexpr fui::ActionId ACTION_QUICK = 6;
 constexpr fui::ActionId ACTION_DISMISS = 7;
 constexpr int BRIGHTNESS_STEP = 5;
 constexpr int FINE_STEP = 1;
-constexpr int HEADER_ICON_SIZE = 24;
+constexpr int HEADER_ICON_SIZE = 32;
 constexpr int HEADER_BUTTON_WIDTH = 64;
 constexpr int HEADER_CONTENT_BOTTOM_GAP = 8;
 constexpr int ACTION_BAR_HEIGHT = 58;
@@ -271,10 +272,6 @@ void FrontlightPanelActivity::activateQuickAction(const int index) {
 }
 
 bool FrontlightPanelActivity::handleHomeGesture() {
-  if (context.activeEpub) {
-    activityManager.goHome();
-    return true;
-  }
   close();
   return true;
 }
@@ -289,9 +286,10 @@ void FrontlightPanelActivity::loop() {
     requestUpdate();
   }
 
-  const Rect homeButton = homeButtonRect();
-  if (context.activeEpub && mappedInput.wasTapInRect(homeButton.x, homeButton.y, homeButton.width, homeButton.height)) {
-    activityManager.goHome();
+  const Rect dismissButton = dismissButtonRect();
+  if (context.activeEpub &&
+      mappedInput.wasTapInRect(dismissButton.x, dismissButton.y, dismissButton.width, dismissButton.height)) {
+    close();
     return;
   }
 
@@ -336,7 +334,7 @@ void FrontlightPanelActivity::loop() {
                                        [this] { adjustBrightness(BRIGHTNESS_STEP); });
 }
 
-Rect FrontlightPanelActivity::homeButtonRect() const {
+Rect FrontlightPanelActivity::dismissButtonRect() const {
   const auto& metrics = UITheme::getInstance().getMetrics();
   return Rect{renderer.getScreenWidth() - HEADER_BUTTON_WIDTH, metrics.topPadding, HEADER_BUTTON_WIDTH,
               TouchHeaderBackButton::height(metrics, mappedInput)};
@@ -529,11 +527,11 @@ void FrontlightPanelActivity::drawHeader() {
   UITheme::drawCenteredText(renderer, header, titleFontId, titleY, title, true);
 
   if (context.activeEpub) {
-    const Rect button = homeButtonRect();
+    const Rect button = dismissButtonRect();
     uiTarget.bitmap(fui::Rect{static_cast<int16_t>(button.x + (button.width - HEADER_ICON_SIZE) / 2),
                               static_cast<int16_t>(headerBottom - HEADER_CONTENT_BOTTOM_GAP - HEADER_ICON_SIZE),
                               HEADER_ICON_SIZE, HEADER_ICON_SIZE},
-                    fui::bitmapFromIcon(icon_home_24), fui::BitmapMode::Center);
+                    fui::bitmapFromIcon(icon_back_32), fui::BitmapMode::Center);
   }
 }
 
