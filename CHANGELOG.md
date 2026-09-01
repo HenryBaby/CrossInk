@@ -36,6 +36,7 @@
 
 ### Fixed
 
+- XTCH covers now retain all four grayscale levels instead of being flattened to black and white.
 - Calibre Wireless now shows the full IP address on its own line without shortening the connected network name.
 - Clipping now supports text inside EPUB tables.
 - The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
