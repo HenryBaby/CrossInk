@@ -44,6 +44,7 @@
 - Closing a dictionary definition now releases its temporary SD font caches, including when it shares the reader font.
 - XTCH covers now retain all four grayscale levels instead of being flattened to black and white.
 - Calibre Wireless now shows the full IP address on its own line without shortening the connected network name.
+- File Transfer options that do not fit at Large UI scale can now be reached by touchscreen scrolling.
 - Clipping now supports text inside EPUB tables.
 - The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
 - EPUB table-of-contents links now resume at their destination chapters instead of being saved as footnotes.
