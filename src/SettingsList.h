@@ -495,6 +495,7 @@ inline uint8_t shortcutRawValue(const ShortcutOptionCatalog catalog, const Cross
       break;
     case ShortcutOptionCatalog::HomeButton:
       switch (action) {
+        case Action::SLEEP:
         case Action::TOGGLE_TILT_PAGE_TURN:
         case Action::TOGGLE_HOME_BUTTON_IN_READER:
         case Action::TOGGLE_FRONTLIGHT:
