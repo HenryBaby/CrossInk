@@ -35,6 +35,7 @@
 
 ### Fixed
 
+- Calibre Wireless now shows the full IP address on its own line without shortening the connected network name.
 - Clipping now supports text inside EPUB tables.
 - The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
 - EPUB table-of-contents links now resume at their destination chapters instead of being saved as footnotes.
