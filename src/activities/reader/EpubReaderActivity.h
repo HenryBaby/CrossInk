@@ -302,7 +302,7 @@ class EpubReaderActivity final : public Activity {
   uint16_t preparedNextViewportWidth = 0;
   uint16_t preparedNextViewportHeight = 0;
 
-  void renderContents(std::unique_ptr<Page> page, int fontId, int orientedMarginTop, int orientedMarginRight,
+  bool renderContents(std::unique_ptr<Page> page, int fontId, int orientedMarginTop, int orientedMarginRight,
                       int orientedMarginBottom, int orientedMarginLeft, bool updatePanel);
   bool ensureGrayscaleStripScratch();
   void releaseGrayscaleStripScratch(bool force = false);

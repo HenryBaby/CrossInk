@@ -6146,8 +6146,19 @@ void EpubReaderActivity::render(RenderLock&& lock) {
     }
 
     const int renderFontId = activeSectionFontId != 0 ? activeSectionFontId : SETTINGS.getReaderFontId();
-    renderContents(std::move(p), renderFontId, layout.marginTop, layout.marginRight, layout.marginBottom,
-                   layout.marginLeft, /*updatePanel=*/true);
+    if (!renderContents(std::move(p), renderFontId, layout.marginTop, layout.marginRight, layout.marginBottom,
+                        layout.marginLeft, /*updatePanel=*/true)) {
+      currentPageFootnotes.clear();
+#if CROSSINK_APP_CAP_TOUCH
+      currentPageFootnoteTouchTargets.fill({});
+#endif
+      renderer.clearScreen(ReaderUtils::readerBackgroundColor());
+      GUI.drawPopup(renderer, renderer.isSdCardFont(renderFontId) ? tr(STR_MEMORY_ERROR) : tr(STR_PAGE_LOAD_ERROR));
+      renderer.displayBuffer();
+      automaticPageTurnActive = false;
+      showPendingSyncSaveError();
+      return;
+    }
     lastRenderCompleteMs = millis();
     const uint8_t heapShapeRedrawStages = pendingHeapShapeReaderRedrawStages.exchange(0, std::memory_order_relaxed);
     if (heapShapeRedrawStages & HEAP_SHAPE_REDRAW_CLIP) {
@@ -6318,6 +6329,7 @@ void EpubReaderActivity::silentIndexNextChapterIfNeeded(const uint16_t viewportW
     renderer.clearScreen(ReaderUtils::readerBackgroundColor());
     renderer.drawCenteredText(UI_12_FONT_ID, renderer.getScreenHeight() / 2, tr(STR_PAGE_LOAD_ERROR),
                               ReaderUtils::readerForegroundBlack(), EpdFontFamily::BOLD);
+    renderer.displayBuffer();
   }
 
   if (prefetchCancelled) {
@@ -6369,9 +6381,8 @@ bool EpubReaderActivity::restoreCurrentPageBufferAfterSilentIndex() {
   const ReaderViewportLayout layout = computeReaderViewportLayout(renderer, automaticPageTurnActive);
   renderer.clearScreen(ReaderUtils::readerBackgroundColor());
   const int renderFontId = activeSectionFontId != 0 ? activeSectionFontId : SETTINGS.getReaderFontId();
-  renderContents(std::move(page), renderFontId, layout.marginTop, layout.marginRight, layout.marginBottom,
-                 layout.marginLeft, /*updatePanel=*/false);
-  return true;
+  return renderContents(std::move(page), renderFontId, layout.marginTop, layout.marginRight, layout.marginBottom,
+                        layout.marginLeft, /*updatePanel=*/false);
 }
 
 bool EpubReaderActivity::isRelayoutCatchUpComplete() const {
@@ -6633,7 +6644,7 @@ void EpubReaderActivity::prepareCurrentSectionForRelayout() {
   cacheCurrentSectionPosition();
 }
 
-void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fontId, const int orientedMarginTop,
+bool EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fontId, const int orientedMarginTop,
                                         const int orientedMarginRight, const int orientedMarginBottom,
                                         const int orientedMarginLeft, const bool updatePanel) {
 #if CROSSINK_APP_CAP_TOUCH
@@ -6652,14 +6663,35 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   }
 #endif
   // Font prewarm: scan pass accumulates text, then prewarm, then real render.
-  // Prewarming is an optimization, so a missing cache manager just skips it.
+  // SD fonts depend on the prepared bitmap cache; drawing after a failed
+  // prewarm would turn every unavailable glyph into a replacement symbol.
+  std::optional<FontCacheManager::PrewarmScope> pageRenderScope;
   if (auto* fcm = renderer.getFontCacheManager()) {
-    auto scope = fcm->createPrewarmScope();
-    page->renderText(renderer, fontId, orientedMarginLeft, orientedMarginTop);  // scan pass
-    // The status-bar title can route to the same SD fallback as the page. Scan
-    // it into this batch before rendering so it does not evict page glyphs.
-    renderStatusBar();
-    scope.endScanAndPrewarm();
+    const auto prewarmVisibleText = [&]() {
+      pageRenderScope.emplace(*fcm, FontCacheManager::PreparationPolicy::Normal);
+      page->renderText(renderer, fontId, orientedMarginLeft, orientedMarginTop);  // scan pass
+      // The status-bar title can route to the same SD fallback as the page. Scan
+      // it into this batch before rendering so it does not evict page glyphs.
+      renderStatusBar();
+      if (!pageRenderScope->endScanAndPrewarm()) {
+        pageRenderScope.reset();
+        return false;
+      }
+      return true;
+    };
+
+    bool prewarmSucceeded = prewarmVisibleText();
+    if (!prewarmSucceeded && renderer.isSdCardFont(fontId)) {
+      LOG_ERR("ERS", "SD-font page prewarm failed (font=%d free=%u maxAlloc=%u); releasing caches and retrying", fontId,
+              ESP.getFreeHeap(), ESP.getMaxAllocHeap());
+      renderer.releaseSdCardFontForLowMemory(fontId, /*preserveAdvanceTable=*/true);
+      prewarmSucceeded = prewarmVisibleText();
+    }
+    if (!prewarmSucceeded) {
+      LOG_ERR("ERS", "Font page prewarm failed after retry (font=%d free=%u maxAlloc=%u)", fontId, ESP.getFreeHeap(),
+              ESP.getMaxAllocHeap());
+      return false;
+    }
   }
 
 #if CROSSINK_APP_CAP_TOUCH
@@ -6741,7 +6773,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
     drawRenderModeToastBuffer(labelForRenderModeToast(normalizeRenderMode(renderModeToastMode)));
   }
   if (!updatePanel) {
-    return;
+    return true;
   }
   if (pageHasImages) {
     // Double FAST_REFRESH with selective image blanking (pablohc's technique):
@@ -6805,7 +6837,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
   if (runTiledGrayscalePass(renderer, *page, fontId, orientedMarginLeft, orientedMarginTop, foregroundBlack,
                             needsTextGrayscale, needsImageGrayscale, grayscaleStripScratch.get(),
                             grayscaleStripScratchSize, overlapRefresh)) {
-    return;
+    return true;
   }
 
   // Save bw buffer to reset buffer state after grayscale data sync
@@ -6839,6 +6871,7 @@ void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fo
       renderer.restoreBwBuffer();
     }
   }
+  return true;
 }
 
 #if CROSSINK_APP_CAP_TOUCH
