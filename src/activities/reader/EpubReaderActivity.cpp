@@ -120,7 +120,8 @@ constexpr int PUBLISHER_PAGE_NUMBER_X = 5;
 constexpr uint16_t CLIP_ADVANCE_CODEPOINT_CAPACITY = 256;
 
 int publisherPageNumberX(const GfxRenderer& renderer) {
-#if defined(FREEINK_DEVICE_X4PRO) && FREEINK_DEVICE_X4PRO
+#if (defined(FREEINK_DEVICE_X4PRO) && FREEINK_DEVICE_X4PRO) || \
+    (defined(FREEINK_DEVICE_X4CLASSIC) && FREEINK_DEVICE_X4CLASSIC)
   if (renderer.getOrientation() == GfxRenderer::Orientation::LandscapeCounterClockwise) {
     return PUBLISHER_PAGE_NUMBER_X + 5;
   }

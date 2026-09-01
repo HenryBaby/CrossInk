@@ -24,6 +24,8 @@
 #include <builtinFonts/all.h>
 #include <uzlib.h>
 
+#include "AppCapabilities.h"
+
 #ifdef SIMULATOR
 using esp_reset_reason_t = int;
 using esp_sleep_wakeup_cause_t = int;
@@ -1140,8 +1142,12 @@ void setup() {
 #endif
 
 #ifndef SIMULATOR
-  const auto recoveryButton =
-      BoardConfig::isX4Pro() ? MappedInputManager::Button::Down : MappedInputManager::Button::Up;
+  // X4 Pro and X4 Classic both map Up to the GPIO0 boot strap. Use Down for
+  // recovery so holding the recovery chord cannot strand either S3 board in a
+  // boot-mode loop.
+  const auto recoveryButton = (BoardConfig::isX4Pro() || CROSSINK_APP_DEVICE_X4CLASSIC)
+                                  ? MappedInputManager::Button::Down
+                                  : MappedInputManager::Button::Up;
   const bool recoveryFirmwareMode = wakeupReason == HalGPIO::WakeupReason::PowerButton && !BoardConfig::isPaperMono() &&
                                     mappedInputManager.isPressed(recoveryButton);
 #else
@@ -1242,7 +1248,8 @@ void setup() {
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
   if (recoveryFirmwareMode) {
-    LOG_INF("MAIN", "Recovery firmware mode (%s + POWER held at boot)", BoardConfig::isX4Pro() ? "DOWN" : "UP");
+    LOG_INF("MAIN", "Recovery firmware mode (%s + POWER held at boot)",
+            (BoardConfig::isX4Pro() || CROSSINK_APP_DEVICE_X4CLASSIC) ? "DOWN" : "UP");
   }
 
   LOG_DBG("MAIN", "Starting CrossInk version " CROSSINK_VERSION);

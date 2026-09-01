@@ -2,6 +2,7 @@
 
 ### Added
 
+- Xteink X4 Classic support, including its six buttons, SD card, USB Drive, display profile, and board-specific firmware builds.
 - Full Xteink X4 Pro support, including USB Drive access to its SD card and direct USB file transfers.
 - Frontlit readers can choose Never for periodic full-screen refreshes, and Night Mode now applies system-wide for ESP32-S3 devices.
 - Tapping the reader status bar on touch devices now toggles it for the current reading session without changing the page layout.
