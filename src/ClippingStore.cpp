@@ -156,26 +156,6 @@ ClippingStore::AddResult ClippingStore::addClipping(const uint16_t spineIndex, c
   return AddResult::Added;
 }
 
-bool ClippingStore::stampMissingLayoutSignature(const uint32_t layoutSignature) {
-  if (layoutSignature == 0) return true;
-
-  bool changed = false;
-  for (Clipping& clipping : clippings) {
-    if (clipping.layoutSignature == 0) {
-      clipping.layoutSignature = layoutSignature;
-      changed = true;
-    }
-  }
-  if (!changed) return true;
-
-  dirty = true;
-  if (writeToFile()) {
-    dirty = false;
-    return true;
-  }
-  return false;
-}
-
 bool ClippingStore::removeClippingAt(const size_t index) {
   if (index >= clippings.size()) return false;
   Clipping clipping = std::move(clippings[index]);

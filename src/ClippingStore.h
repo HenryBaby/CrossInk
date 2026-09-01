@@ -12,6 +12,15 @@ inline constexpr size_t CLIPPING_CHAPTER_TITLE_MAX = 48;
 inline constexpr size_t CLIPPING_TEXT_MAX = 4U * 1024U;
 inline constexpr uint16_t CLIPPING_MAX_PER_BOOK = 256;
 inline constexpr uint16_t CLIPPING_MAX_PAGE_MATCHES = 16;
+inline constexpr uint32_t CLIPPING_WORD_LAYOUT_VERSION = 2;
+
+inline uint32_t clippingWordLayoutSignature(const uint32_t readerLayoutSignature) {
+  if (readerLayoutSignature == 0) return 0;
+  uint32_t signature = readerLayoutSignature;
+  signature ^= CLIPPING_WORD_LAYOUT_VERSION;
+  signature *= 16777619U;
+  return signature == 0 ? 1 : signature;
+}
 
 struct Clipping {
   uint16_t spineIndex = 0;
@@ -54,7 +63,6 @@ class ClippingStore {
   AddResult addClipping(uint16_t spineIndex, uint16_t startPage, uint16_t endPage, uint16_t pageCount,
                         uint16_t startWordIndex, uint16_t endWordIndex, uint16_t wordCount, const char* chapterTitle,
                         uint16_t paragraphIndex, const std::string& text, uint32_t layoutSignature);
-  bool stampMissingLayoutSignature(uint32_t layoutSignature);
   bool removeClippingAt(size_t index);
   bool saveToFile();
   void clearAll();
@@ -91,9 +99,10 @@ class ClippingStore {
 inline bool clippingStoredRangeMatchesLayout(const Clipping& clipping, const uint16_t currentPageCount,
                                              const uint32_t currentLayoutSignature) {
   if (clipping.pageCount != currentPageCount) return false;
-  // Versions 1-2 predate layout signatures. Preserve their fast path until a
-  // reader relayout stamps the layout they were displayed with.
-  return clipping.layoutSignature == 0 || currentLayoutSignature == 0 ||
+  // Legacy records have no signature, so their body-only word ordinals cannot
+  // be trusted now that table words participate in clipping. Their saved text
+  // is used to find the highlight instead.
+  return clipping.layoutSignature != 0 && currentLayoutSignature != 0 &&
          clipping.layoutSignature == currentLayoutSignature;
 }
 

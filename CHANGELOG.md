@@ -35,6 +35,7 @@
 
 ### Fixed
 
+- Clipping now supports text inside EPUB tables.
 - The reader spacing menu now identifies its line and word spacing controls with compact localized labels.
 - EPUB table-of-contents links now resume at their destination chapters instead of being saved as footnotes.
 - EPUB chapter-skip gestures now move past all split sections in the current chapter.

@@ -22,6 +22,7 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <type_traits>
 
 #include "../settings/DictionarySelectActivity.h"
 #include "../settings/KOReaderSettingsActivity.h"
@@ -46,6 +47,7 @@
 #include "LookedUpWordsActivity.h"
 #include "MappedInputManager.h"
 #include "NearbyBookPositionSyncActivity.h"
+#include "PageWordGeometry.h"
 #include "ProgressMapper.h"
 #include "QrDisplayActivity.h"
 #include "QuickActions.h"
@@ -461,14 +463,17 @@ ClippingTextMatcher::TokenFragmentResult matchPageWordToToken(const TextBlock& b
 }
 
 template <typename Callback>
+bool forEachPageTextLine(const Page& page, Callback&& callback) {
+  using CallbackType = std::remove_reference_t<Callback>;
+  return page.forEachTextLine(
+      [](const PageTextLine& line, void* context) { return (*static_cast<CallbackType*>(context))(line); }, &callback);
+}
+
+template <typename Callback>
 bool forEachVisiblePageWord(const Page& page, Callback&& callback) {
   uint16_t wordIndex = 0;
-  for (const auto& element : page.elements) {
-    if (element->getTag() != TAG_PageLine) continue;
-    const auto& line = static_cast<const PageLine&>(*element);
-    if (!line.getBlock()) continue;
-
-    const auto& block = *line.getBlock();
+  return forEachPageTextLine(page, [&](const PageTextLine& line) {
+    const auto& block = *line.block;
     const uint16_t count = block.wordCount();
     for (uint16_t i = 0; i < count; ++i) {
       const char* word = block.wordText(i);
@@ -487,8 +492,8 @@ bool forEachVisiblePageWord(const Page& page, Callback&& callback) {
       }
       wordIndex++;
     }
-  }
-  return true;
+    return true;
+  });
 }
 
 bool matchClipRunFromPageWord(const Page& page, const std::string& clippingText, const uint16_t startPageWord,
@@ -506,31 +511,32 @@ bool matchClipRunFromPageWord(const Page& page, const std::string& clippingText,
   bool reachedClipEnd = false;
   bool stoppedByMismatch = false;
 
-  forEachVisiblePageWord(page, [&](const uint16_t wordIndex, const PageLine&, const TextBlock& block, const size_t i) {
-    if (wordIndex < startPageWord) {
-      return true;
-    }
+  forEachVisiblePageWord(
+      page, [&](const uint16_t wordIndex, const PageTextLine&, const TextBlock& block, const size_t i) {
+        if (wordIndex < startPageWord) {
+          return true;
+        }
 
-    const auto fragmentResult = matchPageWordToToken(block, static_cast<uint16_t>(i), token, tokenLen, tokenOffset);
-    if (fragmentResult.match == ClippingTextMatcher::TokenFragmentMatch::MISMATCH) {
-      stoppedByMismatch = true;
-      return false;
-    }
+        const auto fragmentResult = matchPageWordToToken(block, static_cast<uint16_t>(i), token, tokenLen, tokenOffset);
+        if (fragmentResult.match == ClippingTextMatcher::TokenFragmentMatch::MISMATCH) {
+          stoppedByMismatch = true;
+          return false;
+        }
 
-    lastWord = wordIndex;
-    if (fragmentResult.match == ClippingTextMatcher::TokenFragmentMatch::CONTINUES_TOKEN) {
-      tokenOffset += fragmentResult.tokenBytes;
-      return true;
-    }
+        lastWord = wordIndex;
+        if (fragmentResult.match == ClippingTextMatcher::TokenFragmentMatch::CONTINUES_TOKEN) {
+          tokenOffset += fragmentResult.tokenBytes;
+          return true;
+        }
 
-    matchedTokens++;
-    tokenOffset = 0;
-    if (!nextClipToken(cursor, token, tokenLen)) {
-      reachedClipEnd = true;
-      return false;
-    }
-    return true;
-  });
+        matchedTokens++;
+        tokenOffset = 0;
+        if (!nextClipToken(cursor, token, tokenLen)) {
+          reachedClipEnd = true;
+          return false;
+        }
+        return true;
+      });
 
   if (matchedTokens == 0) {
     return false;
@@ -569,32 +575,33 @@ bool findClippingTextOnPage(const Page& page, const std::string& clippingText, C
 
   bool found = false;
 
-  forEachVisiblePageWord(page, [&](const uint16_t wordIndex, const PageLine&, const TextBlock& block, const size_t i) {
-    const char* cursor = clippingText.c_str();
-    const char* token = nullptr;
-    size_t tokenLen = 0;
-    uint16_t tokenIndex = 0;
-    while (nextClipToken(cursor, token, tokenLen)) {
-      if (tokenIndex >= tokenCount) {
-        break;
-      }
-      if (matchPageWordToToken(block, static_cast<uint16_t>(i), token, tokenLen).match !=
-              ClippingTextMatcher::TokenFragmentMatch::MISMATCH &&
-          matchClipRunFromPageWord(page, clippingText, wordIndex, tokenIndex, minPartialMatch, match)) {
-        found = true;
-        return false;
-      }
-      tokenIndex++;
-    }
-    return true;
-  });
+  forEachVisiblePageWord(
+      page, [&](const uint16_t wordIndex, const PageTextLine&, const TextBlock& block, const size_t i) {
+        const char* cursor = clippingText.c_str();
+        const char* token = nullptr;
+        size_t tokenLen = 0;
+        uint16_t tokenIndex = 0;
+        while (nextClipToken(cursor, token, tokenLen)) {
+          if (tokenIndex >= tokenCount) {
+            break;
+          }
+          if (matchPageWordToToken(block, static_cast<uint16_t>(i), token, tokenLen).match !=
+                  ClippingTextMatcher::TokenFragmentMatch::MISMATCH &&
+              matchClipRunFromPageWord(page, clippingText, wordIndex, tokenIndex, minPartialMatch, match)) {
+            found = true;
+            return false;
+          }
+          tokenIndex++;
+        }
+        return true;
+      });
 
   return found;
 }
 
 uint16_t countVisiblePageWords(const Page& page) {
   uint16_t count = 0;
-  forEachVisiblePageWord(page, [&](const uint16_t, const PageLine&, const TextBlock&, const size_t) {
+  forEachVisiblePageWord(page, [&](const uint16_t, const PageTextLine&, const TextBlock&, const size_t) {
     if (count == UINT16_MAX) return false;
     count++;
     return true;
@@ -4178,7 +4185,7 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
   std::string chapterTitle;
   std::unique_ptr<ClipAdvanceCollector> advanceCollector;
   uint8_t clipAdvanceCapLoggedStyles = 0;
-  uint32_t clippingLayoutSignature = activeSectionLayoutSignature;
+  uint32_t clippingLayoutSignature = clippingWordLayoutSignature(activeSectionLayoutSignature);
 
   MemoryBudget::logHeapShape("clip.before");
 
@@ -4237,12 +4244,8 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
 
       if (advanceCollector) {
         advanceCollector->reset();
-        for (const auto& element : page->elements) {
-          if (element->getTag() != TAG_PageLine) continue;
-          const auto& line = static_cast<const PageLine&>(*element);
-          if (!line.getBlock()) continue;
-
-          const auto& block = *line.getBlock();
+        forEachPageTextLine(*page, [&](const PageTextLine& line) {
+          const auto& block = *line.block;
           for (uint16_t i = 0; i < block.wordCount(); ++i) {
             const uint8_t style = static_cast<uint8_t>(block.wordStyle(i)) & 0x03;
             const char* wordText = block.wordText(i);
@@ -4256,7 +4259,8 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
               }
             }
           }
-        }
+          return true;
+        });
         for (uint8_t style = 0; style < ClipAdvanceCollector::STYLE_COUNT; ++style) {
           if ((advanceCollector->truncatedStyles & static_cast<uint8_t>(1U << style)) &&
               (clipAdvanceCapLoggedStyles & static_cast<uint8_t>(1U << style)) == 0) {
@@ -4280,18 +4284,15 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
       size_t pageTextBytes = 0;
       const size_t remainingWords = maxSelectableWords - wordStore.words.size();
       size_t pageSelectableWords = 0;
-      for (const auto& element : page->elements) {
-        if (element->getTag() != TAG_PageLine) continue;
-        const auto& line = static_cast<const PageLine&>(*element);
-        if (!line.getBlock()) continue;
-        const auto& block = *line.getBlock();
+      forEachPageTextLine(*page, [&](const PageTextLine& line) {
+        const auto& block = *line.block;
         for (uint16_t i = 0; i < block.wordCount(); ++i) {
           const char* wordText = block.wordText(i);
           if (!hasVisibleWordText(wordText)) continue;
-          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-          if (renderer.getTextAdvanceX(readerFontId, wordText, textStyle) > 0) ++pageSelectableWords;
+          if (pageWordGeometry(renderer, readerFontId, line, block, i).width > 0) ++pageSelectableWords;
         }
-      }
+        return true;
+      });
       size_t firstWordToKeep = 0;
       size_t wordsToKeep = 0;
       if (dictionaryRequest) {
@@ -4317,16 +4318,13 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
       }
       size_t selectableWordIndex = 0;
       size_t estimatedWords = 0;
-      for (const auto& element : page->elements) {
-        if (estimatedWords >= wordsToKeep || element->getTag() != TAG_PageLine) continue;
-        const auto& line = static_cast<const PageLine&>(*element);
-        if (!line.getBlock()) continue;
-        const auto& block = *line.getBlock();
+      forEachPageTextLine(*page, [&](const PageTextLine& line) {
+        if (estimatedWords >= wordsToKeep) return false;
+        const auto& block = *line.block;
         for (uint16_t i = 0; i < block.wordCount() && estimatedWords < wordsToKeep; ++i) {
           const char* wordText = block.wordText(i);
           if (!hasVisibleWordText(wordText)) continue;
-          const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-          if (renderer.getTextAdvanceX(readerFontId, wordText, textStyle) <= 0) continue;
+          if (pageWordGeometry(renderer, readerFontId, line, block, i).width <= 0) continue;
           if (selectableWordIndex++ < firstWordToKeep) continue;
 
           const size_t wordBytes = strlen(wordText) + 1;
@@ -4337,26 +4335,23 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           pageTextBytes += wordBytes;
           estimatedWords++;
         }
-      }
+        return estimatedWords < wordsToKeep;
+      });
       const size_t remainingTextBytes = ClipWordStore::MAX_TEXT_POOL_BYTES - wordStore.textPool.size();
       wordStore.textPool.reserve(wordStore.textPool.size() + std::min(pageTextBytes, remainingTextBytes));
 
       size_t pageWordIndex = 0;
-      for (const auto& element : page->elements) {
-        if (textPoolFull) break;
-        if (element->getTag() != TAG_PageLine) continue;
-        const auto& line = static_cast<const PageLine&>(*element);
-        if (!line.getBlock()) continue;
-
-        const auto& block = *line.getBlock();
+      forEachPageTextLine(*page, [&](const PageTextLine& line) {
+        if (textPoolFull) return false;
+        const auto& block = *line.block;
         const uint16_t count = block.wordCount();
         for (uint16_t i = 0; i < count; ++i) {
           const char* wordText = block.wordText(i);
           if (!hasVisibleWordText(wordText)) continue;
 
           const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(i) & ~EpdFontFamily::UNDERLINE);
-          int wordWidth = renderer.getTextAdvanceX(readerFontId, wordText, textStyle);
-          if (wordWidth <= 0) continue;
+          const PageWordGeometry geometry = pageWordGeometry(renderer, readerFontId, line, block, i);
+          if (geometry.width <= 0) continue;
           const size_t wordIndexOnPage = pageWordIndex++;
           if (wordIndexOnPage < firstWordToKeep) continue;
           if (wordIndexOnPage >= firstWordToKeep + wordsToKeep) break;
@@ -4370,13 +4365,10 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           }
 
           WordRef word;
-          word.x = layout.marginLeft + line.xPos + block.wordXpos(i);
+          word.x = layout.marginLeft + line.xPos + geometry.xOffset;
           word.y = layout.marginTop + line.yPos;
-          if (i + 1 < count && block.wordXpos(i + 1) > block.wordXpos(i)) {
-            wordWidth = std::min(wordWidth, static_cast<int>(block.wordXpos(i + 1) - block.wordXpos(i)));
-          }
-          word.w = wordWidth;
-          word.h = lineHeight;
+          word.w = geometry.width;
+          word.h = line.lineHeight > 0 ? line.lineHeight : lineHeight;
           word.pageIdx = pageIdx;
           word.pageWordIndex = static_cast<uint16_t>(wordIndexOnPage);
           if (!wordStore.appendText(word, wordText)) {
@@ -4392,7 +4384,8 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
           word.lineIsRtl = block.getBlockStyle().isRtl;
           wordStore.words.push_back(word);
         }
-      }
+        return !textPoolFull && wordStore.words.size() < maxSelectableWords;
+      });
       MemoryBudget::logHeapShape("clip.after_word_store");
     }
 
@@ -6617,9 +6610,6 @@ void EpubReaderActivity::cacheCurrentSectionPosition() {
 void EpubReaderActivity::prepareCurrentSectionForRelayout() {
   if (!section) return;
   cacheCurrentSectionPosition();
-  if (!CLIPPINGS.stampMissingLayoutSignature(activeSectionLayoutSignature)) {
-    LOG_ERR("CLIP", "Failed to stamp legacy clipping layout before relayout");
-  }
 }
 
 void EpubReaderActivity::renderContents(std::unique_ptr<Page> page, const int fontId, const int orientedMarginTop,
@@ -6952,7 +6942,8 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
     ClippingPageMatch match;
     const bool storedLayoutMatches =
         canUseStoredRanges &&
-        clippingStoredRangeMatchesLayout(clipping, currentPageCount, activeSectionLayoutSignature);
+        clippingStoredRangeMatchesLayout(clipping, currentPageCount,
+                                         clippingWordLayoutSignature(activeSectionLayoutSignature));
     const bool matchedStoredRange =
         storedLayoutMatches && findClippingStoredRangeOnPage(page, clipping, currentPage, currentPageCount, match);
     const bool shouldSearchText =
@@ -6987,7 +6978,7 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
   ClippingHighlightGeometry::WordRect previousHighlight;
   const TextBlock* previousHighlightBlock = nullptr;
   bool hasPreviousHighlight = false;
-  forEachVisiblePageWord(page, [&](const uint16_t pageWordIndex, const PageLine& line, const TextBlock& block,
+  forEachVisiblePageWord(page, [&](const uint16_t pageWordIndex, const PageTextLine& line, const TextBlock& block,
                                    const size_t i) {
     if (!isHighlightedWord(pageWordIndex)) {
       hasPreviousHighlight = false;
@@ -7004,10 +6995,11 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
     const char* visibleText = wordText + (hasEmSpace ? 3 : 0);
     const auto textStyle = static_cast<EpdFontFamily::Style>(block.wordStyle(wordIndex) & ~EpdFontFamily::UNDERLINE);
     const int skipX = hasEmSpace ? renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", textStyle) : 0;
-    const int wordX = orientedMarginLeft + line.xPos + block.wordXpos(wordIndex) + skipX;
+    const PageWordGeometry geometry = pageWordGeometry(renderer, fontId, line, block, wordIndex);
+    const int wordX = orientedMarginLeft + line.xPos + geometry.xOffset + skipX;
     const int wordY = orientedMarginTop + line.yPos;
-    int wordW = renderer.getTextAdvanceX(fontId, wordText, textStyle) - skipX;
-    const int wordH = renderer.getLineHeight(fontId);
+    int wordW = geometry.width - skipX;
+    const int wordH = line.lineHeight > 0 ? line.lineHeight : renderer.getLineHeight(fontId);
     if (wordIndex + 1 < block.wordCount()) {
       const uint16_t nextIndex = static_cast<uint16_t>(wordIndex + 1);
       const char* nextWordText = block.wordText(nextIndex);
@@ -7015,7 +7007,8 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
       const auto nextTextStyle =
           static_cast<EpdFontFamily::Style>(block.wordStyle(nextIndex) & ~EpdFontFamily::UNDERLINE);
       const int nextSkipX = nextHasEmSpace ? renderer.getTextAdvanceX(fontId, "\xe2\x80\x83", nextTextStyle) : 0;
-      const int nextWordX = orientedMarginLeft + line.xPos + block.wordXpos(nextIndex) + nextSkipX;
+      const PageWordGeometry nextGeometry = pageWordGeometry(renderer, fontId, line, block, nextIndex);
+      const int nextWordX = orientedMarginLeft + line.xPos + nextGeometry.xOffset + nextSkipX;
       if (isHighlightedWord(pageWordIndex + 1) && nextWordX > wordX + wordW) {
         wordW = nextWordX - wordX;
       } else if (nextWordX > wordX && wordW > nextWordX - wordX) {
@@ -7036,7 +7029,14 @@ void EpubReaderActivity::drawClippingHighlights(const Page& page, const int font
       // A saved clipping always uses black text on its light-gray marker.
       // The ordinary reader foreground is white in dark mode, which makes the
       // text fade into this marker.
+      if (line.clipWidth > 0 && line.clipHeight > 0) {
+        renderer.beginTextClip(orientedMarginLeft + line.clipX, orientedMarginTop + line.clipY, line.clipWidth,
+                               line.clipHeight);
+      }
       renderer.drawText(fontId, wordX, wordY, visibleText, true, textStyle);
+      if (line.clipWidth > 0 && line.clipHeight > 0) {
+        renderer.endTextClip();
+      }
       previousHighlight = currentHighlight;
       previousHighlightBlock = &block;
       hasPreviousHighlight = true;

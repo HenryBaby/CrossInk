@@ -216,13 +216,29 @@ TEST(ClippingLayout, RejectsStoredRangeWhenFontChangesWithoutChangingPageCount) 
   EXPECT_FALSE(clippingStoredRangeMatchesLayout(clipping, 20, readerRenderSpecSignature(changed)));
 }
 
-TEST(ClippingLayout, PreservesLegacyFastPathUntilRelayout) {
+TEST(ClippingLayout, RejectsUnsignedLegacyRangesAndUsesSavedTextInstead) {
   Clipping clipping;
   clipping.pageCount = 20;
   clipping.layoutSignature = 0;
 
   ReaderRenderSpec current;
   current.fontId = 12;
-  EXPECT_TRUE(clippingStoredRangeMatchesLayout(clipping, 20, readerRenderSpecSignature(current)));
+  EXPECT_FALSE(clippingStoredRangeMatchesLayout(clipping, 20, readerRenderSpecSignature(current)));
   EXPECT_FALSE(clippingStoredRangeMatchesLayout(clipping, 21, readerRenderSpecSignature(current)));
+}
+
+TEST(ClippingLayout, ChangesStoredRangeSignatureWhenWordTraversalChanges) {
+  ReaderRenderSpec current;
+  current.fontId = 12;
+  current.viewportWidth = 760;
+  current.viewportHeight = 430;
+
+  const uint32_t readerSignature = readerRenderSpecSignature(current);
+  const uint32_t clippingSignature = clippingWordLayoutSignature(readerSignature);
+  EXPECT_NE(clippingSignature, readerSignature);
+
+  Clipping clipping;
+  clipping.pageCount = 20;
+  clipping.layoutSignature = readerSignature;
+  EXPECT_FALSE(clippingStoredRangeMatchesLayout(clipping, 20, clippingSignature));
 }
