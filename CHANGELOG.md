@@ -16,6 +16,7 @@
 
 ### Changed
 
+- Automatic reading-stat backups no longer rewrite an identical same-day file before sleep.
 - Reader resumes now defer Recent Books and KOReader credential loading until needed and avoid unchanged recent-book writes.
 - X3 readers now reuse a one-second USB power sample instead of repeatedly querying the battery gauge while idle.
 - Holding a word-selection direction now repeats, touch Settings tabs have a larger target, and OPDS pickers can add a server in place.
