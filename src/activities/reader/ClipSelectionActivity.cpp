@@ -29,7 +29,8 @@ bool hasEmSpace(const char* text) { return text[0] == '\xe2' && text[1] == '\x80
 ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                              ClipWordStore wordStore, const int fontId, Section& section,
                                              const int startPageInSection, const int marginTop, const int marginLeft,
-                                             const DictionaryClippingRequest* dictionaryRequest)
+                                             const DictionaryClippingRequest* dictionaryRequest,
+                                             const bool ignoreInitialBackRelease)
     : Activity("ClipSelection", renderer, mappedInput),
       wordStore(std::move(wordStore)),
       renderFontId(fontId),
@@ -38,6 +39,7 @@ ClipSelectionActivity::ClipSelectionActivity(GfxRenderer& renderer, MappedInputM
       marginTop(marginTop),
       marginLeft(marginLeft),
       hasDictionaryRequest(dictionaryRequest != nullptr),
+      ignoreInitialBackRelease(ignoreInitialBackRelease),
       dictionaryRequest(dictionaryRequest ? *dictionaryRequest : DictionaryClippingRequest{}) {}
 
 void ClipSelectionActivity::onEnter() {
@@ -324,6 +326,12 @@ void ClipSelectionActivity::loop() {
   }
 
   if (mappedInput.wasReleased(Button::Back)) {
+    if (ignoreInitialBackRelease) {
+      // A long Back press can launch this activity. Its release belongs to the
+      // shortcut, not to the selection screen that has just opened.
+      ignoreInitialBackRelease = false;
+      return;
+    }
     if (startMarkIdx != -1) {
       startMarkIdx = -1;
       requestUpdate();

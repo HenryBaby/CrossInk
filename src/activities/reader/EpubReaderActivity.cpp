@@ -2905,9 +2905,13 @@ void EpubReaderActivity::loop() {
   if (!longPressBackHandled && mappedInput.isPressed(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() >= ReaderUtils::GO_HOME_MS) {
     longPressBackHandled = true;
-    mappedInput.suppressNextBackRelease();
-    executeReaderQuickAction(static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressBackAction),
-                             true, QuickLockTrigger::LongBack);
+    const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressBackAction);
+    if (action == CrossPointSettings::LONG_MENU_CREATE_CLIPPING) {
+      startClipSelection(nullptr, /*ignoreInitialBackRelease=*/true);
+    } else {
+      mappedInput.suppressNextBackRelease();
+      executeReaderQuickAction(action, true, QuickLockTrigger::LongBack);
+    }
     return;
   }
 
@@ -4191,7 +4195,8 @@ void EpubReaderActivity::openAutoPageTurnIntervalPicker(const bool ignoreInitial
       });
 }
 
-void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dictionaryRequest) {
+void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dictionaryRequest,
+                                            const bool ignoreInitialBackRelease) {
   if (!section || !epub) {
     requestUpdate();
     return;
@@ -4468,9 +4473,9 @@ void EpubReaderActivity::startClipSelection(const DictionaryClippingRequest* dic
 
   advanceCollector.reset();
   pauseReadingPaceTimer("clip_selection");
-  auto clipSelection =
-      makeUniqueNoThrow<ClipSelectionActivity>(renderer, mappedInput, std::move(wordStore), readerFontId, *section,
-                                               startPage, layout.marginTop, layout.marginLeft, dictionaryRequest);
+  auto clipSelection = makeUniqueNoThrow<ClipSelectionActivity>(
+      renderer, mappedInput, std::move(wordStore), readerFontId, *section, startPage, layout.marginTop,
+      layout.marginLeft, dictionaryRequest, ignoreInitialBackRelease);
   if (!clipSelection) {
     LOG_ERR("CLIP", "OOM: failed to allocate clip selection activity");
     resumeReadingPaceTimer("clip_selection_alloc_failed");
