@@ -70,6 +70,7 @@ inline esp_sleep_wakeup_cause_t esp_sleep_get_wakeup_cause() { return ESP_SLEEP_
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <string>
 
@@ -138,6 +139,35 @@ static bool wakePowerReleasePending = false;
 
 namespace {
 constexpr unsigned long X4PRO_HOME_KEY_DOUBLE_TAP_MS = 300;
+
+struct QuickLockBadgeBackdrop {
+  static constexpr int SIZE = 40;
+  // A 40 px square can straddle at most six 1-bit framebuffer bytes per row.
+  static constexpr size_t MAX_BYTES = 6 * SIZE;
+
+  std::array<uint8_t, MAX_BYTES> pixels{};
+  int x = 0;
+  int y = 0;
+  size_t size = 0;
+  GfxRenderer::Orientation orientation = GfxRenderer::Portrait;
+  bool valid = false;
+
+  void save(GfxRenderer& renderer, const int savedX, const int savedY) {
+    x = savedX;
+    y = savedY;
+    orientation = renderer.getOrientation();
+    size = renderer.getRegionByteSize(x, y, SIZE, SIZE);
+    valid = size > 0 && size <= pixels.size() && renderer.copyRegionToBuffer(x, y, SIZE, SIZE, pixels.data(), size);
+  }
+
+  bool restore(GfxRenderer& renderer) {
+    if (!valid || renderer.getOrientation() != orientation) return false;
+    valid = false;
+    return renderer.copyBufferToRegion(x, y, SIZE, SIZE, pixels.data(), size);
+  }
+};
+
+QuickLockBadgeBackdrop quickLockBadgeBackdrop;
 }  // namespace
 
 static void logBootHeap(const char* stage) {
@@ -513,24 +543,30 @@ void notifyQuickLockChanged() {
     int bottom = 0;
     int left = 0;
     renderer.getOrientedViewableTRBL(&top, &right, &bottom, &left);
-    constexpr int badgeSize = 40;
-    const int x = std::max(left, renderer.getScreenWidth() - right - badgeSize);
-    const int y = std::max(top, renderer.getScreenHeight() - bottom - badgeSize);
+    const int x = std::max(left, renderer.getScreenWidth() - right - QuickLockBadgeBackdrop::SIZE);
+    const int y = std::max(top, renderer.getScreenHeight() - bottom - QuickLockBadgeBackdrop::SIZE);
     // ActivityManager applies Night Mode at the display boundary, so direct
     // framebuffer writes retain the normal palette.
     constexpr bool background = false;
     constexpr bool foreground = true;
     RenderLock lock;
-    renderer.fillRect(x, y, badgeSize, badgeSize, background);
+    quickLockBadgeBackdrop.save(renderer, x, y);
+    renderer.fillRect(x, y, QuickLockBadgeBackdrop::SIZE, QuickLockBadgeBackdrop::SIZE, background);
     freeink::ui::GfxRendererTarget target(renderer);
-    target.bitmap(
-        freeink::ui::Rect{x + (badgeSize - icon_tabler_lock_28.w) / 2, y + (badgeSize - icon_tabler_lock_28.h) / 2,
-                          icon_tabler_lock_28.w, icon_tabler_lock_28.h},
-        freeink::ui::bitmapFromIcon(icon_tabler_lock_28), freeink::ui::BitmapMode::Center,
-        freeink::ui::Paint::solid(foreground ? freeink::ui::Color::Black : freeink::ui::Color::White));
+    target.bitmap(freeink::ui::Rect{x + (QuickLockBadgeBackdrop::SIZE - icon_tabler_lock_28.w) / 2,
+                                    y + (QuickLockBadgeBackdrop::SIZE - icon_tabler_lock_28.h) / 2,
+                                    icon_tabler_lock_28.w, icon_tabler_lock_28.h},
+                  freeink::ui::bitmapFromIcon(icon_tabler_lock_28), freeink::ui::BitmapMode::Center,
+                  freeink::ui::Paint::solid(foreground ? freeink::ui::Color::Black : freeink::ui::Color::White));
     renderer.displayBuffer(HalDisplay::FAST_REFRESH);
   } else {
-    (void)activityManager.requestUpdateAndWait();
+    bool restoredBadgeBackdrop = false;
+    {
+      RenderLock lock;
+      restoredBadgeBackdrop = quickLockBadgeBackdrop.restore(renderer);
+      if (restoredBadgeBackdrop) renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    }
+    if (!restoredBadgeBackdrop) (void)activityManager.requestUpdateAndWait();
     activityManager.notifyInputLockChanged(false);
   }
 }
