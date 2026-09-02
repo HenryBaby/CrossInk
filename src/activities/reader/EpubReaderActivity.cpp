@@ -2236,9 +2236,11 @@ void EpubReaderActivity::onEnter() {
   APP_STATE.saveToFile();
   const RecentBook::CoverState coverState =
       epub->hasCoverImage() ? RecentBook::CoverState::Unknown : RecentBook::CoverState::Missing;
-  RECENT_BOOKS.addOrUpdateBook(epub->getPath(), epub->getTitle(), epub->getAuthor(),
-                               coverState == RecentBook::CoverState::Missing ? "" : epub->getThumbBmpPath(),
-                               coverState);
+  if (!skipRecentBookUpdateOnEntry) {
+    RECENT_BOOKS.addOrUpdateBook(epub->getPath(), epub->getTitle(), epub->getAuthor(),
+                                 coverState == RecentBook::CoverState::Missing ? "" : epub->getThumbBmpPath(),
+                                 coverState);
+  }
 
   // Trigger first update
   requestUpdate();

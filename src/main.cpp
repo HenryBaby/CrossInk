@@ -1276,11 +1276,10 @@ void setup() {
   BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Wake);
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
   I18N.setLanguage(static_cast<Language>(SETTINGS.language));
+  // Normal boot store deferral adapted from Sichroteph/YACP commit
+  // 20af8aee8d3e1d560456753b08d1f52e5488621f (MIT). Accessors load these
+  // stores when Home, reader bookkeeping, or sync actually need them.
   if (!isNetworkResume) {
-    RECENT_BOOKS.loadFromFile();
-    logBootHeap("settings and recent books loaded");
-    KOREADER_STORE.loadFromFile();
-    logBootHeap("sync credentials loaded");
     Dictionary::isValidDictionary();
   } else if (snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::KOREADER_SYNC) ||
              snapshotTarget == static_cast<uint32_t>(NetworkBootTarget::KOREADER_AUTH) ||
