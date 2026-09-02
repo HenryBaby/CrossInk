@@ -38,6 +38,7 @@
 
 ### Fixed
 
+- Long-press Menu and Back shortcuts no longer pass their release into reader screens opened by the shortcut.
 - Mixed-direction EPUB paragraphs now retain their block reading direction when inline spans change direction.
 - End-of-book suggestions now receive input before reader shortcuts and automatic page turns.
 - Arabic and Persian text no longer lets font ligatures reprocess letters that were already shaped for display.

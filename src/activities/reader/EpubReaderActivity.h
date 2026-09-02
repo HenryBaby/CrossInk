@@ -406,9 +406,6 @@ class EpubReaderActivity final : public Activity {
                                 bool dictionaryLookupFramebufferContainsPage = true,
                                 QuickLockTrigger quickLockTrigger = QuickLockTrigger::LongMenu);
   void openQuickActionsPopup();
-  bool quickActionUsesConfirmRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action) const;
-  bool quickActionUsesPowerRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action) const;
-  void suppressConfirmShortcutRelease(CrossPointSettings::LONG_PRESS_MENU_ACTION action);
   void executeFootnoteQuickAction(bool suppressInitialPowerRelease = false);
 #if CROSSINK_APP_CAP_TOUCH
   bool handlePinchFontResize();

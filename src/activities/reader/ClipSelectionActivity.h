@@ -69,6 +69,8 @@ class ClipSelectionActivity final : public Activity {
   int touchDragPageEndIdx = -1;
   uint32_t touchDragPageEndHeldSince = 0;
   bool hasDictionaryRequest = false;
+  bool ignoreInitialConfirmRelease = false;
+  bool ignoreInitialPowerRelease = false;
   bool ignoreInitialBackRelease = false;
   DictionaryClippingRequest dictionaryRequest{};
   std::array<uint16_t, MAX_READING_ORDER_WORDS> readingOrder{};

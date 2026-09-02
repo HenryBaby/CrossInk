@@ -1495,7 +1495,6 @@ bool EpubReaderActivity::handleQuickLockUnlock(const QuickLockTrigger trigger) {
     if (SETTINGS.longPressMenuAction == CrossPointSettings::LONG_MENU_QUICK_LOCK &&
         mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= longPressMenuMs) {
       longPressMenuHandled = true;
-      suppressConfirmShortcutRelease(CrossPointSettings::LONG_MENU_QUICK_LOCK);
       handleGlobalPowerButtonAction(CrossPointSettings::SHORT_PWRBTN::QUICK_LOCK, QuickLockTrigger::LongMenu);
       return true;
     }
@@ -2870,7 +2869,6 @@ void EpubReaderActivity::loop() {
     if (SETTINGS.longPressMenuAction != CrossPointSettings::LONG_MENU_OFF &&
         mappedInput.getHeldTime() >= longPressMenuMs) {
       const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
-      suppressConfirmShortcutRelease(action);
       executeReaderQuickAction(action);
       return;
     }
@@ -2880,7 +2878,6 @@ void EpubReaderActivity::loop() {
       mappedInput.isPressed(MappedInputManager::Button::Confirm) && mappedInput.getHeldTime() >= longPressMenuMs) {
     longPressMenuHandled = true;
     const auto action = static_cast<CrossPointSettings::LONG_PRESS_MENU_ACTION>(SETTINGS.longPressMenuAction);
-    suppressConfirmShortcutRelease(action);
     executeReaderQuickAction(action);
     return;
   }
@@ -4619,7 +4616,7 @@ void EpubReaderActivity::executeReaderQuickAction(CrossPointSettings::LONG_PRESS
       onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::SCREENSHOT);
       break;
     case CrossPointSettings::LONG_MENU_CYCLE_PAGE_TURN:
-      openAutoPageTurnIntervalPicker(/*ignoreInitialConfirmRelease=*/true);
+      openAutoPageTurnIntervalPicker(mappedInput.isPressed(MappedInputManager::Button::Confirm));
       break;
     case CrossPointSettings::LONG_MENU_FILE_TRANSFER:
       openFileTransfer();
@@ -4874,39 +4871,6 @@ void EpubReaderActivity::openQuickActionsPopup() {
   if (quickActionsPopup.isActive()) {
     mappedInput.setReaderTouchscreenOverride(true);
     quickActionsPopup.setCancelCallback([this] { mappedInput.setReaderTouchscreenOverride(false); });
-  }
-}
-
-bool EpubReaderActivity::quickActionUsesConfirmRelease(const CrossPointSettings::LONG_PRESS_MENU_ACTION action) const {
-  switch (action) {
-    case CrossPointSettings::LONG_MENU_READING_STATS:
-    case CrossPointSettings::LONG_MENU_CYCLE_PAGE_TURN:
-    case CrossPointSettings::LONG_MENU_CREATE_CLIPPING:
-    case CrossPointSettings::LONG_MENU_LOOKUP_WORD:
-      return true;
-    case CrossPointSettings::LONG_MENU_FOOTNOTES:
-      return currentPageFootnotes.size() > 1;
-    default:
-      return false;
-  }
-}
-
-bool EpubReaderActivity::quickActionUsesPowerRelease(const CrossPointSettings::LONG_PRESS_MENU_ACTION action) const {
-  return action == CrossPointSettings::LONG_MENU_FOOTNOTES && currentPageFootnotes.size() > 1;
-}
-
-void EpubReaderActivity::suppressConfirmShortcutRelease(const CrossPointSettings::LONG_PRESS_MENU_ACTION action) {
-  if (quickActionUsesConfirmRelease(action)) {
-    mappedInput.suppressNextConfirmRelease();
-  }
-
-  if (mappedInput.isPressed(MappedInputManager::Button::Power)) {
-    if (quickActionUsesConfirmRelease(action)) {
-      mappedInput.suppressNextPowerConfirmRelease();
-    }
-    if (quickActionUsesPowerRelease(action)) {
-      mappedInput.suppressNextPowerRelease();
-    }
   }
 }
 

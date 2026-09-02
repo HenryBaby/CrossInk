@@ -16,6 +16,7 @@
 #include "clippings/ClipTextBuilder.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "util/InputReleaseGuard.h"
 
 namespace {
 
@@ -47,6 +48,8 @@ void ClipSelectionActivity::onEnter() {
   // Clipping needs direct word selection even when touch is disabled for the
   // reader. onExit() restores the reader's configured touch state.
   mappedInput.setReaderTouchscreenOverride(true);
+  ignoreInitialConfirmRelease = mappedInput.isPressed(MappedInputManager::Button::Confirm);
+  ignoreInitialPowerRelease = mappedInput.isPressed(MappedInputManager::Button::Power);
 
   if (wordStore.words.empty()) {
     LOG_ERR("CLIP", "No words available for selection");
@@ -239,8 +242,15 @@ void ClipSelectionActivity::positionCursorAtInitialPageCenter() {
 }
 
 void ClipSelectionActivity::loop() {
-  const int total = static_cast<int>(readingOrderSize);
   using Button = MappedInputManager::Button;
+
+  if (InputReleaseGuard::consumeInitialRelease(mappedInput, Button::Back, ignoreInitialBackRelease) ||
+      InputReleaseGuard::consumeInitialRelease(mappedInput, Button::Power, ignoreInitialPowerRelease) ||
+      InputReleaseGuard::consumeInitialRelease(mappedInput, Button::Confirm, ignoreInitialConfirmRelease)) {
+    return;
+  }
+
+  const int total = static_cast<int>(readingOrderSize);
 
   auto moveCursor = [this](const int nextOrderIdx) {
     if (nextOrderIdx == cursorIdx || nextOrderIdx < 0 || nextOrderIdx >= static_cast<int>(readingOrderSize)) return;
