@@ -59,7 +59,7 @@ class FrontlightPanelActivity final : public Activity {
   void buildPanelScreen(UiApp::ScreenType& screen);
   void addStepSlider(UiApp::ScreenType& screen, const freeink::ui::Rect& row, uint8_t value,
                      freeink::ui::ActionId sliderAction, freeink::ui::ActionId stepAction);
-  Rect dismissButtonRect() const;
+  Rect homeButtonRect() const;
   // Height of the drop-down, derived from the content it holds (header +
   // sliders + toggle). Same layout math as buildPanelScreen so the frame,
   // content margin, and dismiss threshold all agree.
@@ -85,7 +85,8 @@ class FrontlightPanelActivity final : public Activity {
   void onExit() override;
   void loop() override;
   void render(RenderLock&&) override;
-  // Home acts as Back while this overlay is open.
+  // From an EPUB reader, Home returns to the library; elsewhere it dismisses
+  // the overlay back to the current screen.
   bool handleHomeGesture() override;
   bool requiresFreshBackdrop() const override { return true; }
 };
