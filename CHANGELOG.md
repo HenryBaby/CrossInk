@@ -56,6 +56,7 @@
 - Boards with unverified power-button wiring no longer treat every battery cold boot as a held power-button wake, preventing immediate re-sleep after flashing or USB detection gaps.
 - USB Drive now disconnects the host and restarts safely after an SD-card I/O error instead of remaining in a broken raw-storage session.
 - KOReader authentication and progress sync now keep Wi-Fi awake during their short network requests, avoiding modem-sleep timeouts.
+- KOReader Sync now keeps its loading, Wi-Fi, and progress screens aligned with the reader's orientation on non-touch devices.
 - S3 devices without a USB-detect pin can now recognize power-only chargers through battery charging state.
 - Power-latch pins now stay asserted during deep sleep on S3 devices, preventing battery-only wakes from becoming slow cold boots.
 - Sticky and X4 Pro readers now reject firmware files built for the other device before SD-card or over-the-air updates write the OTA partition.

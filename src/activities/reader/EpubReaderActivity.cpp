@@ -3824,7 +3824,7 @@ void EpubReaderActivity::onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction 
         }
 
         // ActivityManager owns this one-shot handoff across deferred reader teardown.
-        auto restartActivity = makeUniqueNoThrow<KOReaderSyncActivity>(renderer, mappedInput);
+        auto restartActivity = makeUniqueNoThrow<KOReaderSyncActivity>(renderer, mappedInput, SETTINGS.orientation);
         if (!restartActivity) {
           LOG_ERR("KOSync", "OOM: restart handoff (free=%u maxAlloc=%u)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
           drawToast(renderer, tr(STR_KOREADER_SYNC_LOW_MEMORY));
@@ -4863,6 +4863,10 @@ void EpubReaderActivity::openQuickActionsPopup() {
           // the reader page instead of reusing the popup framebuffer.
           executeReaderQuickAction(CrossPointSettings::LONG_MENU_LOOKUP_WORD,
                                    /*dictionaryLookupFramebufferContainsPage=*/false);
+          return;
+        }
+        if (action == CrossPointSettings::SHORT_PWRBTN::SYNC_PROGRESS && KOREADER_STORE.hasCredentials()) {
+          onReaderMenuConfirm(EpubReaderMenuActivity::MenuAction::SYNC);
           return;
         }
         dispatchShortcutAction(action);

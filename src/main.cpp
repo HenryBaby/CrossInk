@@ -464,11 +464,20 @@ void silentRestartToNetwork(const NetworkBootTarget target, const uint32_t paylo
 
 void silentRestartToManageFonts() { silentRestartToNetwork(NetworkBootTarget::MANAGE_FONTS); }
 
+static uint32_t encodeKOReaderSyncOrientation(const uint8_t orientation) {
+  return orientation < CrossPointSettings::ORIENTATION_COUNT ? static_cast<uint32_t>(orientation) + 1 : 0;
+}
+
+static uint8_t decodeKOReaderSyncOrientation(const uint32_t payload) {
+  return payload > 0 && payload <= CrossPointSettings::ORIENTATION_COUNT ? static_cast<uint8_t>(payload - 1)
+                                                                         : CrossPointSettings::ORIENTATION_COUNT;
+}
+
 bool isGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action) {
   return isPowerButtonActionAvailableOutsideReader(action);
 }
 
-bool startGlobalSyncProgress(const bool networkBootReady) {
+bool startGlobalSyncProgress(const bool networkBootReady, const uint8_t readerOrientation) {
   if (activityManager.hasActivityNamed(KOReaderSyncActivity::NAME)) {
     LOG_DBG("MAIN", "Ignoring KOReader sync shortcut while sync is already active");
     return true;
@@ -489,13 +498,13 @@ bool startGlobalSyncProgress(const bool networkBootReady) {
   }
 
   if (!networkBootReady) {
-    silentRestartToNetwork(NetworkBootTarget::KOREADER_SYNC);
+    silentRestartToNetwork(NetworkBootTarget::KOREADER_SYNC, encodeKOReaderSyncOrientation(readerOrientation));
     return true;
   }
 
   const DocumentMatchMethod matchMethod = KOREADER_STORE.getMatchMethod();
-  auto syncActivity =
-      makeUniqueNoThrow<KOReaderSyncActivity>(renderer, mappedInputManager, std::move(epubPath), matchMethod);
+  auto syncActivity = makeUniqueNoThrow<KOReaderSyncActivity>(renderer, mappedInputManager, std::move(epubPath),
+                                                              matchMethod, readerOrientation);
   if (!syncActivity) {
     LOG_ERR("MAIN", "OOM: KOReader sync activity (free=%u maxAlloc=%u)", ESP.getFreeHeap(), ESP.getMaxAllocHeap());
     return false;
@@ -669,6 +678,12 @@ bool handleGlobalPowerButtonAction(const CrossPointSettings::SHORT_PWRBTN action
 }
 
 bool dispatchShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
+  // An EPUB reader may have a per-book orientation that is restored during
+  // teardown. Let it hand off Sync Progress before the global restart drops
+  // that transient setting.
+  if (action == CrossPointSettings::SHORT_PWRBTN::SYNC_PROGRESS && activityManager.handleShortcutAction(action)) {
+    return true;
+  }
   return handleGlobalPowerButtonAction(action) || activityManager.handleShortcutAction(action);
 }
 
@@ -817,6 +832,10 @@ bool executeX4ProHomeButtonAction(const uint8_t action) {
   }
 
   const auto powerAction = static_cast<CrossPointSettings::SHORT_PWRBTN>(action);
+  if (powerAction == CrossPointSettings::SHORT_PWRBTN::SYNC_PROGRESS) {
+    dispatchShortcutAction(powerAction);
+    return true;
+  }
   if (handleGlobalPowerButtonAction(powerAction)) {
     return true;
   }
@@ -1426,7 +1445,7 @@ void setup() {
         launched = activityManager.goToOpdsServer(snapshotPayload, true);
         break;
       case NetworkBootTarget::KOREADER_SYNC:
-        launched = startGlobalSyncProgress(true);
+        launched = startGlobalSyncProgress(true, decodeKOReaderSyncOrientation(snapshotPayload));
         break;
       case NetworkBootTarget::KOREADER_AUTH: {
         const auto mode =

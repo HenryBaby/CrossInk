@@ -60,4 +60,5 @@ void enterDeepSleep(bool fromTimeout = false);
 bool handleGlobalPowerButtonAction(CrossPointSettings::SHORT_PWRBTN action,
                                    QuickLockTrigger quickLockTrigger = QuickLockTrigger::None);
 bool dispatchShortcutAction(CrossPointSettings::SHORT_PWRBTN action);
-bool startGlobalSyncProgress(bool networkBootReady = false);
+bool startGlobalSyncProgress(bool networkBootReady = false,
+                             uint8_t readerOrientation = CrossPointSettings::ORIENTATION_COUNT);
