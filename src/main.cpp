@@ -1033,6 +1033,9 @@ void enterDeepSleep(bool fromTimeout) {
   // Last chance to sample: startDeepSleep() cuts the SD rail on X3, so nothing
   // can be written again until the next wake.
   BatteryDiagnosticLog::record(BatteryDiagnosticLog::Event::Sleep);
+  // All sleep-time file writes are complete. Stop SDMMC before the power path
+  // cuts peripheral rails and isolates the bus pads; SPI boards are a no-op.
+  Storage.shutdown();
 
   putTiltSensorToSleepForDeepSleep();
   display.deepSleep();
