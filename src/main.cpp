@@ -532,11 +532,15 @@ CrossPointSettings::SHORT_PWRBTN getPowerButtonAction() {
   return action;
 }
 
-void notifyQuickLockChanged() {
+void notifyQuickLockChanged(const bool restoringAfterWake = false) {
   const bool locked = buttonShortcutController.isQuickLocked();
   mappedInputManager.clearInjectedReleases();
   LOG_DBG("MAIN", "Quick Lock %s", locked ? "enabled" : "disabled");
   if (locked) {
+    if (!restoringAfterWake) {
+      APP_STATE.quickLockRestoreFrontlight = Frontlight.isOn();
+    }
+    Frontlight.setOn(false);
     activityManager.notifyInputLockChanged(true);
     int top = 0;
     int right = 0;
@@ -565,6 +569,10 @@ void notifyQuickLockChanged() {
       RenderLock lock;
       restoredBadgeBackdrop = quickLockBadgeBackdrop.restore(renderer);
       if (restoredBadgeBackdrop) renderer.displayBuffer(HalDisplay::FAST_REFRESH);
+    }
+    if (APP_STATE.quickLockRestoreFrontlight) {
+      Frontlight.setOn(true);
+      APP_STATE.quickLockRestoreFrontlight = false;
     }
     if (!restoredBadgeBackdrop) (void)activityManager.requestUpdateAndWait();
     activityManager.notifyInputLockChanged(false);
@@ -1260,6 +1268,10 @@ void setup() {
   UITheme::getInstance().reload();
   ButtonNavigator::setMappedInputManager(mappedInputManager);
   logBootHeap("boot state ready");
+  // X4 Pro wakes through a POWERON reset, so keep its frontlight off until
+  // the saved Quick Lock is explicitly unlocked below.
+  const bool restoreQuickLockAfterWake = APP_STATE.quickLockResumePending && isSleepWake && !recoveryFirmwareMode &&
+                                         !rebootedFromPanic && !isNetworkResume && !isSilentReboot;
   // Internal silent restarts retain the current light state. Network entry and
   // exit restarts must honor Restore on Wake like a normal user wake.
   const bool wasLightOnBeforeSleep = SETTINGS.frontlightOn != 0;
@@ -1281,6 +1293,9 @@ void setup() {
       restoreLightOn = false;
     }
   }
+  if (restoreQuickLockAfterWake) {
+    restoreLightOn = false;
+  }
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
   if (recoveryFirmwareMode) {
@@ -1298,8 +1313,6 @@ void setup() {
   // X4 Pro cuts its switched rails during sleep and wakes with a POWERON reset,
   // while C3 boards normally report DEEPSLEEP. HalGPIO normalizes both hardware
   // paths to PowerButton, so use that route with the one-shot persisted flag.
-  const bool restoreQuickLockAfterWake = APP_STATE.quickLockResumePending && isSleepWake && !recoveryFirmwareMode &&
-                                         !rebootedFromPanic && !isNetworkResume && !isSilentReboot;
   const auto quickLockResumeTrigger = static_cast<QuickLockTrigger>(APP_STATE.quickLockResumeTrigger);
   if (APP_STATE.quickLockResumePending) {
     // Consume this before routing so a later cold boot cannot inherit a stale
@@ -1489,7 +1502,7 @@ void setup() {
     // restored lock immediately.
     (void)activityManager.requestUpdateAndWait();
     buttonShortcutController.restoreQuickLock(millis(), quickLockResumeTrigger);
-    notifyQuickLockChanged();
+    notifyQuickLockChanged(true);
   }
 
   allowSleepAt = millis() + 2000;
