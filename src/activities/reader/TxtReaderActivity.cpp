@@ -242,7 +242,7 @@ void TxtReaderActivity::loop() {
   }
 
   // Short press BACK goes directly to home
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
+  if (!touch.prev && !touch.next && mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
     onGoHome();
     return;
