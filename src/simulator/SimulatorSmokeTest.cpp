@@ -389,6 +389,27 @@ class SimulatorSmokeTest {
         inputScript.push_back(touchRelease(width / 2, height / 4));
         inputScript.push_back(render("Frontlight Panel reopened from touch gesture", 4));
         inputScript.push_back(assertActivity("FrontlightPanel"));
+        // The fourth action-bar slot opens Global Settings through the real
+        // FrontlightPanelActivity callback path.
+        inputScript.push_back(touchDown(width * 7 / 10, height * 15 / 32));
+        inputScript.push_back(touchRelease(width * 7 / 10, height * 15 / 32));
+        inputScript.push_back(render("Global Settings opened from Frontlight Panel", 4));
+        inputScript.push_back(assertActivity("Settings"));
+        inputScript.push_back(touchDown(width / 2, height * 3 / 4));
+        inputScript.push_back(touchMove(width / 2, height / 2));
+        inputScript.push_back(touchRelease(width / 2, height / 2));
+        inputScript.push_back(render("Global Settings remains open after interior swipe up", 4));
+        inputScript.push_back(assertActivity("Settings"));
+        inputScript.push_back(touchDown(width / 2, height - 8));
+        inputScript.push_back(touchMove(width / 2, height * 3 / 4));
+        inputScript.push_back(touchRelease(width / 2, height * 3 / 4));
+        inputScript.push_back(render("Reader restored after Settings bottom-edge swipe", 4));
+        inputScript.push_back(assertActivity("EpubReader"));
+        inputScript.push_back(touchDown(width / 2, 8));
+        inputScript.push_back(touchMove(width / 2, height / 4));
+        inputScript.push_back(touchRelease(width / 2, height / 4));
+        inputScript.push_back(render("Frontlight Panel reopened after Global Settings", 4));
+        inputScript.push_back(assertActivity("FrontlightPanel"));
         inputScript.push_back(touchDown(width * 3 / 10, height * 3 / 8));
         inputScript.push_back(touchRelease(width * 3 / 10, height * 3 / 8));
         inputScript.push_back(render("Sync dialog opened from Frontlight Panel", 4));

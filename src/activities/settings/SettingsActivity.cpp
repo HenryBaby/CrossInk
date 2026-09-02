@@ -892,12 +892,12 @@ void SettingsActivity::loop() {
   // off-screen) and button navigation pulls the view back to it.
   const auto swipe = mappedInput.wasSwipe();
 #if CROSSINK_APP_CAP_TOUCH
-  const bool landscapeTouch = useLandscapeTouchLayout(renderer);
-  // The frontlight shortcut keeps its quick exit in landscape, but only from
-  // the X4 Pro's lower-edge gesture band. Other upward swipes scroll the list.
-  const bool dismissLandscapeFromBottomEdge = landscapeTouch && mappedInput.wasBottomEdgeUpSwipe();
-  if (dismissOnUpSwipe && swipe == MappedInputManager::SwipeDir::Up &&
-      (!landscapeTouch || dismissLandscapeFromBottomEdge)) {
+  // Settings opened from the frontlight panel keeps its quick exit, but only
+  // from the lower-edge gesture band. Ordinary upward swipes scroll the list
+  // in both portrait and landscape.
+  const bool dismissFromBottomEdge =
+      dismissOnUpSwipe && swipe == MappedInputManager::SwipeDir::Up && mappedInput.wasBottomEdgeUpSwipe();
+  if (dismissFromBottomEdge) {
 #else
   if (dismissOnUpSwipe && swipe == MappedInputManager::SwipeDir::Up) {
 #endif
