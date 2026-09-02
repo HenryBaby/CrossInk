@@ -1725,7 +1725,12 @@ void loop() {
   // repaint it (gauge boards like the X4 Pro report SoC continuously), so poll
   // for a change once a minute. Off-charger the percent moves too slowly to
   // justify unsolicited e-ink refreshes.
-  if (gpio.isUsbConnected()) {
+#ifdef SIMULATOR
+  const bool usbConnected = gpio.isUsbConnected();
+#else
+  const bool usbConnected = gpio.isUsbConnectedCached();
+#endif
+  if (usbConnected) {
     static unsigned long lastBatteryPollTime = 0UL;
     static uint16_t lastBatteryPercent = 0xFFFF;
     if (millis() - lastBatteryPollTime >= 60000UL) {

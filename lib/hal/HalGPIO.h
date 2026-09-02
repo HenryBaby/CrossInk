@@ -26,6 +26,8 @@ class HalGPIO {
 
   bool lastUsbConnected = false;
   bool usbStateChanged = false;
+  bool usbStateSampled = false;
+  unsigned long lastUsbPollMs = 0;
 
  public:
   // HAL-owned, normalized multi-touch representation. Activities must not
@@ -143,6 +145,10 @@ class HalGPIO {
 
   // Check if USB is connected
   bool isUsbConnected() const;
+
+  // Return the latest loop-owned sample. Before the first update(), fall back
+  // to a direct probe so setup-time callers still report external power.
+  bool isUsbConnectedCached() const;
 
   // Whether a cold boot with no USB detected can be trusted to mean a held
   // power button on the active board's power topology.

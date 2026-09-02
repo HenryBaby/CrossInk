@@ -16,6 +16,7 @@
 
 ### Changed
 
+- X3 readers now reuse a one-second USB power sample instead of repeatedly querying the battery gauge while idle.
 - Holding a word-selection direction now repeats, touch Settings tabs have a larger target, and OPDS pickers can add a server in place.
 - Font prewarming now uses a bounded fixed buffer instead of growing temporary strings, reducing heap churn while rendering mixed-style pages.
 - Built-in fonts now use smaller sparse kerning data and stronger offline compression, leaving more firmware flash available without changing text layout.
