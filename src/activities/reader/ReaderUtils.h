@@ -60,6 +60,9 @@ inline bool readerDarkModeEnabled() { return false; }
 
 inline uint8_t readerBackgroundColor() { return readerDarkModeEnabled() ? 0x00 : 0xFF; }
 
+// Night Mode is applied by the display after rendering, so reader content
+// remains normal-polarity at this layer.
+// cppcheck-suppress knownConditionTrueFalse
 inline bool readerForegroundBlack() { return !readerDarkModeEnabled(); }
 
 inline int getTopClockStatusBarHeight() {

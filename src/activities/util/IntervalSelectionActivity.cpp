@@ -359,6 +359,7 @@ void IntervalSelectionActivity::loop() {
   // finger until release. Runs before the Back/Confirm handlers because the release
   // of a drag can also register as a swipe (e.g. the left-edge rightward back
   // gesture) — the drag must consume it so it can't cancel or confirm the dialog.
+  // cppcheck-suppress knownConditionTrueFalse
   if (!usesReaderSlider() && mappedInput.isScreenTouchHeld(tx, ty)) {
     if (draggingBar || (ty >= barY - 20 && ty < barY + barHeight + 20 && tx >= barX && tx < barX + barWidth)) {
       draggingBar = true;
@@ -371,6 +372,7 @@ void IntervalSelectionActivity::loop() {
       }
       return;
     }
+  // cppcheck-suppress knownConditionTrueFalse
   } else if (!usesReaderSlider() && draggingBar) {
     // Release frame of a drag: swallow the tap/swipe events it produced.
     draggingBar = false;
@@ -423,6 +425,7 @@ void IntervalSelectionActivity::loop() {
     return;
   }
 
+  // cppcheck-suppress knownConditionTrueFalse
   if (!usesReaderSlider() && mappedInput.wasScreenTapped(tx, ty)) {
     if (ty >= barY - 20 && ty < barY + barHeight + 20 && tx >= barX && tx < barX + barWidth) {
       const int range = std::max(1, maxValue - minValue);
