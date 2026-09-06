@@ -372,7 +372,7 @@ void IntervalSelectionActivity::loop() {
       }
       return;
     }
-  // cppcheck-suppress knownConditionTrueFalse
+    // cppcheck-suppress knownConditionTrueFalse
   } else if (!usesReaderSlider() && draggingBar) {
     // Release frame of a drag: swallow the tap/swipe events it produced.
     draggingBar = false;

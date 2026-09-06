@@ -227,9 +227,8 @@ void FrontlightPanelActivity::openSyncDialog() {
   if (context.bookPath.empty()) {
     std::vector<std::string> disabledOptions;
     disabledOptions.reserve(OPTIONS.size());
-    std::transform(OPTIONS.begin(), OPTIONS.end(), std::back_inserter(disabledOptions), [](const StrId option) {
-      return std::string(I18N.get(option)) + " - " + tr(STR_UNAVAILABLE);
-    });
+    std::transform(OPTIONS.begin(), OPTIONS.end(), std::back_inserter(disabledOptions),
+                   [](const StrId option) { return std::string(I18N.get(option)) + " - " + tr(STR_UNAVAILABLE); });
     optionPopup.show(StrId::STR_SYNC_AND_TRANSFER, disabledOptions, 0, [this](const int) { openSyncDialog(); });
     optionPopup.setCancelCallback([this] { closeSyncDialog(); });
     requestUpdate();
