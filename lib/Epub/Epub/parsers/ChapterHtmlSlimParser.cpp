@@ -285,6 +285,17 @@ void ChapterHtmlSlimParser::applySmallCapsToEntry(StyleStackEntry& entry, const 
   }
 }
 
+void ChapterHtmlSlimParser::applyVerticalAlignToEntry(StyleStackEntry& entry, const CssStyle& css) {
+  if (!css.hasVerticalAlign()) return;
+  if (css.verticalAlign == CssVerticalAlign::Super) {
+    entry.hasSup = true;
+    entry.sup = true;
+  } else if (css.verticalAlign == CssVerticalAlign::Sub) {
+    entry.hasSub = true;
+    entry.sub = true;
+  }
+}
+
 // Update effective bold/italic/underline based on block style and inline style stack
 void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
   // Start with block-level styles
@@ -296,8 +307,15 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
                            (currentCssStyle.textDecoration & CssTextDecoration::LineThrough) != CssTextDecoration::None;
   effectiveBackgroundBlack =
       honorsPublisherDecorations() && currentCssStyle.hasBackgroundBlack() && currentCssStyle.backgroundBlack;
-  effectiveDirectionDefined = currentCssStyle.hasDirection();
-  effectiveDirection = currentCssStyle.direction;
+  bool paragraphDirectionDefined = false;
+  bool paragraphIsRtl = false;
+  if (blockStyleCount_ > 0) {
+    const auto& blockStyle = blockStyleBuf_[blockStyleCount_ - 1];
+    paragraphDirectionDefined = blockStyle.directionDefined;
+    paragraphIsRtl = blockStyle.isRtl;
+  }
+  effectiveDirectionDefined = paragraphDirectionDefined;
+  effectiveDirection = paragraphIsRtl ? CssTextDirection::Rtl : CssTextDirection::Ltr;
   effectiveSup = currentCssStyle.hasVerticalAlign() && currentCssStyle.verticalAlign == CssVerticalAlign::Super;
   effectiveSub = currentCssStyle.hasVerticalAlign() && currentCssStyle.verticalAlign == CssVerticalAlign::Sub;
   effectiveSmallCaps =
@@ -324,6 +342,10 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
     if (entry.hasDirection) {
       effectiveDirectionDefined = true;
       effectiveDirection = entry.direction;
+      if (entry.setsParagraphDirection) {
+        paragraphDirectionDefined = true;
+        paragraphIsRtl = entry.direction == CssTextDirection::Rtl;
+      }
     }
     if (entry.hasSup) {
       effectiveSup = entry.sup;
@@ -340,13 +362,8 @@ void ChapterHtmlSlimParser::updateEffectiveInlineStyle() {
 
   if (currentTextBlock && currentTextBlock->isEmpty()) {
     auto& style = currentTextBlock->getBlockStyle();
-    if (effectiveDirectionDefined) {
-      style.directionDefined = true;
-      style.isRtl = effectiveDirection == CssTextDirection::Rtl;
-    } else {
-      style.directionDefined = false;
-      style.isRtl = false;
-    }
+    style.directionDefined = paragraphDirectionDefined;
+    style.isRtl = paragraphIsRtl;
   }
 }
 
@@ -1610,9 +1627,9 @@ bool ChapterHtmlSlimParser::appendMalformedMarkupWarningPage() {
     xPos.push_back(0);
     styles.push_back(style);
 
-    auto block =
-        std::make_shared<TextBlock>(std::move(words), std::move(xPos), std::move(styles), std::vector<uint8_t>{},
-                                    std::vector<uint16_t>{}, std::vector<uint16_t>{}, std::vector<uint8_t>{});
+    auto block = std::make_shared<TextBlock>(std::move(words), std::move(xPos), std::move(styles),
+                                             std::vector<uint8_t>{}, std::vector<uint16_t>{}, std::vector<uint16_t>{},
+                                             std::vector<uint8_t>{}, std::vector<bool>{false});
     auto pageLine = makeUniqueNoThrow<PageLine>(
         std::move(block),
         static_cast<int16_t>(
@@ -2025,6 +2042,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         cellStyle.backgroundBlack = cssStyle.backgroundBlack;
       }
       ChapterHtmlSlimParser::applyDirectionToEntry(cellStyle, cssStyle);
+      cellStyle.setsParagraphDirection = true;
       ChapterHtmlSlimParser::applySmallCapsToEntry(cellStyle, cssStyle);
       if (self->inlineStyleCount_ < MAX_INLINE_STYLE_DEPTH) {
         self->inlineStyleBuf_[self->inlineStyleCount_++] = cellStyle;
@@ -2520,6 +2538,7 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
       }
       applyDirectionToEntry(entry, cssStyle);
       applySmallCapsToEntry(entry, cssStyle);
+      applyVerticalAlignToEntry(entry, cssStyle);
       if (self->inlineStyleCount_ < MAX_INLINE_STYLE_DEPTH) {
         self->inlineStyleBuf_[self->inlineStyleCount_++] = entry;
       } else {
@@ -2857,17 +2876,9 @@ void XMLCALL ChapterHtmlSlimParser::startElement(void* userData, const XML_Char*
         entry.backgroundBlack = cssStyle.backgroundBlack;
       }
       applyDirectionToEntry(entry, cssStyle);
+      entry.setsParagraphDirection = strcmp(name, "html") == 0 || strcmp(name, "body") == 0;
       applySmallCapsToEntry(entry, cssStyle);
-      if (cssStyle.hasVerticalAlign()) {
-        if (cssStyle.verticalAlign == CssVerticalAlign::Super) {
-          entry.hasSup = true;
-          entry.sup = true;
-        } else if (cssStyle.verticalAlign == CssVerticalAlign::Sub) {
-          entry.hasSub = true;
-          entry.sub = true;
-        }
-      }
-      ChapterHtmlSlimParser::applyDirectionToEntry(entry, cssStyle);
+      applyVerticalAlignToEntry(entry, cssStyle);
       if (self->inlineStyleCount_ < MAX_INLINE_STYLE_DEPTH) {
         self->inlineStyleBuf_[self->inlineStyleCount_++] = entry;
       } else {
@@ -3362,6 +3373,7 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
         self->currentTextBlock->setBlockStyle(style.addBottom(self->blockStyleBuf_[self->blockStyleCount_ - 1]));
       }
       self->blockStyleCount_--;
+      self->updateEffectiveInlineStyle();
     }
   }
   if (self->tableDepth == 1 && strcmp(name, "caption") == 0 && self->currentCompactTable && self->currentTextBlock) {
@@ -3375,6 +3387,10 @@ void XMLCALL ChapterHtmlSlimParser::endElement(void* userData, const XML_Char* n
   }
   if (self->headingDepth == self->depth) {
     self->headingDepth = -1;
+  }
+
+  if (strcmp(name, "html") == 0) {
+    self->htmlEnded_ = true;
   }
 }
 
@@ -3509,6 +3525,7 @@ void ChapterHtmlSlimParser::releaseInputFile() {
 
 bool ChapterHtmlSlimParser::beginParse() {
   malformedMarkupTruncated = false;
+  htmlEnded_ = false;
   parseFileOffset_ = 0;
   parseFileSize_ = 0;
   // Runs before the render pass opens the file, so only one reader is ever open at a time.
@@ -3622,6 +3639,10 @@ ChapterHtmlSlimParser::ParseStatus ChapterHtmlSlimParser::parseStep() {
   const bool done = parseFile_.available() == 0;
   const XML_Status parseStatus = XML_ParseBuffer(activeParser, static_cast<int>(len), done);
   if (parseStatus == XML_STATUS_ERROR && !previewStopRequested) {
+    if (htmlEnded_) {
+      LOG_DBG("EHP", "Ignoring trailing data after </html>: %s", XML_ErrorString(XML_GetErrorCode(activeParser)));
+      return ParseStatus::Done;
+    }
     LOG_ERR("EHP", "Parse error at line %lu:\n%s", XML_GetCurrentLineNumber(activeParser),
             XML_ErrorString(XML_GetErrorCode(activeParser)));
     if (isPreviewBuild()) {

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iterator>
+#include <limits>
 #include <mutex>
 #include <string>
 
@@ -229,7 +230,8 @@ bool isSleepScreenSetting(const SettingInfo& info) { return info.key && strcmp(i
 bool isValidQuickActionSlot(const uint8_t action) {
   return action < CrossPointSettings::QUICK_ACTION_SLOT_ACTION_COUNT ||
          action == CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER ||
-         action == CrossPointSettings::TOGGLE_FRONTLIGHT || action == CrossPointSettings::TOGGLE_TOUCHSCREEN;
+         action == CrossPointSettings::TOGGLE_FRONTLIGHT || action == CrossPointSettings::TOGGLE_TOUCHSCREEN ||
+         action == CrossPointSettings::PREVIOUS_PAGE || action == CrossPointSettings::NEARBY_POSITION_SYNC;
 }
 
 uint8_t migrateTiltDirectionValue(const uint8_t direction) {
@@ -472,8 +474,10 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   }
   doc["quickActionsTrigger"] = quickActionsTrigger;
   doc["language"] = (language < getLanguageCount()) ? LANGUAGE_CODES[language] : "EN";
+  if (keyboardLayouts != 0) doc["keyboardLayouts"] = keyboardLayouts;
   doc["tiltPageTurnDirectionSchema"] = TILT_DIRECTION_SCHEMA_CURRENT;
   doc["clockDateHasBeenSynced"] = clockDateHasBeenSynced;
+  doc["screenInverted"] = screenInverted;
 }
 
 bool CrossPointSettings::fromJson(JsonVariantConst doc) {
@@ -488,6 +492,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
       !doc["tiltPageTurnDirection"].isNull() &&
       ((doc["tiltPageTurnDirectionSchema"] | static_cast<uint8_t>(1)) < TILT_DIRECTION_SCHEMA_CURRENT);
   if (doc["statusBarChapterPageCount"].isNull()) applyLegacyStatusBarSettings(*this);
+  screenInverted = clamp(doc["screenInverted"] | screenInverted, 2, screenInverted);
 
   for (const auto& info : getBaseSettingsList()) {
     if (!info.key || (!info.valuePtr && !info.value16Ptr && !info.stringOffset)) continue;
@@ -578,6 +583,17 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
       value = std::clamp(value, static_cast<uint8_t>(info.valueRange.min), static_cast<uint8_t>(info.valueRange.max));
     }
     this->*(info.valuePtr) = value;
+  }
+
+  // Older global settings files named the display preference readerDarkMode.
+  // Preserve it when moving to the global screenInverted setting.
+  if (doc["screenInverted"].isNull() && !doc["readerDarkMode"].isNull()) {
+    screenInverted = clamp(doc["readerDarkMode"] | static_cast<uint8_t>(0), 2, 0);
+    needsResave = true;
+  }
+  if (refreshFrequency == REFRESH_NEVER && !Frontlight.present()) {
+    refreshFrequency = REFRESH_15;
+    needsResave = true;
   }
 
   const auto normalizeFrontlightScheduleTime = [&needsResave](uint16_t& timeOfDay) {
@@ -700,10 +716,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   const bool unavailableHomeTrigger =
       !gpio.hasHomeKey() && persistedQuickActionsTrigger >= static_cast<uint8_t>(QuickActions::Trigger::TapHome) &&
       persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::DoubleTapHome);
-  const bool unavailableUpDownTrigger =
-      !gpio.hasTouch() && persistedQuickActionsTrigger == static_cast<uint8_t>(QuickActions::Trigger::UpDown);
-  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::UpDown) && !unavailableHomeTrigger &&
-      !unavailableUpDownTrigger) {
+  if (persistedQuickActionsTrigger <= static_cast<uint8_t>(QuickActions::Trigger::UpDown) && !unavailableHomeTrigger) {
     quickActionsTrigger = persistedQuickActionsTrigger;
   } else {
     quickActionsTrigger = static_cast<uint8_t>(QuickActions::Trigger::None);
@@ -725,6 +738,9 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   }
   if (doc["language"].is<const char*>()) {
     language = static_cast<uint8_t>(I18n::languageFromCode(doc["language"].as<const char*>()));
+  }
+  if (doc["keyboardLayouts"].is<uint16_t>()) {
+    keyboardLayouts = doc["keyboardLayouts"].as<uint16_t>();
   }
   clockDateHasBeenSynced = clamp(doc["clockDateHasBeenSynced"] | static_cast<uint8_t>(0), 2, 0);
 
@@ -1038,6 +1054,10 @@ int CrossPointSettings::getRefreshFrequency() const {
       return 15;
     case REFRESH_30:
       return 30;
+    case REFRESH_NEVER:
+      // Never is available only on frontlit boards. Persisted settings can be
+      // shared between devices, so retain a safe cadence everywhere else.
+      return Frontlight.present() ? std::numeric_limits<int>::max() : 15;
   }
 }
 

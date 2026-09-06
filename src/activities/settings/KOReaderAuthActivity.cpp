@@ -27,6 +27,9 @@ void KOReaderAuthActivity::onWifiSelectionComplete(const bool success) {
     return;
   }
 
+  WiFi.setSleep(false);
+  LOG_DBG("KOAuth", "WiFi sleep disabled for authentication");
+
   sdFontSystem.releaseForNetwork(renderer);
 
   {
@@ -83,7 +86,7 @@ void KOReaderAuthActivity::onExit() {
   }
   // Authentication launches from minimal network boot, so restore the full
   // app state even if setup failed before WiFi was started.
-  silentRestart();
+  silentRestartAfterNetwork();
 }
 
 void KOReaderAuthActivity::render(RenderLock&&) {

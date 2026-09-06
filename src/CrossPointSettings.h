@@ -210,6 +210,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     REFRESH_10 = 2,
     REFRESH_15 = 3,
     REFRESH_30 = 4,
+    REFRESH_NEVER = 5,
     REFRESH_FREQUENCY_COUNT
   };
 
@@ -253,6 +254,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     // Appended after the X4 Pro and Quick Actions values so existing settings
     // files continue to mean exactly the same thing.
     QUICK_LOCK = 30,
+    // Shortcut values are persisted. Append new actions; never reuse removed
+    // raw values or they can silently change an existing binding's behavior.
+    PREVIOUS_PAGE = 31,
+    NEARBY_POSITION_SYNC = 32,
     SHORT_PWRBTN_COUNT
   };
 
@@ -289,6 +294,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     CHORD_QUICK_ACTIONS = 26,
     CHORD_TOGGLE_FRONTLIGHT = 27,
     CHORD_TOGGLE_TOUCHSCREEN = 28,
+    CHORD_PREVIOUS_PAGE = 29,
+    CHORD_NEARBY_POSITION_SYNC = 30,
     POWER_CHORD_ACTION_COUNT
   };
 
@@ -401,6 +408,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
 
   // Sleep screen settings
   uint8_t sleepScreen = DARK;
+  // Night mode: inverted output polarity, applied to every activity per render
+  // by ActivityManager. Sleep screens retain normal polarity.
+  uint8_t screenInverted = 0;
   // Sleep screen cover mode settings
   uint8_t sleepScreenCoverMode = FIT;
   // Sleep screen cover filter
@@ -438,7 +448,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t extraParagraphSpacing = 1;
   uint8_t forceParagraphIndents = 0;
   uint8_t textAntiAliasing = 1;
-  uint8_t readerDarkMode = 0;
   // Touch screen reader zones/gestures on boards with a touch controller.
   uint8_t touchReaderControls = TOUCH_READER_ON;
   // Page-turn gestures remain independently configurable while touch reader controls stay enabled.
@@ -601,6 +610,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint16_t frontlightScheduleEnd = 0xFFFF;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
+  // Enabled keyboard layouts. Zero derives a default from the UI language;
+  // non-zero bits follow KeyboardLayoutSet::ALL table order.
+  uint16_t keyboardLayouts = 0;
   // Custom KOReader sync device display name. Empty means use the hardware default.
   char deviceName[21] = "";
   // Quick Resume: keep current content visible with moon icon instead of showing a static sleep screen.
@@ -625,8 +637,8 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static constexpr uint8_t LINE_HEIGHT_PERCENT_STEP = 1;
   static constexpr uint8_t MIN_SCREEN_MARGIN = 5;
   static constexpr uint8_t MAX_SCREEN_MARGIN = 150;
-  static constexpr uint8_t SCREEN_MARGIN_SMALL_STEP = 5;
-  static constexpr uint8_t SCREEN_MARGIN_LARGE_STEP = 10;
+  static constexpr uint8_t SCREEN_MARGIN_SMALL_STEP = 1;
+  static constexpr uint8_t SCREEN_MARGIN_LARGE_STEP = 5;
   static constexpr uint8_t MAX_WORD_SPACING = 4;
   static constexpr uint16_t DEFAULT_READING_IDLE_TIME_THRESHOLD_SECONDS = 5 * 60;
   static constexpr uint16_t MIN_READING_IDLE_TIME_THRESHOLD_SECONDS = 30;

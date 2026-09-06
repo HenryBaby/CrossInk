@@ -57,10 +57,11 @@ inline constexpr std::array<StrId, CrossPointSettings::QUICK_ACTION_SLOT_ACTION_
 
 // Shared display order for shortcut pickers. The values remain the persisted
 // SHORT_PWRBTN IDs; only their presentation order is centralized here.
-inline constexpr std::array<CrossPointSettings::SHORT_PWRBTN, 28> shortcutActionOrder = {
+inline constexpr std::array<CrossPointSettings::SHORT_PWRBTN, 30> shortcutActionOrder = {
     CrossPointSettings::IGNORE,
     CrossPointSettings::SLEEP,
     CrossPointSettings::PAGE_TURN,
+    CrossPointSettings::PREVIOUS_PAGE,
     CrossPointSettings::TOGGLE_BOOKMARK,
     CrossPointSettings::READING_STATS,
     CrossPointSettings::MARK_FINISHED,
@@ -71,6 +72,7 @@ inline constexpr std::array<CrossPointSettings::SHORT_PWRBTN, 28> shortcutAction
     CrossPointSettings::CYCLE_PAGE_TURN,
     CrossPointSettings::TOGGLE_TILT_PAGE_TURN,
     CrossPointSettings::SYNC_PROGRESS,
+    CrossPointSettings::NEARBY_POSITION_SYNC,
     CrossPointSettings::FILE_TRANSFER,
     CrossPointSettings::CALIBRE_WIRELESS,
     CrossPointSettings::JOIN_NETWORK,
@@ -91,6 +93,7 @@ inline constexpr std::array<CrossPointSettings::SHORT_PWRBTN, 28> shortcutAction
 inline bool supportsTiltPageTurn() { return halTiltSensor.isAvailable(); }
 
 inline bool isActionAvailable(const uint8_t action) {
+  if (action == CrossPointSettings::PREVIOUS_PAGE || action == CrossPointSettings::NEARBY_POSITION_SYNC) return true;
   if (action == CrossPointSettings::QUICK_ACTIONS || action == CrossPointSettings::QUICK_LOCK) return true;
   if (action == CrossPointSettings::TOGGLE_FRONTLIGHT) return Frontlight.present();
   if (action == CrossPointSettings::TOGGLE_TOUCHSCREEN) return gpio.hasTouch();
@@ -100,18 +103,24 @@ inline bool isActionAvailable(const uint8_t action) {
   return action == CrossPointSettings::TOGGLE_HOME_BUTTON_IN_READER && gpio.hasHomeKey();
 }
 
-// Quick Lock needs a single physical shortcut to unlock. Quick Actions are a
-// menu, so they cannot provide that one-to-one input contract.
+// Quick Lock needs a single physical shortcut to unlock. Quick Actions opens
+// this same menu, so neither belongs in a menu slot.
 inline bool isQuickActionSlotActionAvailable(const uint8_t action) {
-  return action != CrossPointSettings::QUICK_LOCK && isActionAvailable(action);
+  return action != CrossPointSettings::QUICK_LOCK && action != CrossPointSettings::QUICK_ACTIONS &&
+         isActionAvailable(action);
 }
 
 inline StrId actionLabel(const uint8_t action) {
+  // STR_PAGE_TURN also labels the touch gesture setting, so shortcuts use the
+  // directional label without changing that setting's wording.
+  if (action == CrossPointSettings::PAGE_TURN) return StrId::STR_NEXT_PAGE;
   if (action < CrossPointSettings::QUICK_ACTION_SLOT_ACTION_COUNT) return actionLabels[action];
   if (action == CrossPointSettings::QUICK_ACTIONS) return StrId::STR_QUICK_ACTIONS;
   if (action == CrossPointSettings::TOGGLE_FRONTLIGHT) return StrId::STR_TOGGLE_FRONTLIGHT;
   if (action == CrossPointSettings::TOGGLE_TOUCHSCREEN) return StrId::STR_TOGGLE_TOUCHSCREEN;
   if (action == CrossPointSettings::QUICK_LOCK) return StrId::STR_QUICK_LOCK;
+  if (action == CrossPointSettings::PREVIOUS_PAGE) return StrId::STR_PREV_PAGE;
+  if (action == CrossPointSettings::NEARBY_POSITION_SYNC) return StrId::STR_NEARBY_POSITION_SYNC;
   return StrId::STR_HOME_BUTTON_LOCK;
 }
 

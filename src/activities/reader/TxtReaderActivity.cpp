@@ -138,7 +138,9 @@ void TxtReaderActivity::onEnter() {
   APP_STATE.saveToFile();
   SleepCoverAssets::prepareTxt(*txt);
   const std::string coverBmpPath = Storage.exists(txt->getCoverBmpPath().c_str()) ? txt->getCoverBmpPath() : "";
-  RECENT_BOOKS.addOrUpdateBook(filePath, fileName, "", coverBmpPath);
+  if (!skipRecentBookUpdateOnEntry) {
+    RECENT_BOOKS.addOrUpdateBook(filePath, fileName, "", coverBmpPath);
+  }
 
   // Trigger first update
   requestUpdate();
@@ -242,7 +244,7 @@ void TxtReaderActivity::loop() {
   }
 
   // Short press BACK goes directly to home
-  if (mappedInput.wasReleased(MappedInputManager::Button::Back) &&
+  if (!touch.prev && !touch.next && mappedInput.wasReleased(MappedInputManager::Button::Back) &&
       mappedInput.getHeldTime() < ReaderUtils::GO_HOME_MS) {
     onGoHome();
     return;
@@ -421,7 +423,7 @@ bool TxtReaderActivity::handleTwoFingerRotation(const bool clockwise) {
 }
 
 void TxtReaderActivity::toggleDarkMode() {
-  SETTINGS.readerDarkMode = !SETTINGS.readerDarkMode;
+  SETTINGS.screenInverted = !SETTINGS.screenInverted;
   SETTINGS.saveToFile();
   requestUpdate();
 }
@@ -452,6 +454,7 @@ bool TxtReaderActivity::consumeLongPowerButtonHold() {
 
 bool TxtReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRBTN action) {
   switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE:
     case CrossPointSettings::SHORT_PWRBTN::SLEEP:
     case CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH:
     case CrossPointSettings::SHORT_PWRBTN::FILE_TRANSFER:
@@ -471,6 +474,12 @@ bool TxtReaderActivity::supportsQuickAction(const CrossPointSettings::SHORT_PWRB
 
 bool TxtReaderActivity::executeReaderShortcutAction(const CrossPointSettings::SHORT_PWRBTN action) {
   switch (action) {
+    case CrossPointSettings::SHORT_PWRBTN::PREVIOUS_PAGE:
+      if (currentPage > 0) {
+        currentPage--;
+        requestUpdate();
+      }
+      return true;
     case CrossPointSettings::SHORT_PWRBTN::TOGGLE_FONT:
       cycleReaderFont();
       return true;
@@ -835,7 +844,7 @@ void TxtReaderActivity::renderStatusBar() const {
   if (SETTINGS.statusBarSpec().showsTitle()) {
     title = txt->getTitle();
   }
-  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title, 0, 0, false, nullptr,
+  GUI.drawStatusBar(renderer, progress, currentPage + 1, totalPages, title.c_str(), 0, 0, false, nullptr,
                     ReaderUtils::readerDarkModeEnabled());
 }
 

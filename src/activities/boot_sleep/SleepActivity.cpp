@@ -1,9 +1,11 @@
 #include "SleepActivity.h"
 
+#include <BoardConfig.h>
 #include <Epub.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalClock.h>
+#include <HalDisplay.h>
 #include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
@@ -21,6 +23,7 @@
 #include "../reader/EpubReaderUtils.h"
 #include "../reader/TxtReaderActivity.h"
 #include "../reader/XtcReaderActivity.h"
+#include "AppCapabilities.h"
 #include "AppVersion.h"
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
@@ -488,6 +491,9 @@ bool selectRandomSleepImage(SleepImageMode mode, SleepImageSelection& selection,
 
 void SleepActivity::onEnter() {
   Activity::onEnter();
+  // Sleep screens draw directly, outside ActivityManager's normal render path.
+  // Keep them at normal polarity when Night Mode remains enabled globally.
+  display.setInverted(false);
 
   const bool renderQuickResume =
       SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
@@ -511,13 +517,19 @@ void SleepActivity::onEnter() {
   overlayBackgroundBufferStored =
       sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::OVERLAY && renderer.storeBwBuffer();
 
+  // X4 Pro and X4 Classic share a panel that can retain this high-contrast
+  // transient update beneath the final OEM-style sleep refresh. Render only
+  // the final sleep frame on that panel family.
+  const bool showSleepPopup = !BoardConfig::isX4Pro() && !CROSSINK_APP_DEVICE_X4CLASSIC;
   // Show the popup in the orientation that was visible before reader exit restores
   // global settings. Reset to portrait afterwards so sleep screen layout stays unchanged.
   if (APP_STATE.lastSleepFromReader) {
-    renderer.setOrientation(sleepPopupOrientation);
-    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+    if (showSleepPopup) {
+      renderer.setOrientation(sleepPopupOrientation);
+      GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
+    }
     renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-  } else {
+  } else if (showSleepPopup) {
     GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
   }
 
@@ -559,9 +571,9 @@ void SleepActivity::renderCustomSleepScreen() const {
 
     LOG_INF("SLP", "Loading custom sleep image: %s", selection.path.c_str());
     delay(100);
-    // White is transparent for the overlay. Error-diffusion can turn a gray
-    // source pixel white, punching holes through the preserved reader page.
-    Bitmap bitmap(file);
+    // Dither grayscale custom sleep images so their tonal detail survives the
+    // 1-bit sleep-screen render.
+    Bitmap bitmap(file, true);
     const BmpReaderError parseResult = bitmap.parseHeaders();
     if (parseResult != BmpReaderError::Ok) {
       LOG_ERR("SLP", "Failed to parse custom sleep BMP %s: %s", selection.path.c_str(),
@@ -930,7 +942,9 @@ void SleepActivity::renderOverlaySleepScreen() const {
       LOG_DBG("SLP", "BMP overlay not found: %s", filename.c_str());
       return OverlayDrawResult::NotFound;
     }
-    Bitmap bitmap(file, true);
+    // Keep dithering off here: error diffusion can make nominally white
+    // transparent pixels visible over the preserved reader page.
+    Bitmap bitmap(file);
     const BmpReaderError parseResult = bitmap.parseHeaders();
     if (parseResult != BmpReaderError::Ok) {
       LOG_ERR("SLP", "BMP overlay header parse failed for %s: %s", filename.c_str(),

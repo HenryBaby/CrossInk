@@ -2,11 +2,17 @@
 
 #include <GfxRenderer.h>
 #include <I18n.h>
+#include <Logging.h>
+#include <Memory.h>
 
+#include <cstring>
+
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
 #include "OpdsSettingsActivity.h"
 #include "activities/ActivityManager.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
@@ -17,14 +23,21 @@ namespace fui = freeink::ui;
 
 namespace {
 constexpr fui::ActionId ACTION_ROW = 1;
+
+std::string normalizeDownloadFolder(std::string folder) {
+  while (!folder.empty() && (folder.front() == ' ' || folder.front() == '\t')) folder.erase(folder.begin());
+  while (!folder.empty() && (folder.back() == ' ' || folder.back() == '\t')) folder.pop_back();
+  if (folder.empty() || folder == "/") return "";
+  if (folder.front() != '/') folder.insert(folder.begin(), '/');
+  while (folder.size() > 1 && folder.back() == '/') folder.pop_back();
+  return folder;
+}
 }  // namespace
 
 int OpdsServerListActivity::getItemCount() const {
   int count = static_cast<int>(OPDS_STORE.getCount());
-  // In settings mode, append the virtual "Add Server" item.
-  if (!pickerMode) {
-    count += 1;
-  }
+  // Both modes append "Add Server"; Settings also includes Download Folder.
+  count += pickerMode ? 1 : 2;
   return count;
 }
 
@@ -124,10 +137,43 @@ void OpdsServerListActivity::handleSelection() {
   const auto serverCount = static_cast<int>(OPDS_STORE.getCount());
 
   if (pickerMode) {
-    // Picker mode: selecting a server navigates to the OPDS browser
+    // Picker mode: select a server or add the first one without leaving the flow.
     if (selectedIndex < serverCount) {
       activityManager.goToOpdsServer(static_cast<uint32_t>(selectedIndex));
+    } else {
+      auto editor = makeUniqueNoThrow<OpdsSettingsActivity>(renderer, mappedInput, -1);
+      if (!editor) {
+        LOG_ERR("OPDS", "OOM: OPDS settings activity");
+        return;
+      }
+      startActivityForResult(std::move(editor), [this](const ActivityResult&) {
+        OPDS_STORE.loadFromFile();
+        selectedIndex = 0;
+        topIndex = 0;
+        requestUpdate();
+      });
     }
+    return;
+  }
+
+  // Item layout: configured servers, Add Server, Download Folder.
+  if (selectedIndex == serverCount + 1) {
+    auto resultHandler = [this](const ActivityResult& result) {
+      if (result.isCancelled) return;
+
+      const auto& keyboardResult = std::get<KeyboardResult>(result.data);
+      const std::string folder = normalizeDownloadFolder(keyboardResult.text);
+      strncpy(SETTINGS.opdsDownloadFolder, folder.c_str(), sizeof(SETTINGS.opdsDownloadFolder) - 1);
+      SETTINGS.opdsDownloadFolder[sizeof(SETTINGS.opdsDownloadFolder) - 1] = '\0';
+      if (!SETTINGS.saveToFile()) {
+        LOG_ERR("OPDS", "Could not save download folder setting");
+      }
+      requestUpdate();
+    };
+    startActivityForResult(std::make_unique<KeyboardEntryActivity>(
+                               renderer, mappedInput, tr(STR_OPDS_DOWNLOAD_FOLDER), SETTINGS.opdsDownloadFolder,
+                               sizeof(SETTINGS.opdsDownloadFolder) - 1, InputType::Text),
+                           resultHandler);
     return;
   }
 
@@ -177,11 +223,17 @@ void OpdsServerListActivity::buildListScreen(UiApp::ScreenType& screen) {
     item.actionValue = static_cast<int16_t>(i);
     items.push_back(item);
   }
+  fui::ListItem addServer;
+  addServer.label = tr(STR_ADD_SERVER);
+  addServer.actionValue = static_cast<int16_t>(serverCount);
+  items.push_back(addServer);
+
   if (!pickerMode) {
-    fui::ListItem addServer;
-    addServer.label = tr(STR_ADD_SERVER);
-    addServer.actionValue = static_cast<int16_t>(serverCount);
-    items.push_back(addServer);
+    fui::ListItem folder;
+    folder.label = tr(STR_OPDS_DOWNLOAD_FOLDER);
+    folder.subtitle = SETTINGS.opdsDownloadFolder[0] ? SETTINGS.opdsDownloadFolder : tr(STR_OPDS_SD_ROOT);
+    folder.actionValue = static_cast<int16_t>(serverCount + 1);
+    items.push_back(folder);
   }
 
   fui::ListProps props;

@@ -62,7 +62,13 @@ class MappedInputManager {
     confirmPressed = false;
     return true;
   }
-  bool wasReleased(Button) const { return false; }
+  bool wasReleased(const Button button) const {
+    if (button != Button::Power || !powerReleased) return false;
+    if (powerReleaseSuppressed) {
+      return false;
+    }
+    return true;
+  }
   bool isPressed(const Button button) const { return button == Button::Power && powerPressed; }
   Label withBackArrow(const char* text) const { return Label(text); }
   Label withPreviousPageArrow(const char* text) const { return Label(text); }
@@ -93,6 +99,16 @@ class MappedInputManager {
     powerPressed = true;
   }
 
+  void injectPowerConfirmRelease() {
+    powerPressed = false;
+    powerReleased = true;
+  }
+
+  void advanceInputFrame() {
+    powerReleased = false;
+    if (!powerPressed) powerReleaseSuppressed = false;
+  }
+
   bool isPowerReleaseSuppressed() const { return powerReleaseSuppressed; }
 
  private:
@@ -102,6 +118,7 @@ class MappedInputManager {
   mutable bool suppressTouchTap = false;
   mutable bool confirmPressed = false;
   mutable bool powerPressed = false;
+  mutable bool powerReleased = false;
   mutable bool powerReleaseSuppressed = false;
   mutable int touchX = 0;
   mutable int touchY = 0;
