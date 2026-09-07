@@ -128,7 +128,7 @@ jobs:
           CROSSINK_RELEASE_VERSION: ${{ steps.release_metadata.outputs.release_version }}
         run: |
           set -euo pipefail
-          pio run -j1 -e ${{ matrix.environment }} | tee pio-${{ matrix.environment }}.log
+          pio run -j4 -e ${{ matrix.environment }} | tee pio-${{ matrix.environment }}.log
 
       - name: Extract firmware stats
         run: |
