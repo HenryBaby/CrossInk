@@ -53,7 +53,7 @@ My goal with this fork was to maintain the core Crosspoint firmware while integr
 - Added improved support for tables with simple markup.
 - Added ability to add bookmarks.
 - Added ability to remap front buttons that only applies in the reader.
-- Added Bionic Reading and Guide Dots as optional reader modes.
+- Added Focus Reading and Guide Dots as optional reader modes.
 - Added Force Paragraph Indents for books that render as one giant wall of text.
 - Added ability to pin a sleep image as a favorite. The favorited image will always be displayed when your sleep settings are set to `Custom` or `Cover + Custom` (when no cover is available).
 - Added more in-reader control remapping options for side buttons, short power button clicks, and long-press menu actions.
@@ -94,7 +94,7 @@ See [SD Card Fonts](./docs/sd-card-fonts.md) for installing additional font fami
 
 ### Reader features
 
-Reader Options, Bionic Reading, Guide Dots, Force Paragraph Indents, reading stats, and finished-book behavior are documented in [Reader Features](./docs/reader-features.md).
+Reader Options, Focus Reading, Guide Dots, Force Paragraph Indents, reading stats, and finished-book behavior are documented in [Reader Features](./docs/reader-features.md).
 
 ### Custom button actions
 

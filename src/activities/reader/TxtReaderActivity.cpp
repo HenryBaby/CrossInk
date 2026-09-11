@@ -849,6 +849,23 @@ void TxtReaderActivity::renderStatusBar() const {
                     ReaderUtils::readerDarkModeEnabled());
 }
 
+bool TxtReaderActivity::getFrontlightPanelBookDetails(FrontlightPanelBookDetails& details) {
+  RenderLock lock(*this);
+  if (!txt || totalPages <= 0) return false;
+
+  details.title = txt->getTitle();
+  details.author.clear();
+  details.chapter.clear();
+  details.progressPercent = std::clamp((currentPage + 1) * 100 / totalPages, 0, 100);
+  return true;
+}
+
+bool TxtReaderActivity::handleFrontlightPanelResult(const FrontlightPanelResult& result) {
+  if (result.action != FrontlightPanelAction::SendNearbyBook || !txt) return false;
+  if (!saveProgress(currentPage)) return false;
+  return activityManager.goToNearbyBookSend(txt->getPath(), true);
+}
+
 bool TxtReaderActivity::saveProgress(const int page) {
   if (!txt) {
     return false;

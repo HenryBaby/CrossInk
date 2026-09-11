@@ -386,11 +386,9 @@ void ClipSelectionActivity::confirmSelection() {
     return;
   }
 
-  const int total = static_cast<int>(readingOrderSize);
   const int from = std::min(startMarkIdx, cursorIdx);
   const int to = std::max(startMarkIdx, cursorIdx);
-  auto result =
-      ClipTextBuilder::build(wordStore, readingOrder.data(), from, to, total, startPageInSection, section.pageCount);
+  auto result = ClipTextBuilder::build(wordStore, readingOrder.data(), from, to, startPageInSection, section.pageCount);
   if (const auto paragraphIndex = section.getParagraphIndexForPage(result.sectionPage)) {
     result.paragraphIndex = *paragraphIndex;
   }
@@ -456,8 +454,8 @@ bool ClipSelectionActivity::finishDictionarySelection() {
       dictionaryRequest.firstPageOffset,     dictionaryRequest.firstPageWordOrdinal,
       dictionaryRequest.firstWordByteOffset, dictionaryRequest.lastPageOffset,
       dictionaryRequest.lastPageWordOrdinal, dictionaryRequest.lastWordByteEndOffset};
-  auto result = ClipTextBuilder::build(wordStore, readingOrder.data(), from, to, static_cast<int>(readingOrderSize),
-                                       startPageInSection, section.pageCount, &selectionBounds);
+  auto result = ClipTextBuilder::build(wordStore, readingOrder.data(), from, to, startPageInSection, section.pageCount,
+                                       &selectionBounds);
   if (const auto paragraphIndex = section.getParagraphIndexForPage(result.sectionPage)) {
     result.paragraphIndex = *paragraphIndex;
   }

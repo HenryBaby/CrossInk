@@ -7,6 +7,7 @@
 #include "Epub.h"
 #include "EpubRenderMode.h"
 #include "ReaderRenderSpec.h"
+#include "SectionPageIndex.h"
 
 class Page;
 class GfxRenderer;
@@ -26,7 +27,11 @@ struct SectionBuildOptions {
   bool isCancellationRequested() const { return shouldCancel && shouldCancel(cancelContext); }
 };
 
+#ifdef CROSSINK_SECTION_TEST_ACCESS
+struct Section {
+#else
 class Section {
+#endif
   std::shared_ptr<Epub> epubOwner;
   Epub* epub;
   const int spineIndex;
@@ -34,18 +39,9 @@ class Section {
   std::string filePath;
   HalFile file;
 
-  struct PageLutEntry {
-    uint32_t fileOffset;
-    uint16_t paragraphIndex;
-    uint16_t listItemIndex;
-    uint32_t visibleTextOffset;
-  };
-
   struct BuildContext {
     std::unique_ptr<ChapterHtmlSlimParser> parser;
-    std::unique_ptr<PageLutEntry[]> lut;
-    uint16_t lutCapacity = 0;
-    uint16_t lutCount = 0;
+    SectionPageIndex pageIndex;
     std::string parsePath;
     std::string contentBase;
     std::string imageBasePath;
@@ -137,7 +133,6 @@ class Section {
   std::unique_ptr<Page> loadPage(int page);
 
   std::unique_ptr<Page> loadPageFromSectionFile();
-  std::string getTextFromSectionFile();
 
   // Resolve an anchor from the in-progress build first, then the on-disk anchor map
   // (covers finalized sections and partials from a previous session).
