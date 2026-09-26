@@ -32,8 +32,8 @@ class ChapterHtmlSlimParserTest : public ::testing::TestWithParam<const char*> {
   CssParser cssParser{"/tmp"};
   ChapterHtmlSlimParser parser{epub,  filepath, renderer, 0,  1.0f, false, false, 0, 480, 800,     false,
                                false, false,    0,        {}, true, "",    "",    0, {},  nullptr, &cssParser};
-  std::array<ChapterHtmlSlimParser::StyleStackEntry, 4> inlineStyles{};
-  std::array<BlockStyle, 4> blockStyles{};
+  std::array<ChapterHtmlSlimParser::StyleStackEntry, ChapterHtmlSlimParser::MAX_INLINE_STYLE_DEPTH> inlineStyles{};
+  std::array<BlockStyle, ChapterHtmlSlimParser::MAX_BLOCK_STYLE_DEPTH> blockStyles{};
 
   void SetUp() override {
     parser.currentTextBlock = std::make_unique<ParsedText>(false);
