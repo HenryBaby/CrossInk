@@ -143,7 +143,9 @@ void OpdsBookBrowserActivity::onExit() {
   }
   // OPDS launches from minimal network boot, so restore the full app state
   // even if setup failed before WiFi was started.
-  silentRestartAfterNetwork();
+  // The current restart API returns to Home after the OPDS network session.
+  // Network boot routing has already completed before this activity exits.
+  silentRestart();
 #endif
 }
 
