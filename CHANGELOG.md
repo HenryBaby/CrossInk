@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.6.2] - 2026-10-03
+
 ### Added
 
-- Added a Reading Stats Backups setting that controls both automatic and manual backup creation on all supported devices.
+- [`7e7d941a`](https://github.com/HenryBaby/CrossInk/commit/7e7d941a) — Reading stats backups can now be disabled on X3, X4, and X4 Pro.
 
 ## [v1.6.1] - 2026-09-26
 
