@@ -5,6 +5,7 @@
 
 ## Changes maintained by this downstream fork
 
+- [`7e7d941a`](https://github.com/HenryBaby/CrossInk/commit/7e7d941a) — Reading stats backups can be disabled on X3, X4, and X4 Pro, preventing automatic and manual backup creation.
 - [`20a575b5`](https://github.com/HenryBaby/CrossInk/commit/20a575b5) — Settings submenus remain highlighted when returning to their parent menu.
 - [`5cbd063f`](https://github.com/HenryBaby/CrossInk/commit/5cbd063f) — replaces the upstream waterdrop with this downstream fork's artwork on the boot and logo sleep screens.
 - [`03355ac8`](https://github.com/HenryBaby/CrossInk/commit/03355ac8) — Network and menu transitions follow CrossPoint Reader's normal fast-refresh behavior instead of CrossInk's full-refresh transition policy.
