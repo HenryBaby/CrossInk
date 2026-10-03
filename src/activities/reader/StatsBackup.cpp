@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "CrossPointSettings.h"
 #include "GlobalReadingStats.h"
 #include "ReadingStatsUtils.h"
 
@@ -207,6 +208,14 @@ bool backupFileMatches(const char* path, const uint8_t* expected, const size_t e
 }  // namespace
 
 bool backupGlobalStats(const bool manual, char* outFileName, const size_t outFileNameLen) {
+  // This setting controls both scheduled and user-requested backups. Check it
+  // before touching the backup directory so disabling backups has no storage
+  // side effects (including creating /.crossink-stats-backup/).
+  if (SETTINGS.autoBackupStats == 0) {
+    LOG_DBG(LOG_TAG, "Reading-stats backups are disabled");
+    return false;
+  }
+
   if (!Storage.ensureDirectoryExists(BACKUP_DIR)) {
     LOG_ERR(LOG_TAG, "Could not create stats backup directory: %s", BACKUP_DIR);
     return false;

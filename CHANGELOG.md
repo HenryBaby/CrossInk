@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Added
+
+- Added a Reading Stats Backups setting that controls both automatic and manual backup creation on all supported devices.
+
 ## [v1.6.1] - 2026-09-26
 
 ### Upstream CrossInk v1.6.0

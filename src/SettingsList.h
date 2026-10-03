@@ -1427,10 +1427,12 @@ inline std::vector<SettingInfo> buildSystemReadingStatsSettingsList(const std::v
 inline std::vector<SettingInfo> buildSystemGlobalStatsSettingsList(const std::vector<SettingInfo>& allSettings) {
   std::vector<SettingInfo> settings;
   settings.reserve(3);
-  if (halClock.isAvailable()) {
-    addSettingByName(settings, allSettings, StrId::STR_AUTO_BACKUP_STATS);
+  // Manual backups are available on devices without an RTC too, so expose the
+  // shared backup policy independently of automatic sleep-time backups.
+  addSettingByName(settings, allSettings, StrId::STR_AUTO_BACKUP_STATS);
+  if (SETTINGS.autoBackupStats != 0) {
+    settings.push_back(SettingInfo::Action(StrId::STR_BACKUP_NOW, SettingAction::BackupStats));
   }
-  settings.push_back(SettingInfo::Action(StrId::STR_BACKUP_NOW, SettingAction::BackupStats));
   settings.push_back(SettingInfo::Action(StrId::STR_RESET_ALL_TIME_STATS, SettingAction::ResetGlobalStats));
   return settings;
 }
