@@ -6,13 +6,16 @@
 #include <GfxRenderer.h>
 #include <HalStorage.h>
 #include <I18n.h>
+#include <LibraryBuilder.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <OpdsStream.h>
 #include <WiFi.h>
+#include <ZipFile.h>
 
 #include <cctype>
 #include <string_view>
+#include <cstdio>
 #include <utility>
 
 #include "CrossPointSettings.h"
@@ -20,6 +23,7 @@
 #include "SdCardFontSystem.h"
 #include "SilentRestart.h"
 #include "activities/network/WifiSelectionActivity.h"
+#include "activities/util/ConfirmationActivity.h"
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/TouchHeaderBackButton.h"
 #include "components/UIScale.h"
@@ -28,6 +32,7 @@
 #include "components/UiAppHelpers.h"
 #include "components/icons/listIcons.h"
 #include "fontIds.h"
+#include "network/DownloadFileSwap.h"
 #include "network/HttpDownloader.h"
 #include "util/BookCacheUtils.h"
 #include "util/StringUtils.h"
@@ -36,7 +41,6 @@
 namespace fui = freeink::ui;
 
 namespace {
-constexpr size_t OPDS_BROWSER_ENTRY_CAPACITY = MAX_OPDS_FEED_ENTRIES + 2;
 constexpr size_t OPDS_DOWNLOAD_BUFFER_SIZE = 2048;
 constexpr fui::ActionId ACTION_ROW = 1;
 constexpr fui::ActionId ACTION_SEARCH = 2;
@@ -80,6 +84,17 @@ bool applyResponseFilename(const std::string& folder, const std::string& respons
   if (!Storage.rename(path.c_str(), target.c_str())) return false;
   path = target;
   return true;
+}
+
+// Mayberry prefixes folder titles with U+1F4C1 (file folder), which the UI
+// fonts lack; show "/name" instead.
+void replaceFolderEmoji(std::string& title) {
+  constexpr char FOLDER_EMOJI[] = "\xF0\x9F\x93\x81";
+  constexpr size_t FOLDER_EMOJI_LEN = sizeof(FOLDER_EMOJI) - 1;
+  if (title.compare(0, FOLDER_EMOJI_LEN, FOLDER_EMOJI) != 0) return;
+  size_t prefixLen = FOLDER_EMOJI_LEN;
+  while (prefixLen < title.size() && title[prefixLen] == ' ') ++prefixLen;
+  title.replace(0, prefixLen, "/");
 }
 
 }  // namespace
@@ -131,6 +146,7 @@ void OpdsBookBrowserActivity::onEnter() {
 }
 
 void OpdsBookBrowserActivity::onExit() {
+  library::invalidateLibraryIndex();
   Activity::onExit();
   clearEntries();
   entries.reset();
@@ -152,7 +168,13 @@ void OpdsBookBrowserActivity::onExit() {
 void OpdsBookBrowserActivity::activateSelected() {
   if (!entries || entryCount == 0 || selectorIndex < 0 || selectorIndex >= static_cast<int>(entryCount)) return;
   const auto& entry = entries[selectorIndex];
-  entry.type == OpdsEntryType::BOOK ? downloadBook(entry) : navigateToEntry(entry);
+  if (entry.type == OpdsEntryType::BOOK) {
+    requestDownload(entry);
+    return;
+  }
+  const bool pageLink =
+      (hasPrevPageRow && selectorIndex == 0) || (hasNextPageRow && selectorIndex == static_cast<int>(entryCount) - 1);
+  navigateToEntry(entry, pageLink);
 }
 
 void OpdsBookBrowserActivity::onRowEvent(const fui::ActionEvent& event, void* user) {
@@ -386,7 +408,13 @@ void OpdsBookBrowserActivity::buildBrowsingScreen(UiApp::ScreenType& screen) {
     fui::ListItem item;
     item.label = entry.title.c_str();
     if (entry.type == OpdsEntryType::BOOK && !entry.author.empty()) item.subtitle = entry.author.c_str();
-    if (entry.type == OpdsEntryType::NAVIGATION) item.value = ">";
+    if (entry.type == OpdsEntryType::NAVIGATION) {
+      item.value = ">";
+      if (entry.count >= 0) {
+        snprintf(countLabels[i].data(), countLabels[i].size(), "(%ld) >", static_cast<long>(entry.count));
+        item.value = countLabels[i].data();
+      }
+    }
     item.actionValue = static_cast<int16_t>(items.size());
     items.push_back(item);
   }
@@ -544,12 +572,16 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
 
   clearEntries();
   const std::string url = UrlUtils::buildUrl(server.url, path);
-  LOG_DBG("OPDS", "Fetching: %s", url.c_str());
+  // Keep the normalized server URL alive for the synchronous fetch so
+  // HttpDownloader can scope Basic auth even for legacy scheme-less entries.
+  const std::string authorizationOrigin = UrlUtils::ensureProtocol(server.url);
+  LOG_DBG("OPDS", "Fetching: %s", UrlUtils::forLog(url).c_str());
   OpdsParser parser(entries.get(), MAX_OPDS_FEED_ENTRIES);
   {
     OpdsParserStream stream{parser};
     HttpDownloader::DownloadOptions downloadOptions;
     downloadOptions.transport = HttpDownloader::Transport::WOLFSSL;
+    downloadOptions.authorizationOrigin = authorizationOrigin;
     const auto result = HttpDownloader::streamUrl(
         url, [&stream](const uint8_t* data, const size_t len) { return stream.write(data, len) == len; }, nullptr,
         server.username, server.password, std::move(downloadOptions));
@@ -573,11 +605,15 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
   const auto& nextUrl = parser.getNextPageUrl();
   const auto& prevUrl = parser.getPrevPageUrl();
   entryCount = parser.getEntryCount();
+  for (size_t i = 0; i < entryCount; ++i) {
+    if (entries[i].type == OpdsEntryType::NAVIGATION) replaceFolderEmoji(entries[i].title);
+  }
   if (parser.wasTruncated()) {
     LOG_DBG("OPDS", "Feed truncated to %zu entries", entryCount);
   }
 
   if (!prevUrl.empty()) {
+    hasPrevPageRow = true;
     for (size_t i = entryCount; i > 0; --i) {
       entries[i] = std::move(entries[i - 1]);
     }
@@ -586,11 +622,11 @@ void OpdsBookBrowserActivity::fetchFeed(const std::string& path) {
                            "", prevUrl, ""};
     entryCount++;
   }
-  if (!nextUrl.empty() &&
-      !appendEntry(OpdsEntry{OpdsEntryType::NAVIGATION,
-                             std::string(mappedInput.resolveLabel(mappedInput.withNextPageArrow(tr(STR_NEXT_PAGE)))),
-                             "", nextUrl, ""})) {
-    LOG_DBG("OPDS", "No room for next-page entry");
+  if (!nextUrl.empty()) {
+    hasNextPageRow = appendEntry(OpdsEntry{
+        OpdsEntryType::NAVIGATION,
+        std::string(mappedInput.resolveLabel(mappedInput.withNextPageArrow(tr(STR_NEXT_PAGE)))), "", nextUrl, ""});
+    if (!hasNextPageRow) LOG_DBG("OPDS", "No room for next-page entry");
   }
 
   selectorIndex = 0;
@@ -614,6 +650,8 @@ void OpdsBookBrowserActivity::clearEntries() {
     entries[i] = OpdsEntry{};
   }
   entryCount = 0;
+  hasPrevPageRow = false;
+  hasNextPageRow = false;
 }
 
 bool OpdsBookBrowserActivity::appendEntry(OpdsEntry&& entry) {
@@ -622,8 +660,9 @@ bool OpdsBookBrowserActivity::appendEntry(OpdsEntry&& entry) {
   return true;
 }
 
-void OpdsBookBrowserActivity::navigateToEntry(const OpdsEntry& entry) {
-  navigationHistory.push_back(currentPath);
+void OpdsBookBrowserActivity::navigateToEntry(const OpdsEntry& entry, const bool pageLink) {
+  // Pagination stays in the same catalog; Back should return to its parent.
+  if (!pageLink) navigationHistory.push_back(currentPath);
   // Resolve to a full URL so sub-sub-navigation retains parent path context
   const std::string feedUrl = UrlUtils::buildUrl(server.url, currentPath);
   currentPath = UrlUtils::buildUrl(feedUrl, entry.href);
@@ -647,7 +686,34 @@ void OpdsBookBrowserActivity::navigateBack() {
   }
 }
 
-void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
+void OpdsBookBrowserActivity::requestDownload(const OpdsEntry& book) {
+  const std::string path = buildDownloadPath(buildDownloadFolder(server, book), server, book);
+  // Recover an interrupted replacement before deciding whether the book exists.
+  if (!DownloadFileSwap::recover(path)) {
+    state = BrowserState::ERROR;
+    errorMessage = tr(STR_DOWNLOAD_FAILED);
+    requestUpdate();
+    return;
+  }
+  if (!Storage.exists(path.c_str())) {
+    downloadBook(book, path);
+    return;
+  }
+  auto dialog =
+      makeUniqueNoThrow<ConfirmationActivity>(renderer, mappedInput, std::string(tr(STR_REPLACE)) + "?", book.title);
+  if (!dialog) {
+    LOG_ERR("OPDS", "Cannot allocate overwrite dialog");
+    return;
+  }
+  const int bookIndex = selectorIndex;
+  startActivityForResult(std::move(dialog), [this, bookIndex, path = std::move(path)](const ActivityResult& result) {
+    if (result.isCancelled || !entries || bookIndex < 0 || bookIndex >= static_cast<int>(entryCount)) return;
+    downloadBook(entries[bookIndex], path);
+  });
+}
+
+void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book, const std::string& requestedFilename) {
+  std::string filename = requestedFilename;
   state = BrowserState::DOWNLOADING;
   statusMessage = book.title;
   downloadProgress = downloadTotal = 0;
@@ -665,6 +731,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   // Build full download URL relative to the current feed, not the root server URL
   const std::string feedUrl = UrlUtils::buildUrl(server.url, currentPath);
   std::string downloadUrl = UrlUtils::buildUrl(feedUrl, book.href);
+  const std::string authorizationOrigin = UrlUtils::ensureProtocol(server.url);
   const std::string folder = buildDownloadFolder(server, book);
   const std::string baseFolder = normalizeOpdsDownloadFolder(server.downloadFolder);
   if (baseFolder != "/" && !Storage.exists(baseFolder.c_str()) && !Storage.mkdir(baseFolder.c_str())) {
@@ -682,8 +749,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
     return;
   }
 
-  std::string filename = buildDownloadPath(folder, server, book);
-  LOG_DBG("OPDS", "Downloading: %s -> %s", downloadUrl.c_str(), filename.c_str());
+  LOG_DBG("OPDS", "Downloading: %s -> %s", UrlUtils::forLog(downloadUrl).c_str(), filename.c_str());
 
   bool cancelRequested = false;
   auto pollCancel = [this, &cancelRequested] {
@@ -701,7 +767,13 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
         mappedInput.wasReleased(MappedInputManager::Button::Back)) {
       cancelRequested = true;
     }
-    return cancelRequested;
+    if (uiReady) {
+      const fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
+      if (snap.touchPressed || snap.touchReleased) app.route(snap);
+    }
+    // app.route() can set cancelDownload through onCancelEvent() during this poll.
+    // cppcheck-suppress knownConditionTrueFalse
+    return cancelRequested || cancelDownload;
   };
   HttpDownloader::DownloadOptions downloadOptions;
   downloadOptions.shouldCancel = pollCancel;
@@ -710,27 +782,22 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
   std::string responseFilename;
   if (server.filenameFormat == OpdsFilenameFormat::SERVER_FILENAME)
     downloadOptions.responseFilename = &responseFilename;
+  downloadOptions.authorizationOrigin = authorizationOrigin;
+  downloadOptions.stageAsPart = true;
+  downloadOptions.checkFreeSpace = true;
+  downloadOptions.validate = [](const std::string& path) {
+    ZipFile zip(path);
+    size_t size = 0;
+    return zip.getInflatedFileSize("META-INF/container.xml", &size) && size > 0;
+  };
   int lastRenderedPercent = -1;
   unsigned long lastProgressUpdateMs = 0;
 
   const auto result = HttpDownloader::downloadToFile(
       downloadUrl, filename,
-      [this, &cancelRequested, &lastRenderedPercent, &lastProgressUpdateMs](const size_t downloaded,
-                                                                            const size_t total) {
+      [this, &lastRenderedPercent, &lastProgressUpdateMs](const size_t downloaded, const size_t total) {
         downloadProgress = downloaded;
         downloadTotal = total;
-        // The activity loop is blocked for the whole download; pump input here
-        // so the Cancel button or a Back press can abort mid-transfer.
-        mappedInput.update();
-        if (mappedInput.wasHomeGesture()) {
-          goHomeAfterCancel = true;
-          cancelRequested = true;
-        }
-        if (mappedInput.wasReleased(MappedInputManager::Button::Back)) cancelRequested = true;
-        if (uiReady) {
-          const fui::InputSnapshot snap = touchSnapshotFrom(mappedInput);
-          if (snap.touchPressed || snap.touchReleased) app.route(snap);
-        }
         const int percent = total > 0 ? static_cast<int>(static_cast<uint64_t>(downloaded) * 100 / total) : 0;
         const unsigned long now = millis();
         if (percent >= 100 || lastRenderedPercent < 0 ||
@@ -757,7 +824,7 @@ void OpdsBookBrowserActivity::downloadBook(const OpdsEntry& book) {
     state = BrowserState::BROWSING;
   } else {
     state = BrowserState::ERROR;
-    errorMessage = tr(STR_DOWNLOAD_FAILED);
+    errorMessage = result == HttpDownloader::INSUFFICIENT_SPACE ? tr(STR_SD_CARD_FULL) : tr(STR_DOWNLOAD_FAILED);
   }
   requestUpdate();
 }
