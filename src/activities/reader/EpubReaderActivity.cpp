@@ -3207,9 +3207,8 @@ void EpubReaderActivity::loop() {
         }
         case CrossPointSettings::SIDE_INCREASE_FONT:
         case CrossPointSettings::SIDE_DECREASE_FONT:
-          if (ReaderUtils::changeReaderFontSizeWithFeedback(renderer,
-                                                            side.action == CrossPointSettings::SIDE_INCREASE_FONT,
-                                                            FontSizeStepMode::Clamp))
+          if (ReaderUtils::changeReaderFontSizeWithFeedback(
+                  renderer, side.action == CrossPointSettings::SIDE_INCREASE_FONT, FontSizeStepMode::Clamp))
             reindexCurrentSection();
           break;
         case CrossPointSettings::SIDE_ROTATE_COUNTERCLOCKWISE:
@@ -3305,7 +3304,8 @@ void EpubReaderActivity::loop() {
       }
 
       if (frontLongPressChangesFont) {
-        if (ReaderUtils::changeReaderFontSizeWithFeedback(renderer, /*larger=*/nextLongPressed, FontSizeStepMode::Clamp)) {
+        if (ReaderUtils::changeReaderFontSizeWithFeedback(renderer, /*larger=*/nextLongPressed,
+                                                          FontSizeStepMode::Clamp)) {
           reindexCurrentSection();
         }
         return;

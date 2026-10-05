@@ -14,8 +14,8 @@
 #include <ZipFile.h>
 
 #include <cctype>
-#include <string_view>
 #include <cstdio>
+#include <string_view>
 #include <utility>
 
 #include "CrossPointSettings.h"
