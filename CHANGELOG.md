@@ -1,8 +1,10 @@
 ## [Unreleased]
 
+## [v1.6.4] - 2026-10-27
+
 ### Fixed
 
-- Prevented HTTPS OPDS downloads from failing mid-transfer as TLS input buffers grow on memory-constrained devices.
+- [`a767379d`](https://github.com/HenryBaby/CrossInk/commit/a767379d) — Improved HTTPS OPDS download reliability on memory-constrained devices by reserving TLS input capacity before downloads fragment RAM.
 
 ## [v1.6.3] - 2026-10-05
 
