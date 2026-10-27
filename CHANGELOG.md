@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Fixed
+
+- Prevented HTTPS OPDS downloads from failing mid-transfer as TLS input buffers grow on memory-constrained devices.
+
 ## [v1.6.3] - 2026-10-05
 
 ### Upstream CrossInk v1.6.1
